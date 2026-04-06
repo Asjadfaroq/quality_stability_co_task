@@ -114,7 +114,10 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
-// 8. Register services
+// 8. HttpClient factory
+builder.Services.AddHttpClient();
+
+// Register services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IAdminService, AdminService>();

@@ -1,4 +1,6 @@
-using OpenAI.Chat;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using ServiceMarketplace.API.Models.DTOs.Ai;
 using ServiceMarketplace.API.Services.Interfaces;
 
@@ -8,61 +10,76 @@ public class AiService : IAiService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<AiService> _logger;
+    private readonly HttpClient _httpClient;
 
-    public AiService(IConfiguration configuration, ILogger<AiService> logger)
+    private const string Model = "Qwen/Qwen2.5-7B-Instruct-Turbo";
+    private const string Endpoint = "https://router.huggingface.co/together/v1/chat/completions";
+
+    public AiService(IConfiguration configuration, ILogger<AiService> logger, IHttpClientFactory httpClientFactory)
     {
         _configuration = configuration;
         _logger = logger;
+        _httpClient = httpClientFactory.CreateClient();
     }
 
     public async Task<EnhanceDescriptionResponse> EnhanceDescriptionAsync(EnhanceDescriptionRequest request)
     {
         try
         {
-            var apiKey = _configuration["OpenAI:ApiKey"];
+            var apiKey = _configuration["HuggingFace:ApiKey"];
 
-            if (string.IsNullOrWhiteSpace(apiKey) || apiKey.StartsWith("sk-placeholder"))
+            if (string.IsNullOrWhiteSpace(apiKey) || apiKey == "YOUR-HUGGINGFACE-KEY-HERE")
                 return Mock(request);
 
-            var client = new ChatClient("gpt-4o-mini", apiKey);
-
             var prompt =
-                "You are a professional service marketplace assistant.\n" +
-                "Enhance the following service request description to be clear and professional.\n" +
+                "You are a professional service marketplace assistant. " +
+                "Enhance the following service request description to be clear and professional. " +
                 "Also suggest the most appropriate category from: Plumbing, Electrical, Cleaning, Carpentry, Painting, Moving, Gardening, IT Support, Other.\n\n" +
                 $"Title: {request.Title}\n" +
                 $"Description: {request.RawDescription}\n\n" +
-                "Respond in JSON with exactly two fields:\n" +
+                "Respond ONLY in JSON with exactly two fields, no extra text:\n" +
                 "{ \"enhancedDescription\": \"...\", \"suggestedCategory\": \"...\" }";
 
-            var completion = await client.CompleteChatAsync(
-                new UserChatMessage(prompt));
+            var body = new
+            {
+                model = Model,
+                messages = new[] { new { role = "user", content = prompt } },
+                max_tokens = 512,
+                temperature = 0.5
+            };
 
-            var content = completion.Value.Content[0].Text;
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, Endpoint);
+            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            requestMessage.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-            // Parse JSON response
-            var json = System.Text.Json.JsonDocument.Parse(
-                ExtractJson(content));
+            var response = await _httpClient.SendAsync(requestMessage);
+            response.EnsureSuccessStatusCode();
 
+            var json = await response.Content.ReadAsStringAsync();
+            var doc = JsonDocument.Parse(json);
+            var content = doc.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString() ?? string.Empty;
+
+            var resultDoc = JsonDocument.Parse(ExtractJson(content));
             return new EnhanceDescriptionResponse
             {
-                EnhancedDescription = json.RootElement.GetProperty("enhancedDescription").GetString() ?? string.Empty,
-                SuggestedCategory   = json.RootElement.GetProperty("suggestedCategory").GetString()   ?? string.Empty
+                EnhancedDescription = resultDoc.RootElement.GetProperty("enhancedDescription").GetString() ?? string.Empty,
+                SuggestedCategory   = resultDoc.RootElement.GetProperty("suggestedCategory").GetString()   ?? string.Empty
             };
         }
         catch (Exception ex)
         {
-            // AI failure must never break the flow — fall back to mock
-            _logger.LogWarning(ex, "OpenAI call failed, falling back to mock enhancement.");
+            _logger.LogWarning(ex, "HuggingFace call failed, falling back to mock enhancement.");
             return Mock(request);
         }
     }
 
-    // Mock fallback: prepend "Professional service: " and categorise by keywords
     private static EnhanceDescriptionResponse Mock(EnhanceDescriptionRequest request)
     {
         var enhanced = $"Professional service: {request.RawDescription}";
-
         var lower = $"{request.Title} {request.RawDescription}".ToLowerInvariant();
 
         var category = lower switch
@@ -78,20 +95,13 @@ public class AiService : IAiService
             _ => "Other"
         };
 
-        return new EnhanceDescriptionResponse
-        {
-            EnhancedDescription = enhanced,
-            SuggestedCategory   = category
-        };
+        return new EnhanceDescriptionResponse { EnhancedDescription = enhanced, SuggestedCategory = category };
     }
 
-    // Extract JSON object from a string that may contain markdown code fences
     private static string ExtractJson(string text)
     {
         var start = text.IndexOf('{');
         var end   = text.LastIndexOf('}');
-        return start >= 0 && end > start
-            ? text[start..(end + 1)]
-            : text;
+        return start >= 0 && end > start ? text[start..(end + 1)] : text;
     }
 }
