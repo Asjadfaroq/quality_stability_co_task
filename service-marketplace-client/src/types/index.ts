@@ -14,6 +14,6 @@ export interface ServiceRequest {
   category: string
   latitude: number
   longitude: number
-  status: 'Pending' | 'Accepted' | 'Completed'
+  status: 'Pending' | 'Accepted' | 'Completed' | 'PendingConfirmation'
   createdAt: string
 }

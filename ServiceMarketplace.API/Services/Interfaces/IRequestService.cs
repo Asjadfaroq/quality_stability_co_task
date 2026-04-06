@@ -11,4 +11,5 @@ public interface IRequestService
     Task<List<ServiceRequestDto>> GetNearbyAsync(double lat, double lng, double radiusKm);
     Task<ServiceRequestDto> AcceptAsync(Guid requestId, Guid providerId);
     Task<ServiceRequestDto> CompleteAsync(Guid requestId, Guid providerId);
+    Task<ServiceRequestDto> ConfirmAsync(Guid requestId, Guid customerId);
 }

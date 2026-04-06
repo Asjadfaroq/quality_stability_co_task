@@ -1,9 +1,12 @@
 import { useState } from 'react'
+import ChatPanel from '../../components/ChatPanel'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore'
+import { useSignalR } from '../../hooks/useSignalR'
 import api from '../../api/axios'
 import type { ServiceRequest } from '../../types'
 
@@ -22,10 +25,17 @@ const statusBadge = (status: ServiceRequest['status']) => {
     Pending: 'bg-amber-100 text-amber-700',
     Accepted: 'bg-blue-100 text-blue-700',
     Completed: 'bg-green-100 text-green-700',
+    PendingConfirmation: 'bg-orange-100 text-orange-700',
+  }
+  const labels = {
+    Pending: 'Pending',
+    Accepted: 'Accepted',
+    Completed: 'Completed',
+    PendingConfirmation: 'Awaiting Your Confirmation',
   }
   return (
     <span className={`text-xs font-medium px-2 py-1 rounded-full ${styles[status]}`}>
-      {status}
+      {labels[status]}
     </span>
   )
 }
@@ -35,6 +45,18 @@ export default function CustomerDashboard() {
   const queryClient = useQueryClient()
   const [freeLimitError, setFreeLimitError] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
+  const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
+
+  // Real-time: provider marked job complete → notify customer
+  useSignalR({
+    RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast('Provider marked "' + data.title + '" as complete. Please confirm!', {
+        icon: '🔔',
+        duration: 8000,
+      })
+    },
+  })
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -61,6 +83,15 @@ export default function CustomerDashboard() {
     },
   })
 
+  const confirmMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/requests/${id}/confirm`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast.success('Job confirmed as completed!')
+    },
+    onError: () => toast.error('Failed to confirm completion.'),
+  })
+
   const handleEnhance = async () => {
     if (!title || !description) return
     setEnhancing(true)
@@ -77,6 +108,7 @@ export default function CustomerDashboard() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center">
@@ -199,12 +231,36 @@ export default function CustomerDashboard() {
           ) : (
             <div className="space-y-3">
               {requests.map((req) => (
-                <div key={req.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-gray-800 text-sm">{req.title}</p>
-                    <p className="text-gray-500 text-xs mt-1">{req.category} · {new Date(req.createdAt).toLocaleDateString()}</p>
+                <div key={req.id} className={`border rounded-lg p-4 ${req.status === 'PendingConfirmation' ? 'border-orange-300 bg-orange-50' : 'border-gray-200'}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">{req.title}</p>
+                      <p className="text-gray-500 text-xs mt-1">{req.category} · {new Date(req.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {statusBadge(req.status)}
+                      {(req.status === 'Accepted' || req.status === 'PendingConfirmation') && (
+                        <button
+                          onClick={() => setActiveChat({ id: req.id, title: req.title })}
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-lg transition"
+                        >
+                          💬 Chat
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {statusBadge(req.status)}
+                  {req.status === 'PendingConfirmation' && (
+                    <div className="mt-3 flex items-center justify-between bg-white border border-orange-200 rounded-lg px-3 py-2">
+                      <p className="text-xs text-orange-700">The provider has marked this job as complete. Please confirm.</p>
+                      <button
+                        onClick={() => confirmMutation.mutate(req.id)}
+                        disabled={confirmMutation.isPending}
+                        className="ml-4 text-xs bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-lg disabled:opacity-60 transition whitespace-nowrap"
+                      >
+                        Confirm Complete
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -212,5 +268,14 @@ export default function CustomerDashboard() {
         </div>
       </div>
     </div>
+
+    {activeChat && (
+      <ChatPanel
+        requestId={activeChat.id}
+        requestTitle={activeChat.title}
+        onClose={() => setActiveChat(null)}
+      />
+    )}
+  </>
   )
 }

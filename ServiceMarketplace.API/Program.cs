@@ -2,10 +2,12 @@ using System.Text;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
@@ -41,7 +43,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.MapInboundClaims = false; // keep claim names as-is from the JWT
+    options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -53,6 +55,19 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         NameClaimType = "userId",
         RoleClaimType = "role"
+    };
+    // SignalR sends JWT as query param because browsers can't set
+    // WebSocket headers — read it here for hub authentication
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var token = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(token) &&
+                context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                context.Token = token;
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -75,7 +90,6 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1"
     });
 
-    // Include XML doc comments in Swagger UI
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -107,16 +121,21 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// 7. CORS for frontend
+// 7. CORS — must allow credentials for SignalR WebSocket
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
         policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
               .AllowAnyHeader()
-              .AllowAnyMethod());
+              .AllowAnyMethod()
+              .AllowCredentials());
 });
 
-// 8. HttpClient factory
+// 8. SignalR
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, UserIdProvider>();
+
+// 9. HttpClient factory
 builder.Services.AddHttpClient();
 
 // Register services
@@ -137,10 +156,9 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// 9. Exception middleware — must be first in pipeline
+// 10. Exception middleware — must be first
 app.UseExceptionMiddleware();
 
-// Middleware pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -149,11 +167,12 @@ if (!app.Environment.IsDevelopment())
 
 app.UseCors("Frontend");
 
-// 10. Authentication & Authorization (order matters)
 app.UseAuthentication();
 app.UseAuthorization();
 
-// 11. Controllers
 app.MapControllers();
+
+// 11. SignalR hub endpoint
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();

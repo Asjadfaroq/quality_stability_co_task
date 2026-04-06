@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore'
+import { useSignalR } from '../../hooks/useSignalR'
+import ChatPanel from '../../components/ChatPanel'
 import api from '../../api/axios'
 import type { ServiceRequest } from '../../types'
 
@@ -10,10 +12,17 @@ const statusBadge = (status: ServiceRequest['status']) => {
     Pending: 'bg-amber-100 text-amber-700',
     Accepted: 'bg-blue-100 text-blue-700',
     Completed: 'bg-green-100 text-green-700',
+    PendingConfirmation: 'bg-orange-100 text-orange-700',
+  }
+  const labels = {
+    Pending: 'Pending',
+    Accepted: 'Accepted',
+    Completed: 'Completed',
+    PendingConfirmation: 'Awaiting Customer',
   }
   return (
     <span className={`text-xs font-medium px-2 py-1 rounded-full ${styles[status]}`}>
-      {status}
+      {labels[status]}
     </span>
   )
 }
@@ -22,11 +31,20 @@ export default function ProviderDashboard() {
   const { email, role, logout } = useAuthStore()
   const queryClient = useQueryClient()
 
+  const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')
   const [radius, setRadius] = useState(10)
   const [nearbyResults, setNearbyResults] = useState<ServiceRequest[] | null>(null)
   const [searchingNearby, setSearchingNearby] = useState(false)
+
+  // Real-time: customer confirmed job → notify provider
+  useSignalR({
+    RequestConfirmed: (data: { requestId: string; title: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast.success('Customer confirmed "' + data.title + '" as completed!')
+    },
+  })
 
   const { data: allRequests = [], isLoading: loadingAll } = useQuery<ServiceRequest[]>({
     queryKey: ['requests'],
@@ -78,6 +96,7 @@ export default function ProviderDashboard() {
   const displayPending = nearbyResults ?? pending
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center">
@@ -211,12 +230,23 @@ export default function ProviderDashboard() {
                   <div className="flex items-center gap-3">
                     {statusBadge(req.status)}
                     <button
-                      onClick={() => completeMutation.mutate(req.id)}
-                      disabled={completeMutation.isPending}
-                      className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-60 transition"
+                      onClick={() => setActiveChat({ id: req.id, title: req.title })}
+                      className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1.5 rounded-lg transition"
                     >
-                      Complete
+                      💬 Chat
                     </button>
+                    {req.status === 'Accepted' && (
+                      <button
+                        onClick={() => completeMutation.mutate(req.id)}
+                        disabled={completeMutation.isPending}
+                        className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-60 transition"
+                      >
+                        Complete
+                      </button>
+                    )}
+                    {req.status === 'PendingConfirmation' && (
+                      <span className="text-xs text-orange-600 italic">Waiting for customer...</span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -225,5 +255,14 @@ export default function ProviderDashboard() {
         </div>
       </div>
     </div>
+
+    {activeChat && (
+      <ChatPanel
+        requestId={activeChat.id}
+        requestTitle={activeChat.title}
+        onClose={() => setActiveChat(null)}
+      />
+    )}
+  </>
   )
 }

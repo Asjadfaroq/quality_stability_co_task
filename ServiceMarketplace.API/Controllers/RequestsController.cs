@@ -92,7 +92,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Complete an accepted request. Returns 403 if caller is not the acceptor, 422 if not in Accepted state.</summary>
+    /// <summary>Mark an accepted request as pending customer confirmation. Returns 403 if caller is not the acceptor, 422 if not in Accepted state.</summary>
     [HttpPatch("{id:guid}/complete")]
     [RequirePermission("request.complete")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
@@ -102,6 +102,18 @@ public class RequestsController : BaseController
     public async Task<IActionResult> Complete(Guid id)
     {
         var result = await _requestService.CompleteAsync(id, CurrentUserId);
+        return Ok(result);
+    }
+
+    /// <summary>Customer confirms completion of a request. Only the request owner can confirm. Returns 422 if not in PendingConfirmation state.</summary>
+    [HttpPatch("{id:guid}/confirm")]
+    [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Confirm(Guid id)
+    {
+        var result = await _requestService.ConfirmAsync(id, CurrentUserId);
         return Ok(result);
     }
 }

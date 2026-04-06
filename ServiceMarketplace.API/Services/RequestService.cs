@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Helpers;
+using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Models.Enums;
@@ -12,11 +14,13 @@ public class RequestService : IRequestService
 {
     private readonly AppDbContext _db;
     private readonly ISubscriptionService _subscriptionService;
+    private readonly IHubContext<NotificationHub> _hub;
 
-    public RequestService(AppDbContext db, ISubscriptionService subscriptionService)
+    public RequestService(AppDbContext db, ISubscriptionService subscriptionService, IHubContext<NotificationHub> hub)
     {
         _db = db;
         _subscriptionService = subscriptionService;
+        _hub = hub;
     }
 
     public async Task<ServiceRequestDto> CreateAsync(Guid customerId, CreateRequestDto dto)
@@ -52,7 +56,7 @@ public class RequestService : IRequestService
             UserRole.Customer => query.Where(r => r.CustomerId == userId),
             UserRole.Admin    => query,
             _                 => query.Where(r => r.Status == RequestStatus.Pending ||
-                                              (r.Status == RequestStatus.Accepted && r.AcceptedByProviderId == userId))
+                                              ((r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation) && r.AcceptedByProviderId == userId))
         };
 
         var requests = await query.OrderByDescending(r => r.CreatedAt).ToListAsync();
@@ -119,16 +123,59 @@ public class RequestService : IRequestService
         if (request.Status == RequestStatus.Completed)
             throw new InvalidOperationException("Request is already completed.");
 
+        if (request.Status == RequestStatus.PendingConfirmation)
+            throw new InvalidOperationException("Request is awaiting customer confirmation.");
+
         if (request.Status != RequestStatus.Accepted)
             throw new InvalidOperationException("Request must be accepted before it can be completed.");
 
         if (request.AcceptedByProviderId != providerId)
             throw new UnauthorizedAccessException("Only the provider who accepted this request can complete it.");
 
+        request.Status = RequestStatus.PendingConfirmation;
+        request.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        // Notify the customer in real time
+        await _hub.Clients
+            .Group(request.CustomerId.ToString())
+            .SendAsync("RequestNeedsConfirmation", new
+            {
+                requestId = request.Id,
+                title = request.Title
+            });
+
+        return MapToDto(request);
+    }
+
+    public async Task<ServiceRequestDto> ConfirmAsync(Guid requestId, Guid customerId)
+    {
+        var request = await _db.ServiceRequests
+            .FirstOrDefaultAsync(r => r.Id == requestId)
+            ?? throw new KeyNotFoundException("Request not found.");
+
+        if (request.CustomerId != customerId)
+            throw new UnauthorizedAccessException("Only the customer who created this request can confirm completion.");
+
+        if (request.Status != RequestStatus.PendingConfirmation)
+            throw new InvalidOperationException("Request is not awaiting confirmation.");
+
         request.Status = RequestStatus.Completed;
         request.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        // Notify the provider in real time
+        if (request.AcceptedByProviderId.HasValue)
+            await _hub.Clients
+                .Group(request.AcceptedByProviderId.Value.ToString())
+                .SendAsync("RequestConfirmed", new
+                {
+                    requestId = request.Id,
+                    title = request.Title
+                });
+
         return MapToDto(request);
     }
 
