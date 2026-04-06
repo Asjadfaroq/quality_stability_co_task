@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Models.DTOs.Auth;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -76,11 +77,9 @@ public class AuthService : IAuthService
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Role, user.Role.ToString()),
-            new Claim("role", user.Role.ToString()),
-            new Claim("userId", user.Id.ToString())
+            new Claim(ClaimConstants.UserId, user.Id.ToString()),
+            new Claim(ClaimConstants.Email, user.Email!),
+            new Claim(ClaimConstants.Role, user.Role.ToString())
         };
 
         var expiry = int.Parse(jwtSection["ExpiryMinutes"] ?? "1440");

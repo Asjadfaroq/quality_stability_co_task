@@ -14,5 +14,9 @@ done
 echo "==> Applying EF migrations..."
 dotnet ef database update --project "$PROJECT_DIR"
 
+# EF Core tools on macOS create a literal "bin\Debug" folder (Windows-style path bug)
+# Clean it up so it never appears in git status
+rm -rf "$PROJECT_DIR/bin\\Debug" "$PROJECT_DIR/bin\\Release" 2>/dev/null || true
+
 echo "==> Starting API..."
 dotnet run --project "$PROJECT_DIR"

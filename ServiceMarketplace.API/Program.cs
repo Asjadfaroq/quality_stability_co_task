@@ -38,6 +38,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.MapInboundClaims = false; // keep claim names as-is from the JWT
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -46,7 +47,9 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtSection["Issuer"],
         ValidAudience = jwtSection["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        NameClaimType = "userId",
+        RoleClaimType = "role"
     };
 });
 
@@ -103,6 +106,9 @@ builder.Services.AddCors(options =>
 
 // 8. Register services
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IOrgService, OrgService>();
 
 var app = builder.Build();
 

@@ -497,5 +497,9 @@ service-marketplace-client/.env.*.local
 # Docker
 docker-compose.override.yml
 
+# EF Core tools on macOS create a Windows-style backslash path as a literal folder
+ServiceMarketplace.API/bin\Debug/
+ServiceMarketplace.API/bin\Release/
+
 # macOS
 .DS_Store
