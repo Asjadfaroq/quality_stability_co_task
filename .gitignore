@@ -484,7 +484,7 @@ $RECYCLE.BIN/
 # ---- Project-specific secrets ----
 appsettings.Development.json
 appsettings.*.json
-!appsettings.json
+appsettings.json
 
 # Frontend
 node_modules/
@@ -503,3 +503,4 @@ ServiceMarketplace.API/bin\Release/
 
 # macOS
 .DS_Store
+appsettings.json
