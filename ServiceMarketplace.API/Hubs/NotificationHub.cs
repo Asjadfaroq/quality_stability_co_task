@@ -90,13 +90,26 @@ public class NotificationHub : Hub
         _db.ChatMessages.Add(message);
         await _db.SaveChangesAsync();
 
-        await Clients.Group($"chat_{requestId}").SendAsync("ReceiveMessage", new
+        var payload = new
         {
             id          = message.Id,
+            requestId   = message.RequestId,
             senderId    = message.SenderId,
             senderEmail = message.SenderEmail,
             content     = message.Content,
             sentAt      = message.SentAt
-        });
+        };
+
+        // Broadcast to everyone in the chat room (open ChatPanel)
+        await Clients.Group($"chat_{requestId}").SendAsync("ReceiveMessage", payload);
+
+        // Also notify the OTHER party via their userId group so dashboards
+        // can show unread badge even when the chat panel is closed
+        var otherPartyId = message.SenderId == request.CustomerId
+            ? request.AcceptedByProviderId?.ToString()
+            : request.CustomerId.ToString();
+
+        if (otherPartyId != null)
+            await Clients.Group(otherPartyId).SendAsync("NewMessageNotification", payload);
     }
 }

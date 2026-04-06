@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore'
@@ -32,17 +32,25 @@ export default function ProviderDashboard() {
   const queryClient = useQueryClient()
 
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
+  const activeChatRef = useRef<string | null>(null)
+  activeChatRef.current = activeChat?.id ?? null
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')
   const [radius, setRadius] = useState(10)
   const [nearbyResults, setNearbyResults] = useState<ServiceRequest[] | null>(null)
   const [searchingNearby, setSearchingNearby] = useState(false)
 
-  // Real-time: customer confirmed job → notify provider
   useSignalR({
     RequestConfirmed: (data: { requestId: string; title: string }) => {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
       toast.success('Customer confirmed "' + data.title + '" as completed!')
+    },
+    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
+      const rid = String(data.requestId)
+      if (activeChatRef.current === rid) return
+      setUnreadCounts((prev) => ({ ...prev, [rid]: (prev[rid] ?? 0) + 1 }))
+      toast(data.senderEmail + ' sent you a message', { icon: '💬', duration: 4000 })
     },
   })
 
@@ -230,10 +238,18 @@ export default function ProviderDashboard() {
                   <div className="flex items-center gap-3">
                     {statusBadge(req.status)}
                     <button
-                      onClick={() => setActiveChat({ id: req.id, title: req.title })}
-                      className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1.5 rounded-lg transition"
+                      onClick={() => {
+                        setActiveChat({ id: req.id, title: req.title })
+                        setUnreadCounts((prev) => ({ ...prev, [req.id]: 0 }))
+                      }}
+                      className="relative text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1.5 rounded-lg transition"
                     >
                       💬 Chat
+                      {(unreadCounts[req.id] ?? 0) > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                          {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
+                        </span>
+                      )}
                     </button>
                     {req.status === 'Accepted' && (
                       <button

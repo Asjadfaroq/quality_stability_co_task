@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import ChatPanel from '../../components/ChatPanel'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -46,8 +46,11 @@ export default function CustomerDashboard() {
   const [freeLimitError, setFreeLimitError] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
 
-  // Real-time: provider marked job complete → notify customer
+  const activeChatRef = useRef<string | null>(null)
+  activeChatRef.current = activeChat?.id ?? null
+
   useSignalR({
     RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
@@ -55,6 +58,12 @@ export default function CustomerDashboard() {
         icon: '🔔',
         duration: 8000,
       })
+    },
+    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
+      const rid = String(data.requestId)
+      if (activeChatRef.current === rid) return // panel is open, no badge needed
+      setUnreadCounts((prev) => ({ ...prev, [rid]: (prev[rid] ?? 0) + 1 }))
+      toast(data.senderEmail + ' sent you a message', { icon: '💬', duration: 4000 })
     },
   })
 
@@ -241,10 +250,18 @@ export default function CustomerDashboard() {
                       {statusBadge(req.status)}
                       {(req.status === 'Accepted' || req.status === 'PendingConfirmation') && (
                         <button
-                          onClick={() => setActiveChat({ id: req.id, title: req.title })}
-                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-lg transition"
+                          onClick={() => {
+                            setActiveChat({ id: req.id, title: req.title })
+                            setUnreadCounts((prev) => ({ ...prev, [req.id]: 0 }))
+                          }}
+                          className="relative text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-lg transition"
                         >
                           💬 Chat
+                          {(unreadCounts[req.id] ?? 0) > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                              {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
+                            </span>
+                          )}
                         </button>
                       )}
                     </div>
