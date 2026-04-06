@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore'
 import { useSignalR } from '../../hooks/useSignalR'
-import api from '../../api/axios'
+import api, { isRateLimited } from '../../api/axios'
 import type { ServiceRequest } from '../../types'
 
 const schema = z.object({
@@ -88,6 +88,7 @@ export default function CustomerDashboard() {
       reset()
     },
     onError: (err: any) => {
+      if (isRateLimited(err)) return
       if (err?.response?.status === 403) setFreeLimitError(true)
     },
   })
@@ -98,7 +99,10 @@ export default function CustomerDashboard() {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
       toast.success('Job confirmed as completed!')
     },
-    onError: () => toast.error('Failed to confirm completion.'),
+    onError: (err: unknown) => {
+      if (isRateLimited(err)) return
+      toast.error('Failed to confirm completion.')
+    },
   })
 
   const handleEnhance = async () => {
@@ -111,8 +115,8 @@ export default function CustomerDashboard() {
       })
       setValue('description', res.data.enhancedDescription)
       if (!watch('category')) setValue('category', res.data.suggestedCategory)
-    } catch {
-      toast.error('AI enhancement failed. Please try again.')
+    } catch (err) {
+      if (!isRateLimited(err)) toast.error('AI enhancement failed. Please try again.')
     } finally {
       setEnhancing(false)
     }

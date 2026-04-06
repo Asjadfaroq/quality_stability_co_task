@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,6 +13,13 @@ const schema = z.object({
 })
 
 type FormData = z.infer<typeof schema>
+
+function getRegisterError(error: unknown): string {
+  if (axios.isAxiosError(error) && error.response?.status === 400) {
+    return error.response.data?.message ?? 'Registration failed. Email may already be in use.'
+  }
+  return 'Something went wrong. Please try again.'
+}
 
 export default function Register() {
   const navigate = useNavigate()
@@ -31,9 +39,9 @@ export default function Register() {
       <div className="bg-white p-8 rounded-xl shadow w-full max-w-md">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">Create account</h1>
 
-        {mutation.isError && (
+        {mutation.isError && (mutation.error as any)?.response?.status !== 429 && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-            Registration failed. Email may already be in use.
+            {getRegisterError(mutation.error)}
           </div>
         )}
 

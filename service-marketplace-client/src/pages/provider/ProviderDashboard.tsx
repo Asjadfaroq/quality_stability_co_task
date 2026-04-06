@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore'
 import { useSignalR } from '../../hooks/useSignalR'
 import ChatPanel from '../../components/ChatPanel'
-import api from '../../api/axios'
+import api, { isRateLimited } from '../../api/axios'
 import type { ServiceRequest } from '../../types'
 
 const statusBadge = (status: ServiceRequest['status']) => {
@@ -69,6 +69,7 @@ export default function ProviderDashboard() {
       toast.success('Request accepted!')
     },
     onError: (err: any) => {
+      if (isRateLimited(err)) return
       if (err?.response?.status === 409)
         toast.error('This request was already accepted by someone else.')
       else
@@ -82,7 +83,10 @@ export default function ProviderDashboard() {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
       toast.success('Request marked as completed!')
     },
-    onError: () => toast.error('Failed to complete request.'),
+    onError: (err: unknown) => {
+      if (isRateLimited(err)) return
+      toast.error('Failed to complete request.')
+    },
   })
 
   const handleNearbySearch = async () => {
@@ -101,8 +105,8 @@ export default function ProviderDashboard() {
       })
       setNearbyResults(res.data)
       if (res.data.length === 0) toast('No requests found nearby.', { icon: 'ℹ️' })
-    } catch {
-      toast.error('Failed to fetch nearby requests.')
+    } catch (err) {
+      if (!isRateLimited(err)) toast.error('Failed to fetch nearby requests.')
     } finally {
       setSearchingNearby(false)
     }
