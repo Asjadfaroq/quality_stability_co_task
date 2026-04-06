@@ -18,8 +18,6 @@ public class AdminService : IAdminService
 
     public async Task<List<UserDto>> GetAllUsersAsync()
     {
-        // Project in SQL — avoids loading all IdentityUser columns (PasswordHash,
-        // SecurityStamp, ConcurrencyStamp, etc.) and maps directly to the DTO.
         var raw = await _db.Users
             .AsNoTracking()
             .Select(u => new
@@ -65,7 +63,6 @@ public class AdminService : IAdminService
 
         var permissionNames = overrides.Select(o => o.PermissionName).ToHashSet();
 
-        // Batch load all referenced permissions in one query instead of N queries
         var permissions = await _db.Permissions
             .AsNoTracking()
             .Where(p => permissionNames.Contains(p.Name))
@@ -77,7 +74,6 @@ public class AdminService : IAdminService
 
         var permissionIds = permissions.Values.Select(p => p.Id).ToList();
 
-        // Batch load existing user overrides in one query instead of N queries
         var existingOverrides = await _db.UserPermissions
             .Where(up => up.UserId == userId && permissionIds.Contains(up.PermissionId))
             .ToDictionaryAsync(up => up.PermissionId);
@@ -94,14 +90,13 @@ public class AdminService : IAdminService
             {
                 _db.UserPermissions.Add(new UserPermission
                 {
-                    UserId = userId,
+                    UserId       = userId,
                     PermissionId = permission.Id,
-                    Granted = o.Granted
+                    Granted      = o.Granted
                 });
             }
         }
 
         await _db.SaveChangesAsync();
     }
-
 }

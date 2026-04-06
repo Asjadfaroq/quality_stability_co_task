@@ -16,7 +16,6 @@ public class NotificationHub : Hub
         _logger = logger;
     }
 
-    // Each user joins a group named after their userId for targeted notifications.
     public override async Task OnConnectedAsync()
     {
         var userId = Context.UserIdentifier;
@@ -34,8 +33,6 @@ public class NotificationHub : Hub
 
         await base.OnDisconnectedAsync(exception);
     }
-
-    // ── Chat Methods ──────────────────────────────────────────────────────────
 
     public async Task JoinRequestChat(string requestId)
     {
@@ -73,15 +70,14 @@ public class NotificationHub : Hub
                 sentAt      = message.SentAt
             };
 
-            // Broadcast to everyone in the chat room (open ChatPanel)
             await Clients.Group($"chat_{requestId}").SendAsync("ReceiveMessage", payload);
 
-            // Notify the other party's dashboard so their unread badge updates
+            // Push to the other party's personal group so their unread badge updates
+            // even if they don't have the chat panel open
             var otherPartyId = await _chatService.GetOtherPartyIdAsync(message.RequestId, userId.Value);
             if (otherPartyId.HasValue)
                 await Clients.Group(otherPartyId.Value.ToString())
                     .SendAsync("NewMessageNotification", payload);
-
         }
         catch (ArgumentException ex)
         {

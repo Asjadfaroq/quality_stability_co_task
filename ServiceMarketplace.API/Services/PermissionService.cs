@@ -31,14 +31,12 @@ public class PermissionService : IPermissionService
         if (_cache.TryGetValue(cacheKey, out HashSet<string>? cached) && cached is not null)
             return cached;
 
-        // 1. Get user's role
         var user = await _db.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == userId);
 
         if (user is null) return [];
 
-        // 2. Load role default permissions
         var rolePermissionNames = await _db.RolePermissions
             .AsNoTracking()
             .Where(rp => rp.Role == user.Role)
@@ -47,7 +45,6 @@ public class PermissionService : IPermissionService
 
         var effective = new HashSet<string>(rolePermissionNames);
 
-        // 3. Load user-level overrides and apply them
         var userOverrides = await _db.UserPermissions
             .AsNoTracking()
             .Where(up => up.UserId == userId)

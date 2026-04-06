@@ -35,24 +35,22 @@ public class RequestService : IRequestService
 
         var request = new ServiceRequest
         {
-            Id = Guid.NewGuid(),
-            CustomerId = customerId,
-            Title = dto.Title,
+            Id          = Guid.NewGuid(),
+            CustomerId  = customerId,
+            Title       = dto.Title,
             Description = dto.Description,
-            Category = dto.Category,
-            Latitude = dto.Latitude,
-            Longitude = dto.Longitude,
-            Status = RequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            Category    = dto.Category,
+            Latitude    = dto.Latitude,
+            Longitude   = dto.Longitude,
+            Status      = RequestStatus.Pending,
+            CreatedAt   = DateTime.UtcNow,
+            UpdatedAt   = DateTime.UtcNow
         };
 
         _db.ServiceRequests.Add(request);
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation(
-            "Request {RequestId} created by customer {CustomerId}",
-            request.Id, customerId);
+        _logger.LogInformation("Request {RequestId} created by customer {CustomerId}", request.Id, customerId);
 
         return MapToDto(request);
     }
@@ -65,8 +63,10 @@ public class RequestService : IRequestService
         {
             UserRole.Customer => query.Where(r => r.CustomerId == userId),
             UserRole.Admin    => query,
-            _                 => query.Where(r => r.Status == RequestStatus.Pending ||
-                                              ((r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation) && r.AcceptedByProviderId == userId))
+            _                 => query.Where(r =>
+                                     r.Status == RequestStatus.Pending ||
+                                     ((r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation)
+                                      && r.AcceptedByProviderId == userId))
         };
 
         var requests = await query.OrderByDescending(r => r.CreatedAt).ToListAsync();
@@ -80,7 +80,6 @@ public class RequestService : IRequestService
             .FirstOrDefaultAsync(r => r.Id == requestId)
             ?? throw new KeyNotFoundException("Request not found.");
 
-        // Customers can only see their own requests
         if (role == UserRole.Customer && request.CustomerId != userId)
             throw new UnauthorizedAccessException("You do not have access to this request.");
 
@@ -89,9 +88,8 @@ public class RequestService : IRequestService
 
     public async Task<List<ServiceRequestDto>> GetNearbyAsync(double lat, double lng, double radiusKm)
     {
-        // Step 1: bounding box pre-filter in SQL.
-        // Cast delta to decimal once in C# so SQL compares decimal columns to decimal
-        // parameters directly — avoids per-row CAST(Latitude AS float) in the query plan.
+        // Pre-cast bounding box to decimal so EF generates a direct column comparison
+        // rather than CAST(Latitude AS float) per row, allowing index usage
         var delta  = radiusKm / 111.0;
         var latMin = (decimal)(lat - delta);
         var latMax = (decimal)(lat + delta);
@@ -106,10 +104,9 @@ public class RequestService : IRequestService
                 r.Longitude >= lngMin && r.Longitude <= lngMax)
             .ToListAsync();
 
-        // Step 2: exact Haversine filter in memory
+        // Haversine exact filter after the bounding-box pre-filter
         return candidates
-            .Where(r => GeoHelper.CalculateDistance(
-                lat, lng, (double)r.Latitude, (double)r.Longitude) <= radiusKm)
+            .Where(r => GeoHelper.CalculateDistance(lat, lng, (double)r.Latitude, (double)r.Longitude) <= radiusKm)
             .Select(MapToDto)
             .ToList();
     }
@@ -133,14 +130,11 @@ public class RequestService : IRequestService
         }
         catch (DbUpdateConcurrencyException)
         {
-            // Another provider accepted the same request between our read and write.
-            // RowVersion mismatch triggers this — surface it as a 409 Conflict.
+            // RowVersion mismatch — another provider accepted between our read and write
             throw new ConflictException("Request was accepted by another provider. Please refresh.");
         }
 
-        _logger.LogInformation(
-            "Request {RequestId} accepted by provider {ProviderId}",
-            requestId, providerId);
+        _logger.LogInformation("Request {RequestId} accepted by provider {ProviderId}", requestId, providerId);
 
         return MapToDto(request);
     }
@@ -168,18 +162,11 @@ public class RequestService : IRequestService
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation(
-            "Request {RequestId} marked PendingConfirmation by provider {ProviderId}",
-            requestId, providerId);
+        _logger.LogInformation("Request {RequestId} marked PendingConfirmation by provider {ProviderId}", requestId, providerId);
 
-        // Notify the customer in real time
         await _hub.Clients
             .Group(request.CustomerId.ToString())
-            .SendAsync("RequestNeedsConfirmation", new
-            {
-                requestId = request.Id,
-                title = request.Title
-            });
+            .SendAsync("RequestNeedsConfirmation", new { requestId = request.Id, title = request.Title });
 
         return MapToDto(request);
     }
@@ -201,35 +188,28 @@ public class RequestService : IRequestService
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation(
-            "Request {RequestId} confirmed completed by customer {CustomerId}",
-            requestId, customerId);
+        _logger.LogInformation("Request {RequestId} confirmed completed by customer {CustomerId}", requestId, customerId);
 
-        // Notify the provider in real time
         if (request.AcceptedByProviderId.HasValue)
             await _hub.Clients
                 .Group(request.AcceptedByProviderId.Value.ToString())
-                .SendAsync("RequestConfirmed", new
-                {
-                    requestId = request.Id,
-                    title = request.Title
-                });
+                .SendAsync("RequestConfirmed", new { requestId = request.Id, title = request.Title });
 
         return MapToDto(request);
     }
 
     private static ServiceRequestDto MapToDto(ServiceRequest r) => new()
     {
-        Id = r.Id,
-        CustomerId = r.CustomerId,
-        Title = r.Title,
-        Description = r.Description,
-        Category = r.Category,
-        Latitude = r.Latitude,
-        Longitude = r.Longitude,
-        Status = r.Status.ToString(),
+        Id                   = r.Id,
+        CustomerId           = r.CustomerId,
+        Title                = r.Title,
+        Description          = r.Description,
+        Category             = r.Category,
+        Latitude             = r.Latitude,
+        Longitude            = r.Longitude,
+        Status               = r.Status.ToString(),
         AcceptedByProviderId = r.AcceptedByProviderId,
-        CreatedAt = r.CreatedAt,
-        UpdatedAt = r.UpdatedAt
+        CreatedAt            = r.CreatedAt,
+        UpdatedAt            = r.UpdatedAt
     };
 }

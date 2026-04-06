@@ -21,7 +21,6 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     {
         base.OnModelCreating(builder);
 
-        // User
         builder.Entity<User>(e =>
         {
             e.Property(u => u.Role).IsRequired();
@@ -30,11 +29,9 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .WithMany(o => o.Members)
              .HasForeignKey(u => u.OrganizationId)
              .OnDelete(DeleteBehavior.SetNull);
-            // Supports GetOrgMembersAsync / UpdateMemberPermissionsAsync filters
             e.HasIndex(u => u.OrganizationId);
         });
 
-        // Organization
         builder.Entity<Organization>(e =>
         {
             e.HasKey(o => o.Id);
@@ -45,7 +42,6 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ServiceRequest
         builder.Entity<ServiceRequest>(e =>
         {
             e.HasKey(r => r.Id);
@@ -63,21 +59,17 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .WithMany()
              .HasForeignKey(r => r.AcceptedByProviderId)
              .OnDelete(DeleteBehavior.SetNull);
-            // Individual indexes for customer dashboard and admin list
             e.HasIndex(r => r.CustomerId);
             e.HasIndex(r => r.Status);
-            // Compound index for the provider query:
-            // WHERE Status IN (Pending) OR (Status IN (Accepted,PendingConf) AND AcceptedByProviderId = ?)
+            // Compound index covers the provider query: pending requests OR accepted by this provider
             e.HasIndex(r => new { r.AcceptedByProviderId, r.Status });
         });
 
-        // ChatMessage
         builder.Entity<ChatMessage>(e =>
         {
             e.HasIndex(m => m.RequestId);
         });
 
-        // Permission
         builder.Entity<Permission>(e =>
         {
             e.HasKey(p => p.Id);
@@ -85,7 +77,6 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
             e.HasIndex(p => p.Name).IsUnique();
         });
 
-        // RolePermission — composite PK
         builder.Entity<RolePermission>(e =>
         {
             e.HasKey(rp => new { rp.Role, rp.PermissionId });
@@ -95,7 +86,6 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // UserPermission — composite PK
         builder.Entity<UserPermission>(e =>
         {
             e.HasKey(up => new { up.UserId, up.PermissionId });
@@ -126,15 +116,12 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     private static void SeedRolePermissions(ModelBuilder builder)
     {
         builder.Entity<RolePermission>().HasData(
-            // Customer -> request.create
-            new RolePermission { Role = UserRole.Customer, PermissionId = 1 },
+            new RolePermission { Role = UserRole.Customer,         PermissionId = 1 },
 
-            // ProviderAdmin -> request.accept, request.complete, request.view_all
-            new RolePermission { Role = UserRole.ProviderAdmin, PermissionId = 2 },
-            new RolePermission { Role = UserRole.ProviderAdmin, PermissionId = 3 },
-            new RolePermission { Role = UserRole.ProviderAdmin, PermissionId = 4 },
+            new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 2 },
+            new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 3 },
+            new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 4 },
 
-            // ProviderEmployee -> request.accept, request.complete
             new RolePermission { Role = UserRole.ProviderEmployee, PermissionId = 2 },
             new RolePermission { Role = UserRole.ProviderEmployee, PermissionId = 3 }
         );

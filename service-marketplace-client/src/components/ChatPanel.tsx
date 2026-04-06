@@ -30,7 +30,6 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
   const connectionRef = useRef<signalR.HubConnection | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Load chat history
   const { data: history = [] } = useQuery<Message[]>({
     queryKey: ['chat', requestId],
     queryFn: () => api.get(`/chat/${requestId}`).then((r) => r.data),
@@ -40,14 +39,12 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
     setMessages(history)
   }, [history])
 
-  // Connect to hub and join chat room
   useEffect(() => {
     if (!token) return
 
-    // Tracks whether the cleanup has already run (React StrictMode mounts twice in dev,
-    // or the user closes the panel before the connection resolves). Without this flag,
-    // our own cleanup calling connection.stop() would reject the pending start() and
-    // incorrectly show the "Failed to connect" toast.
+    // Prevents the cleanup calling stop() from triggering the error toast.
+    // React StrictMode mounts effects twice in development, so without this flag
+    // the first connection's stop() would reject start() and show a false error.
     let cancelled = false
 
     const connection = new signalR.HubConnectionBuilder()
@@ -81,7 +78,6 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
     }
   }, [requestId, token])
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -110,7 +106,6 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-sm flex flex-col pointer-events-auto"
            style={{ height: '500px' }}>
 
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-blue-600 rounded-t-xl">
           <div>
             <p className="text-white font-medium text-sm">Chat</p>
@@ -122,7 +117,6 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
           </div>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {messages.length === 0 ? (
             <p className="text-gray-400 text-xs text-center mt-8">No messages yet. Say hello!</p>
@@ -151,7 +145,6 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <div className="border-t border-gray-200 p-3 flex gap-2">
           <input
             value={input}

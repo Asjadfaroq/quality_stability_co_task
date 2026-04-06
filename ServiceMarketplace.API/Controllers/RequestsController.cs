@@ -8,7 +8,6 @@ using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
 
-/// <summary>Service request lifecycle management.</summary>
 [Route("api/requests")]
 [Authorize]
 public class RequestsController : BaseController

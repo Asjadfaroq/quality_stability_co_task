@@ -19,6 +19,6 @@ public class ServiceRequest
     public User? Customer { get; set; }
     public User? AcceptedByProvider { get; set; }
 
-    /// <summary>Optimistic concurrency token — prevents double-accept race conditions.</summary>
+    // Optimistic concurrency — EF throws DbUpdateConcurrencyException on double-accept
     public byte[]? RowVersion { get; set; }
 }

@@ -4,7 +4,6 @@ using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
 
-/// <summary>Handles user registration and login.</summary>
 [Route("api/auth")]
 public class AuthController : BaseController
 {

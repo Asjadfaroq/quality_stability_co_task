@@ -18,7 +18,6 @@ public class SubscriptionService : ISubscriptionService
 
     public async Task EnforceCreateLimitAsync(Guid customerId)
     {
-        // Project only SubTier — avoids loading all IdentityUser columns
         var subTier = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == customerId)

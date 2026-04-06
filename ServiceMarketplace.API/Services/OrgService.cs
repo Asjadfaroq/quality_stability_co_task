@@ -19,8 +19,6 @@ public class OrgService : IOrgService
 
     public async Task<List<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId)
     {
-        // Project only OrganizationId — avoids loading all IdentityUser columns.
-        // Use anonymous type so we can distinguish "user not found" from "org is null".
         var adminInfo = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
@@ -33,7 +31,6 @@ public class OrgService : IOrgService
 
         var adminOrgId = adminInfo.OrganizationId.Value;
 
-        // Single query with SQL projection — no full entity load, no ThenInclude overhead
         var raw = await _db.Users
             .AsNoTracking()
             .Where(u => u.OrganizationId == adminOrgId && u.Id != providerAdminId)
@@ -60,7 +57,6 @@ public class OrgService : IOrgService
 
     public async Task UpdateMemberPermissionsAsync(Guid providerAdminId, Guid memberId, List<PermissionOverride> overrides)
     {
-        // Project only what we need — avoids loading all IdentityUser columns
         var adminInfo = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
@@ -73,7 +69,6 @@ public class OrgService : IOrgService
 
         var adminOrgId = adminInfo.OrganizationId.Value;
 
-        // Verify target member belongs to the same org — AsNoTracking because we only read
         var memberRole = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == memberId && u.OrganizationId == adminOrgId)
@@ -84,8 +79,8 @@ public class OrgService : IOrgService
         if (memberRole != UserRole.ProviderEmployee)
             throw new InvalidOperationException("Can only manage permissions for ProviderEmployee members.");
 
-        // Batch load all referenced permissions in one query
         var permissionNames = overrides.Select(o => o.PermissionName).ToHashSet();
+
         var permissions = await _db.Permissions
             .AsNoTracking()
             .Where(p => permissionNames.Contains(p.Name))
@@ -97,7 +92,6 @@ public class OrgService : IOrgService
 
         var permissionIds = permissions.Values.Select(p => p.Id).ToList();
 
-        // Batch load existing overrides in one query
         var existingOverrides = await _db.UserPermissions
             .Where(up => up.UserId == memberId && permissionIds.Contains(up.PermissionId))
             .ToDictionaryAsync(up => up.PermissionId);

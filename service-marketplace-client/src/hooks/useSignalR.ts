@@ -15,14 +15,11 @@ export function useSignalR(handlers: EventHandlers) {
     if (!token) return
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(HUB_URL, {
-        accessTokenFactory: () => token,
-      })
+      .withUrl(HUB_URL, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
       .configureLogging(signalR.LogLevel.Warning)
       .build()
 
-    // Register all event handlers
     Object.entries(handlers).forEach(([event, handler]) => {
       connection.on(event, handler)
     })

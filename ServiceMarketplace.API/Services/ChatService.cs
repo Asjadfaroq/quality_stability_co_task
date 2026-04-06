@@ -33,13 +33,11 @@ public class ChatService : IChatService
         if (content.Length > MaxMessageLength)
             throw new ArgumentException($"Message exceeds maximum length of {MaxMessageLength} characters.");
 
-        // Sequential reads — DbContext is not thread-safe; never run two queries on the
-        // same instance concurrently (Task.WhenAll would cause "second operation started").
+        // DbContext is not thread-safe — queries must be sequential on the same instance
         var participants = await GetParticipantsAsync(requestId)
             ?? throw new KeyNotFoundException("Request not found.");
 
-        var isParticipant = participants.CustomerId == senderId || participants.ProviderId == senderId;
-        if (!isParticipant)
+        if (participants.CustomerId != senderId && participants.ProviderId != senderId)
             throw new UnauthorizedAccessException("You are not a participant in this chat.");
 
         var senderEmail = await _db.Users
@@ -92,8 +90,7 @@ public class ChatService : IChatService
         return null;
     }
 
-    // Shared projection — fetches only the two Guid fields needed for access checks.
-    // Avoids loading Title, Description, Latitude, Longitude, Status, etc. every call.
+    // Projects only the two participant IDs rather than the full ServiceRequest row
     private async Task<RequestParticipants?> GetParticipantsAsync(Guid requestId) =>
         await _db.ServiceRequests
             .AsNoTracking()
