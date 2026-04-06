@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { MapPin, AlertCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import api from '../api/axios'
 import { useAuthStore } from '../store/authStore'
 import { getDashboardPath, AUTH_REDIRECT_KEY } from '../utils/auth'
@@ -22,6 +22,50 @@ function getLoginError(error: unknown): string {
     if (error.response?.status === 401) return 'Incorrect email or password.'
   }
   return 'Something went wrong. Please try again.'
+}
+
+// Floating shape definitions — position, size, shape type, animation delay
+const SHAPES = [
+  { type: 'circle',  top: '8%',  left: '6%',  size: 72,  delay: '0s',    duration: '6s'  },
+  { type: 'square',  top: '18%', left: '34%', size: 42,  delay: '1.2s',  duration: '7s'  },
+  { type: 'circle',  top: '42%', left: '41%', size: 52,  delay: '0.6s',  duration: '8s'  },
+  { type: 'diamond', top: '68%', left: '29%', size: 54,  delay: '2s',    duration: '6.5s'},
+  { type: 'circle',  top: '78%', left: '5%',  size: 38,  delay: '1.5s',  duration: '7.5s'},
+  { type: 'square',  top: '55%', left: '55%', size: 30,  delay: '0.3s',  duration: '9s'  },
+  { type: 'diamond', top: '88%', left: '48%', size: 44,  delay: '1s',    duration: '7s'  },
+]
+
+function FloatingShape({ type, top, left, size, delay, duration }: typeof SHAPES[0]) {
+  const base = `absolute opacity-20 border border-indigo-300`
+  const style = {
+    top, left, width: size, height: size,
+    animationDelay: delay,
+    animationDuration: duration,
+  }
+
+  if (type === 'circle') {
+    return (
+      <div
+        className={`${base} rounded-full animate-float`}
+        style={style}
+      />
+    )
+  }
+  if (type === 'diamond') {
+    return (
+      <div
+        className={`${base} animate-float`}
+        style={{ ...style, transform: 'rotate(45deg)' }}
+      />
+    )
+  }
+  // square
+  return (
+    <div
+      className={`${base} rounded-sm animate-float`}
+      style={style}
+    />
+  )
 }
 
 export default function Login() {
@@ -48,99 +92,150 @@ export default function Login() {
   const showBanner = mutation.isError && (mutation.error as any)?.response?.status !== 429
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-            <MapPin size={18} className="text-white" />
-          </div>
-          <span className="text-lg font-semibold text-white tracking-tight">ServiceMarket</span>
-        </div>
+    <>
+      {/* Inject float keyframes globally once */}
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(var(--r, 0deg)); }
+          50%       { transform: translateY(-18px) rotate(var(--r, 0deg)); }
+        }
+        .animate-float {
+          animation-name: float;
+          animation-timing-function: ease-in-out;
+          animation-iteration-count: infinite;
+        }
+      `}</style>
 
-        <div>
-          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
-            Connect with skilled<br />service professionals
-          </h1>
-          <p className="text-blue-200 text-base leading-relaxed">
-            Post a job, get matched with verified providers, and get things done — all in one place.
-          </p>
-        </div>
+      <div className="min-h-screen flex">
 
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { value: '2,400+', label: 'Active providers' },
-            { value: '98%',    label: 'Satisfaction rate' },
-            { value: '< 2h',   label: 'Average response' },
-          ].map((s) => (
-            <div key={s.label} className="bg-white/10 rounded-xl p-4">
-              <p className="text-2xl font-bold text-white">{s.value}</p>
-              <p className="text-xs text-blue-200 mt-0.5">{s.label}</p>
-            </div>
+        {/* ── Left panel ── */}
+        <div
+          className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col items-center justify-center"
+          style={{ background: 'linear-gradient(145deg, #e8eef8 0%, #dae4f5 40%, #cdd8f0 100%)' }}
+        >
+          {/* Floating shapes */}
+          {SHAPES.map((s, i) => (
+            <FloatingShape key={i} {...s} />
           ))}
-        </div>
-      </div>
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <MapPin size={16} className="text-white" />
+          {/* Logo / brand mark */}
+          <div className="relative z-10 flex flex-col items-center select-none">
+            {/* Icon mark */}
+            <div className="mb-6">
+              <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                <rect x="10" y="30" width="22" height="22" rx="4" fill="#3b6fd4" opacity="0.9" />
+                <rect x="28" y="14" width="22" height="22" rx="4" fill="#5a8ee8" opacity="0.8" />
+                <rect x="46" y="30" width="22" height="22" rx="4" fill="#7aaaf0" opacity="0.7" />
+                <rect x="28" y="46" width="22" height="22" rx="4" fill="#4e7dd4" opacity="0.75" />
+              </svg>
             </div>
-            <span className="text-base font-semibold text-gray-900">ServiceMarket</span>
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
-            <p className="text-sm text-gray-500 mt-1">Sign in to your account to continue</p>
-          </div>
-
-          {showBanner && (
-            <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl mb-6">
-              <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-red-700">{getLoginError(mutation.error)}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-            <Input
-              label="Email address"
-              type="email"
-              placeholder="you@example.com"
-              error={errors.email?.message}
-              {...register('email')}
-            />
-
-            <Input
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              error={errors.password?.message}
-              {...register('password')}
-            />
-
-            <Button
-              type="submit"
-              fullWidth
-              size="lg"
-              loading={mutation.isPending}
-              className="mt-2"
+            <h1
+              className="text-5xl font-black tracking-tight"
+              style={{ color: '#1a2e5a', letterSpacing: '-1px' }}
             >
-              Sign in
-            </Button>
-          </form>
+              ServiceMarket
+            </h1>
+            <p className="mt-3 text-base font-medium" style={{ color: '#4a6090' }}>
+              Professional services, on demand
+            </p>
+          </div>
 
-          <p className="text-sm text-gray-500 text-center mt-6">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-blue-600 font-medium hover:underline">
-              Create one
-            </Link>
+          {/* Bottom tagline */}
+          <p
+            className="absolute bottom-8 text-xs text-center px-12"
+            style={{ color: '#8099c0' }}
+          >
+            Connecting skilled professionals with people who need them
           </p>
         </div>
+
+        {/* ── Right panel — form ── */}
+        <div className="flex-1 flex flex-col bg-white">
+          <div className="flex-1 flex items-center justify-center px-8">
+            <div className="w-full max-w-sm">
+
+              {/* Mobile logo */}
+              <div className="flex flex-col items-center mb-10 lg:hidden">
+                <svg width="48" height="48" viewBox="0 0 80 80" fill="none" className="mb-2">
+                  <rect x="10" y="30" width="22" height="22" rx="4" fill="#3b6fd4" opacity="0.9" />
+                  <rect x="28" y="14" width="22" height="22" rx="4" fill="#5a8ee8" opacity="0.8" />
+                  <rect x="46" y="30" width="22" height="22" rx="4" fill="#7aaaf0" opacity="0.7" />
+                  <rect x="28" y="46" width="22" height="22" rx="4" fill="#4e7dd4" opacity="0.75" />
+                </svg>
+                <span className="text-xl font-black text-gray-900">ServiceMarket</span>
+              </div>
+
+              <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                Login with your Account
+              </h2>
+              <p className="text-sm text-gray-500 mb-8">
+                Enter your credentials to access your account
+              </p>
+
+              {showBanner && (
+                <div className="flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl mb-5">
+                  <AlertCircle size={15} className="text-red-500 mt-0.5 shrink-0" />
+                  <p className="text-sm text-red-700">{getLoginError(mutation.error)}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
+                <Input
+                  label="Email"
+                  type="email"
+                  placeholder="Enter your email"
+                  error={errors.email?.message}
+                  {...register('email')}
+                />
+
+                <Input
+                  label="Password"
+                  type="password"
+                  placeholder="Enter your password"
+                  error={errors.password?.message}
+                  {...register('password')}
+                />
+
+                <div className="pt-1">
+                  <button
+                    type="submit"
+                    disabled={mutation.isPending}
+                    className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{
+                      background: mutation.isPending
+                        ? '#6b9de8'
+                        : 'linear-gradient(135deg, #3b6fd4 0%, #5a8ee8 100%)',
+                      boxShadow: '0 4px 14px rgba(59, 111, 212, 0.35)',
+                    }}
+                  >
+                    {mutation.isPending ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Signing in…
+                      </span>
+                    ) : (
+                      'Login'
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              <p className="text-sm text-gray-500 text-center mt-6">
+                Don't have an account?{' '}
+                <Link to="/register" className="font-semibold hover:underline" style={{ color: '#3b6fd4' }}>
+                  Create one
+                </Link>
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <p className="text-center text-xs text-gray-400 py-5">
+            © {new Date().getFullYear()} ServiceMarket. All rights reserved.
+          </p>
+        </div>
+
       </div>
-    </div>
+    </>
   )
 }
