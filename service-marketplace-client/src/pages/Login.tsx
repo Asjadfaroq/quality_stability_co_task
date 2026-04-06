@@ -8,7 +8,7 @@ import { AlertCircle } from 'lucide-react'
 import api from '../api/axios'
 import { useAuthStore } from '../store/authStore'
 import { getDashboardPath, AUTH_REDIRECT_KEY } from '../utils/auth'
-import { Button, Input } from '../components/ui'
+import { Input } from '../components/ui'
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email address'),
@@ -36,7 +36,7 @@ const SHAPES = [
 ]
 
 function FloatingShape({ type, top, left, size, delay, duration }: typeof SHAPES[0]) {
-  const base = `absolute opacity-20 border border-indigo-300`
+  const base = `absolute opacity-40 border-2 border-indigo-400`
   const style = {
     top, left, width: size, height: size,
     animationDelay: delay,
@@ -111,8 +111,17 @@ export default function Login() {
         {/* ── Left panel ── */}
         <div
           className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col items-center justify-center"
-          style={{ background: 'linear-gradient(145deg, #e8eef8 0%, #dae4f5 40%, #cdd8f0 100%)' }}
+          style={{ background: 'linear-gradient(160deg, #dbeafe 0%, #f0f5fd 28%, #f7f9fe 60%, #eef2fb 100%)' }}
         >
+          {/* Top-left corner accent glow */}
+          <div
+            className="absolute top-0 left-0 w-72 h-72 rounded-full pointer-events-none"
+            style={{
+              background: 'radial-gradient(circle at top left, rgba(99,138,255,0.18) 0%, rgba(147,197,253,0.10) 50%, transparent 75%)',
+              filter: 'blur(18px)',
+            }}
+          />
+
           {/* Floating shapes */}
           {SHAPES.map((s, i) => (
             <FloatingShape key={i} {...s} />
