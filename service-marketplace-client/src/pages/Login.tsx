@@ -4,12 +4,14 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { MapPin, AlertCircle } from 'lucide-react'
 import api from '../api/axios'
 import { useAuthStore } from '../store/authStore'
 import { getDashboardPath, AUTH_REDIRECT_KEY } from '../utils/auth'
+import { Button, Input } from '../components/ui'
 
 const schema = z.object({
-  email: z.string().email('Invalid email'),
+  email:    z.string().email('Enter a valid email address'),
   password: z.string().min(1, 'Password is required'),
 })
 
@@ -17,20 +19,16 @@ type FormData = z.infer<typeof schema>
 
 function getLoginError(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    if (error.response?.status === 401) return 'Invalid email or password.'
+    if (error.response?.status === 401) return 'Incorrect email or password.'
   }
   return 'Something went wrong. Please try again.'
 }
 
 export default function Login() {
-  const navigate  = useNavigate()
-  const location  = useLocation()
-  const login     = useAuthStore((s) => s.login)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const login    = useAuthStore((s) => s.login)
 
-  // Resolve the post-login destination:
-  // 1. Path passed via React Router state (e.g. from ProtectedRoute)
-  // 2. Path stored in sessionStorage (e.g. from a mid-session 401)
-  // 3. Role-based default dashboard
   const stateFrom = (location.state as { from?: string } | null)?.from ?? null
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -41,62 +39,107 @@ export default function Login() {
     mutationFn: (data: FormData) => api.post('/auth/login', data).then((r) => r.data),
     onSuccess: (data) => {
       login(data)
-
       const sessionFrom = sessionStorage.getItem(AUTH_REDIRECT_KEY)
       sessionStorage.removeItem(AUTH_REDIRECT_KEY)
-
-      const destination = stateFrom ?? sessionFrom ?? getDashboardPath(data.role)
-      navigate(destination, { replace: true })
+      navigate(stateFrom ?? sessionFrom ?? getDashboardPath(data.role), { replace: true })
     },
   })
 
+  const showBanner = mutation.isError && (mutation.error as any)?.response?.status !== 429
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-xl shadow w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">Sign in</h1>
-
-        {mutation.isError && (mutation.error as any)?.response?.status !== 429 && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-            {getLoginError(mutation.error)}
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Left panel — branding */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 flex-col justify-between p-12">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+            <MapPin size={18} className="text-white" />
           </div>
-        )}
+          <span className="text-lg font-semibold text-white tracking-tight">ServiceMarket</span>
+        </div>
 
-        <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              {...register('email')}
+        <div>
+          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
+            Connect with skilled<br />service professionals
+          </h1>
+          <p className="text-blue-200 text-base leading-relaxed">
+            Post a job, get matched with verified providers, and get things done — all in one place.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { value: '2,400+', label: 'Active providers' },
+            { value: '98%',    label: 'Satisfaction rate' },
+            { value: '< 2h',   label: 'Average response' },
+          ].map((s) => (
+            <div key={s.label} className="bg-white/10 rounded-xl p-4">
+              <p className="text-2xl font-bold text-white">{s.value}</p>
+              <p className="text-xs text-blue-200 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+              <MapPin size={16} className="text-white" />
+            </div>
+            <span className="text-base font-semibold text-gray-900">ServiceMarket</span>
+          </div>
+
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
+            <p className="text-sm text-gray-500 mt-1">Sign in to your account to continue</p>
+          </div>
+
+          {showBanner && (
+            <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl mb-6">
+              <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{getLoginError(mutation.error)}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
+            <Input
+              label="Email address"
               type="email"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="you@example.com"
+              error={errors.email?.message}
+              {...register('email')}
             />
-            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              {...register('password')}
+            <Input
+              label="Password"
               type="password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
+              error={errors.password?.message}
+              {...register('password')}
             />
-            {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-          </div>
 
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg text-sm disabled:opacity-60 transition"
-          >
-            {mutation.isPending ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+            <Button
+              type="submit"
+              fullWidth
+              size="lg"
+              loading={mutation.isPending}
+              className="mt-2"
+            >
+              Sign in
+            </Button>
+          </form>
 
-        <p className="text-sm text-gray-500 text-center mt-4">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline">Register</Link>
-        </p>
+          <p className="text-sm text-gray-500 text-center mt-6">
+            Don't have an account?{' '}
+            <Link to="/register" className="text-blue-600 font-medium hover:underline">
+              Create one
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )

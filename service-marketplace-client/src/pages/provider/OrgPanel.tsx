@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { useAuthStore } from '../../store/authStore'
+import { Users, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react'
 import api from '../../api/axios'
+import AppLayout from '../../components/AppLayout'
+import { Card, CardHeader, Badge, EmptyState, SkeletonCard } from '../../components/ui'
 
-const PERMISSIONS = ['request.create', 'request.accept', 'request.complete', 'request.view_all']
+const PERMISSIONS = [
+  { key: 'request.create',   label: 'Create Requests' },
+  { key: 'request.accept',   label: 'Accept Requests' },
+  { key: 'request.complete', label: 'Complete Requests' },
+  { key: 'request.view_all', label: 'View All Requests' },
+]
 
 interface OrgMember {
   id: string
@@ -14,9 +21,8 @@ interface OrgMember {
 }
 
 export default function OrgPanel() {
-  const { email, logout } = useAuthStore()
   const queryClient = useQueryClient()
-  const [expandedMember, setExpandedMember] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const { data: members = [], isLoading } = useQuery<OrgMember[]>({
     queryKey: ['org-members'],
@@ -34,85 +40,108 @@ export default function OrgPanel() {
   })
 
   const togglePerm = (member: OrgMember, permission: string) => {
-    const granted = !member.permissions.includes(permission)
-    permMutation.mutate({ id: member.id, permission, granted })
+    permMutation.mutate({ id: member.id, permission, granted: !member.permissions.includes(permission) })
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center">
-        <h1 className="text-lg font-semibold text-gray-800">Organization Panel</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">ProviderAdmin</span>
-          <span className="text-sm text-gray-500">{email}</span>
-          <button onClick={logout} className="text-sm text-red-500 hover:text-red-700 transition">
-            Logout
-          </button>
-        </div>
-      </nav>
-
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-        {/* Provider Dashboard link */}
-        <div className="flex gap-3">
-          <a
-            href="/provider"
-            className="text-sm text-blue-600 hover:underline"
-          >
-            ← Back to Provider Dashboard
-          </a>
+    <AppLayout
+      title="Organization"
+      description="Manage your team members and their permissions"
+    >
+      <Card padding={false}>
+        <div className="px-6 py-5 border-b border-gray-100">
+          <CardHeader
+            title="Team Members"
+            description={`${members.length} member${members.length !== 1 ? 's' : ''} in your organization`}
+          />
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Organization Members</h2>
-
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2].map((i) => <div key={i} className="h-14 bg-gray-100 rounded-lg animate-pulse" />)}
-            </div>
-          ) : members.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">No members in your organization.</p>
-          ) : (
-            <div className="space-y-3">
-              {members.map((member) => (
-                <div key={member.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{member.email}</p>
-                      <p className="text-xs text-gray-500">{member.role}</p>
+        {isLoading ? (
+          <div className="p-4 space-y-3">
+            {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+          </div>
+        ) : members.length === 0 ? (
+          <EmptyState
+            icon={<Users size={22} />}
+            title="No team members yet"
+            description="Invite provider employees to join your organization."
+          />
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {members.map((member) => {
+              const isOpen = expanded === member.id
+              return (
+                <li key={member.id}>
+                  <button
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50/60 transition-colors text-left"
+                    onClick={() => setExpanded(isOpen ? null : member.id)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-semibold shrink-0">
+                        {member.email.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{member.email}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge label={member.role} variant={member.role.toLowerCase() as any} />
+                          <span className="text-xs text-gray-400">
+                            {member.permissions.length} permission{member.permissions.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => setExpandedMember(expandedMember === member.id ? null : member.id)}
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      {expandedMember === member.id ? 'Hide' : 'Permissions'}
-                    </button>
-                  </div>
+                    <span className="text-gray-400 shrink-0">
+                      {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </span>
+                  </button>
 
-                  {expandedMember === member.id && (
-                    <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
-                      <p className="text-xs font-medium text-gray-600 mb-2">Permissions</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {PERMISSIONS.map((perm) => (
-                          <label key={perm} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={member.permissions.includes(perm)}
-                              onChange={() => togglePerm(member, perm)}
-                              disabled={permMutation.isPending}
-                              className="accent-blue-600"
-                            />
-                            <span className="text-xs text-gray-700">{perm}</span>
-                          </label>
-                        ))}
+                  {isOpen && (
+                    <div className="px-6 pb-5 bg-gray-50/50 border-t border-gray-100">
+                      <div className="pt-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <ShieldCheck size={14} className="text-gray-400" />
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                            Permissions
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {PERMISSIONS.map(({ key, label }) => {
+                            const granted = member.permissions.includes(key)
+                            return (
+                              <label
+                                key={key}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+                                  granted
+                                    ? 'bg-blue-50 border-blue-200'
+                                    : 'bg-white border-gray-200 hover:border-gray-300'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={granted}
+                                  onChange={() => togglePerm(member, key)}
+                                  disabled={permMutation.isPending}
+                                  className="w-3.5 h-3.5 accent-blue-600 shrink-0"
+                                />
+                                <div>
+                                  <p className={`text-xs font-medium ${granted ? 'text-blue-700' : 'text-gray-700'}`}>
+                                    {label}
+                                  </p>
+                                  <p className="text-[11px] text-gray-400 font-mono mt-0.5">{key}</p>
+                                </div>
+                              </label>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                   )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Card>
+    </AppLayout>
   )
 }

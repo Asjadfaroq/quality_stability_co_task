@@ -4,12 +4,14 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
+import { MapPin, AlertCircle, CheckCircle2 } from 'lucide-react'
 import api from '../api/axios'
+import { Button, Input, Select } from '../components/ui'
 
 const schema = z.object({
-  email: z.string().email('Invalid email'),
+  email:    z.string().email('Enter a valid email address'),
   password: z.string().min(6, 'Minimum 6 characters'),
-  role: z.enum(['Customer', 'ProviderEmployee', 'ProviderAdmin']),
+  role:     z.enum(['Customer', 'ProviderEmployee', 'ProviderAdmin']),
 })
 
 type FormData = z.infer<typeof schema>
@@ -21,84 +23,146 @@ function getRegisterError(error: unknown): string {
   return 'Something went wrong. Please try again.'
 }
 
+const roleDescriptions: Record<string, string> = {
+  Customer:         'Post service requests and hire professionals',
+  ProviderEmployee: 'Browse and accept service jobs',
+  ProviderAdmin:    'Manage your team and service operations',
+}
+
 export default function Register() {
   const navigate = useNavigate()
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { role: 'Customer' },
   })
 
+  const selectedRole = watch('role')
+
   const mutation = useMutation({
     mutationFn: (data: FormData) => api.post('/auth/register', data).then((r) => r.data),
-    onSuccess: () => navigate('/login'),
+    onSuccess: () => navigate('/login', { state: { registered: true } }),
   })
 
+  const showBanner = mutation.isError && (mutation.error as any)?.response?.status !== 429
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-xl shadow w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">Create account</h1>
-
-        {mutation.isError && (mutation.error as any)?.response?.status !== 429 && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-            {getRegisterError(mutation.error)}
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Left panel */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 flex-col justify-between p-12">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+            <MapPin size={18} className="text-white" />
           </div>
-        )}
+          <span className="text-lg font-semibold text-white tracking-tight">ServiceMarket</span>
+        </div>
 
-        {mutation.isSuccess && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
-            Account created! Redirecting to login...
+        <div>
+          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
+            Join thousands of<br />service professionals
+          </h1>
+          <p className="text-blue-200 text-base leading-relaxed">
+            Whether you're looking for help or offering your skills, ServiceMarket connects you with the right people.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {[
+            'Free to sign up — no credit card required',
+            'Verified service providers near you',
+            'Secure payments and communication',
+          ].map((f) => (
+            <div key={f} className="flex items-center gap-3">
+              <CheckCircle2 size={16} className="text-blue-300 shrink-0" />
+              <span className="text-sm text-blue-100">{f}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right panel */}
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+              <MapPin size={16} className="text-white" />
+            </div>
+            <span className="text-base font-semibold text-gray-900">ServiceMarket</span>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              {...register('email')}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900">Create your account</h2>
+            <p className="text-sm text-gray-500 mt-1">Get started in less than a minute</p>
+          </div>
+
+          {showBanner && (
+            <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl mb-6">
+              <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{getRegisterError(mutation.error)}</p>
+            </div>
+          )}
+
+          {mutation.isSuccess && (
+            <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-6">
+              <CheckCircle2 size={16} className="text-emerald-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-emerald-700">Account created! Redirecting to sign in...</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
+            <Input
+              label="Email address"
               type="email"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="you@example.com"
+              error={errors.email?.message}
+              {...register('email')}
             />
-            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              {...register('password')}
+            <Input
+              label="Password"
               type="password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Min. 6 characters"
+              error={errors.password?.message}
+              {...register('password')}
             />
-            {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <select
+            <Select
+              label="I want to..."
+              error={errors.role?.message}
               {...register('role')}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="Customer">Customer</option>
-              <option value="ProviderEmployee">Provider Employee</option>
-              <option value="ProviderAdmin">Provider Admin</option>
-            </select>
-          </div>
+              <option value="Customer">Hire professionals (Customer)</option>
+              <option value="ProviderEmployee">Offer my services (Provider)</option>
+              <option value="ProviderAdmin">Manage a service team (Provider Admin)</option>
+            </Select>
 
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg text-sm disabled:opacity-60 transition"
-          >
-            {mutation.isPending ? 'Creating account...' : 'Create account'}
-          </button>
-        </form>
+            {/* Role description */}
+            {selectedRole && (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+                {roleDescriptions[selectedRole]}
+              </p>
+            )}
 
-        <p className="text-sm text-gray-500 text-center mt-4">
-          Already have an account?{' '}
-          <Link to="/login" className="text-blue-600 hover:underline">Sign in</Link>
-        </p>
+            <Button
+              type="submit"
+              fullWidth
+              size="lg"
+              loading={mutation.isPending}
+              className="mt-2"
+            >
+              Create account
+            </Button>
+          </form>
+
+          <p className="text-sm text-gray-500 text-center mt-6">
+            Already have an account?{' '}
+            <Link to="/login" className="text-blue-600 font-medium hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )
