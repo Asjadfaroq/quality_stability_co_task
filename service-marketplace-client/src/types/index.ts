@@ -1,0 +1,19 @@
+export type UserRole = 'Admin' | 'ProviderAdmin' | 'ProviderEmployee' | 'Customer'
+
+export interface AuthUser {
+  token: string
+  userId: string
+  email: string
+  role: UserRole
+}
+
+export interface ServiceRequest {
+  id: string
+  title: string
+  description: string
+  category: string
+  latitude: number
+  longitude: number
+  status: 'Pending' | 'Accepted' | 'Completed'
+  createdAt: string
+}
