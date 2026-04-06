@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Enums;
@@ -23,6 +24,7 @@ public class RequestsController : BaseController
 
     /// <summary>Create a new service request. Requires request.create permission. Free tier limited to 3 requests.</summary>
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission("request.create")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -48,6 +50,7 @@ public class RequestsController : BaseController
 
     /// <summary>Find pending requests within a radius using Haversine. Requires request.view_all permission.</summary>
     [HttpGet("nearby")]
+    [EnableRateLimiting(RateLimitPolicies.Nearby)]
     [RequirePermission("request.view_all")]
     [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -80,6 +83,7 @@ public class RequestsController : BaseController
 
     /// <summary>Accept a pending request. Returns 409 if already accepted.</summary>
     [HttpPatch("{id:guid}/accept")]
+    [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission("request.accept")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -93,6 +97,7 @@ public class RequestsController : BaseController
 
     /// <summary>Mark an accepted request as pending customer confirmation. Returns 403 if caller is not the acceptor, 422 if not in Accepted state.</summary>
     [HttpPatch("{id:guid}/complete")]
+    [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission("request.complete")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -106,6 +111,7 @@ public class RequestsController : BaseController
 
     /// <summary>Customer confirms completion of a request. Only the request owner can confirm. Returns 422 if not in PendingConfirmation state.</summary>
     [HttpPatch("{id:guid}/confirm")]
+    [EnableRateLimiting(RateLimitPolicies.Writes)]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

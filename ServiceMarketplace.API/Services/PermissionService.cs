@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Services.Interfaces;
 
@@ -10,9 +9,9 @@ public class PermissionService : IPermissionService
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
 
     private readonly AppDbContext _db;
-    private readonly IMemoryCache _cache;
+    private readonly ICacheService _cache;
 
-    public PermissionService(AppDbContext db, IMemoryCache cache)
+    public PermissionService(AppDbContext db, ICacheService cache)
     {
         _db = db;
         _cache = cache;
@@ -28,7 +27,8 @@ public class PermissionService : IPermissionService
     {
         var cacheKey = $"permissions:{userId}";
 
-        if (_cache.TryGetValue(cacheKey, out HashSet<string>? cached) && cached is not null)
+        var cached = await _cache.GetAsync<HashSet<string>>(cacheKey);
+        if (cached is not null)
             return cached;
 
         var user = await _db.Users
@@ -57,7 +57,7 @@ public class PermissionService : IPermissionService
             else           effective.Remove(o.Name);
         }
 
-        _cache.Set(cacheKey, effective, CacheTtl);
+        await _cache.SetAsync(cacheKey, effective, CacheTtl);
         return effective;
     }
 }

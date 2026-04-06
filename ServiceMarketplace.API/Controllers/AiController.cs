@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs.Ai;
 using ServiceMarketplace.API.Services.Interfaces;
 
@@ -22,6 +24,7 @@ public class AiController : BaseController
     /// Falls back to a mock response if the AI provider is unavailable.
     /// </summary>
     [HttpPost("enhance-description")]
+    [EnableRateLimiting(RateLimitPolicies.Ai)]
     [ProducesResponseType(typeof(EnhanceDescriptionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> EnhanceDescription([FromBody] EnhanceDescriptionRequest request)

@@ -15,6 +15,19 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   api:
     build:
       context: ./ServiceMarketplace.API
@@ -24,12 +37,15 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
       ConnectionStrings__DefaultConnection: "Server=db,1433;Database=ServiceMarketplaceDb;User Id=sa;Password=Marketplace2026!;TrustServerCertificate=True;Encrypt=False;"
+      ConnectionStrings__Redis: "alert-aphid-34752.upstash.io:6379,password=AYfAAAIncDI4MDdiMzc3ZTFmOGM0OWFmOWYzNTRiYzI5NmE0NWIyY3AyMzQ3NTI,ssl=True,abortConnect=False"
       Jwt__Key: "your-secret-key-minimum-32-characters-long!!"
       Jwt__Issuer: "ServiceMarketplace"
       Jwt__Audience: "ServiceMarketplaceClient"
       HuggingFace__ApiKey: "${HUGGINGFACE_API_KEY}"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:
@@ -43,3 +59,4 @@ services:
 
 volumes:
   sqldata:
+  redisdata:

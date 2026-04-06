@@ -10,10 +10,12 @@ namespace ServiceMarketplace.API.Services;
 public class AdminService : IAdminService
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
 
-    public AdminService(AppDbContext db)
+    public AdminService(AppDbContext db, ICacheService cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     public async Task<List<UserDto>> GetAllUsersAsync()
@@ -98,5 +100,7 @@ public class AdminService : IAdminService
         }
 
         await _db.SaveChangesAsync();
+
+        await _cache.RemoveAsync($"permissions:{userId}");
     }
 }

@@ -11,10 +11,12 @@ namespace ServiceMarketplace.API.Services;
 public class OrgService : IOrgService
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
 
-    public OrgService(AppDbContext db)
+    public OrgService(AppDbContext db, ICacheService cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     public async Task<List<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId)
@@ -116,5 +118,7 @@ public class OrgService : IOrgService
         }
 
         await _db.SaveChangesAsync();
+
+        await _cache.RemoveAsync($"permissions:{memberId}");
     }
 }

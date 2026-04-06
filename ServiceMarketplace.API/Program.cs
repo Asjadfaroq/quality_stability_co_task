@@ -1,11 +1,14 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using RedisRateLimiting;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Middleware;
@@ -13,6 +16,7 @@ using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Services;
 using ServiceMarketplace.API.Services.Interfaces;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,8 +60,7 @@ builder.Services.AddAuthentication(options =>
         NameClaimType = "userId",
         RoleClaimType = "role"
     };
-    // SignalR sends JWT as query param because browsers can't set
-    // WebSocket headers — read it here for hub authentication
+    // Browsers can't set WebSocket headers, so SignalR passes the JWT as ?access_token=
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
@@ -138,6 +141,186 @@ builder.Services.AddSingleton<IUserIdProvider, UserIdProvider>();
 // 9. HttpClient factory
 builder.Services.AddHttpClient();
 
+// 10. Redis — one shared IConnectionMultiplexer for both distributed cache and rate limiting.
+//     AbortOnConnectFail=false lets the app start even when Redis is temporarily unavailable;
+//     the multiplexer retries in the background.
+var redisConnection = builder.Configuration.GetConnectionString("Redis");
+var redisAvailable  = !string.IsNullOrEmpty(redisConnection);
+
+if (redisAvailable)
+{
+    var configOptions = ConfigurationOptions.Parse(redisConnection!);
+    configOptions.AbortOnConnectFail = false;
+    var multiplexer = ConnectionMultiplexer.Connect(configOptions);
+
+    builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+
+    // Share the same connection for distributed cache (used by CacheService / PermissionService)
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.ConnectionMultiplexerFactory = () => Task.FromResult((IConnectionMultiplexer)multiplexer);
+        options.InstanceName = "sm:cache:";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
+// 11. Rate limiting
+//     Redis policies use keys prefixed "sm:rl:{policy}:{partitionKey}" — kept separate from cache keys.
+//     In-memory policies are the fallback when Redis is not configured.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/problem+json";
+
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterValue)
+            ? (int)retryAfterValue.TotalSeconds
+            : 60;
+
+        context.HttpContext.Response.Headers["Retry-After"] = retryAfter.ToString();
+
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            type             = "https://httpstatuses.com/429",
+            title            = "Too Many Requests",
+            status           = 429,
+            detail           = "You have exceeded the rate limit. Please try again later.",
+            retryAfterSeconds = retryAfter
+        }, token);
+    };
+
+    if (redisAvailable)
+    {
+        // Login & Register — fixed window per IP, 10 requests per 15 minutes
+        options.AddPolicy(RateLimitPolicies.Auth, httpContext =>
+        {
+            var mux = httpContext.RequestServices.GetRequiredService<IConnectionMultiplexer>();
+            var ip  = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RedisRateLimitPartition.GetFixedWindowRateLimiter(
+                partitionKey: $"sm:rl:auth:{ip}",
+                factory: _ => new RedisFixedWindowRateLimiterOptions
+                {
+                    PermitLimit               = 10,
+                    Window                    = TimeSpan.FromMinutes(15),
+                    ConnectionMultiplexerFactory = () => mux
+                });
+        });
+
+        // AI enhancement — fixed window per user, 20 requests per hour
+        options.AddPolicy(RateLimitPolicies.Ai, httpContext =>
+        {
+            var mux = httpContext.RequestServices.GetRequiredService<IConnectionMultiplexer>();
+            var key = httpContext.User.FindFirst("userId")?.Value
+                      ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                      ?? "unknown";
+            return RedisRateLimitPartition.GetFixedWindowRateLimiter(
+                partitionKey: $"sm:rl:ai:{key}",
+                factory: _ => new RedisFixedWindowRateLimiterOptions
+                {
+                    PermitLimit               = 20,
+                    Window                    = TimeSpan.FromHours(1),
+                    ConnectionMultiplexerFactory = () => mux
+                });
+        });
+
+        // Geo search — sliding window per user, 60 requests per minute
+        options.AddPolicy(RateLimitPolicies.Nearby, httpContext =>
+        {
+            var mux = httpContext.RequestServices.GetRequiredService<IConnectionMultiplexer>();
+            var key = httpContext.User.FindFirst("userId")?.Value
+                      ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                      ?? "unknown";
+            return RedisRateLimitPartition.GetSlidingWindowRateLimiter(
+                partitionKey: $"sm:rl:nearby:{key}",
+                factory: _ => new RedisSlidingWindowRateLimiterOptions
+                {
+                    PermitLimit               = 60,
+                    Window                    = TimeSpan.FromMinutes(1),
+                    ConnectionMultiplexerFactory = () => mux
+                });
+        });
+
+        // Mutation endpoints — token bucket per user, allows short bursts
+        options.AddPolicy(RateLimitPolicies.Writes, httpContext =>
+        {
+            var mux = httpContext.RequestServices.GetRequiredService<IConnectionMultiplexer>();
+            var key = httpContext.User.FindFirst("userId")?.Value
+                      ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                      ?? "unknown";
+            return RedisRateLimitPartition.GetTokenBucketRateLimiter(
+                partitionKey: $"sm:rl:writes:{key}",
+                factory: _ => new RedisTokenBucketRateLimiterOptions
+                {
+                    TokenLimit               = 20,
+                    ReplenishmentPeriod      = TimeSpan.FromSeconds(30),
+                    TokensPerPeriod          = 5,
+                    ConnectionMultiplexerFactory = () => mux
+                });
+        });
+    }
+    else
+    {
+        // In-memory fallback — single instance only, used when Redis is not configured
+        options.AddPolicy(RateLimitPolicies.Auth, httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit           = 10,
+                    Window                = TimeSpan.FromMinutes(15),
+                    QueueProcessingOrder  = QueueProcessingOrder.OldestFirst,
+                    QueueLimit            = 0
+                }));
+
+        options.AddPolicy(RateLimitPolicies.Ai, httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.User.FindFirst("userId")?.Value
+                              ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                              ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit           = 20,
+                    Window                = TimeSpan.FromHours(1),
+                    QueueProcessingOrder  = QueueProcessingOrder.OldestFirst,
+                    QueueLimit            = 0
+                }));
+
+        options.AddPolicy(RateLimitPolicies.Nearby, httpContext =>
+            RateLimitPartition.GetSlidingWindowLimiter(
+                partitionKey: httpContext.User.FindFirst("userId")?.Value
+                              ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                              ?? "unknown",
+                factory: _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit           = 60,
+                    Window                = TimeSpan.FromMinutes(1),
+                    SegmentsPerWindow     = 6,
+                    QueueProcessingOrder  = QueueProcessingOrder.OldestFirst,
+                    QueueLimit            = 0
+                }));
+
+        options.AddPolicy(RateLimitPolicies.Writes, httpContext =>
+            RateLimitPartition.GetTokenBucketLimiter(
+                partitionKey: httpContext.User.FindFirst("userId")?.Value
+                              ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                              ?? "unknown",
+                factory: _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit            = 20,
+                    ReplenishmentPeriod   = TimeSpan.FromSeconds(30),
+                    TokensPerPeriod       = 5,
+                    AutoReplenishment     = true,
+                    QueueProcessingOrder  = QueueProcessingOrder.OldestFirst,
+                    QueueLimit            = 0
+                }));
+    }
+});
+
 // Register services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
@@ -147,9 +330,7 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IRequestService, RequestService>();
 builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<IChatService, ChatService>();
-
-// In-memory cache for permission lookups
-builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ICacheService, CacheService>();
 
 var app = builder.Build();
 
@@ -160,7 +341,7 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// 10. Exception middleware — must be first
+// Exception middleware — must be first
 app.UseExceptionMiddleware();
 
 app.UseSwagger();
@@ -174,9 +355,10 @@ app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseRateLimiter();
+
 app.MapControllers();
 
-// 11. SignalR hub endpoint
 app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();

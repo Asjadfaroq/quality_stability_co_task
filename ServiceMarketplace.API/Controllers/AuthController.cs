@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs.Auth;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
 
 [Route("api/auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class AuthController : BaseController
 {
     private readonly IAuthService _authService;
