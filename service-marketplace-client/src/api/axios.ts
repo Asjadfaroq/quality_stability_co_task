@@ -1,6 +1,7 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
+import { AUTH_REDIRECT_KEY } from '../utils/auth'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:5132/api',
@@ -16,8 +17,15 @@ api.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
+      const currentPath = window.location.pathname
       useAuthStore.getState().logout()
-      window.location.href = '/login'
+      // Preserve the current path so Login can redirect back after re-authentication.
+      // We use sessionStorage because window.location.replace() is a full-page reload
+      // that loses any React Router state.
+      if (currentPath !== '/login' && currentPath !== '/register') {
+        sessionStorage.setItem(AUTH_REDIRECT_KEY, currentPath)
+      }
+      window.location.replace('/login')
     }
 
     if (error.response?.status === 429) {

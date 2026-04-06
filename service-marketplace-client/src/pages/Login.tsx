@@ -3,9 +3,10 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuthStore } from '../store/authStore'
+import { getDashboardPath, AUTH_REDIRECT_KEY } from '../utils/auth'
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
@@ -22,8 +23,15 @@ function getLoginError(error: unknown): string {
 }
 
 export default function Login() {
-  const navigate = useNavigate()
-  const login = useAuthStore((s) => s.login)
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const login     = useAuthStore((s) => s.login)
+
+  // Resolve the post-login destination:
+  // 1. Path passed via React Router state (e.g. from ProtectedRoute)
+  // 2. Path stored in sessionStorage (e.g. from a mid-session 401)
+  // 3. Role-based default dashboard
+  const stateFrom = (location.state as { from?: string } | null)?.from ?? null
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -33,9 +41,12 @@ export default function Login() {
     mutationFn: (data: FormData) => api.post('/auth/login', data).then((r) => r.data),
     onSuccess: (data) => {
       login(data)
-      if (data.role === 'Customer') navigate('/customer')
-      else if (data.role === 'Admin') navigate('/admin')
-      else navigate('/provider')
+
+      const sessionFrom = sessionStorage.getItem(AUTH_REDIRECT_KEY)
+      sessionStorage.removeItem(AUTH_REDIRECT_KEY)
+
+      const destination = stateFrom ?? sessionFrom ?? getDashboardPath(data.role)
+      navigate(destination, { replace: true })
     },
   })
 
