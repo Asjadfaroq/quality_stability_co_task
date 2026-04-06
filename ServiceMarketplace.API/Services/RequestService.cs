@@ -89,14 +89,21 @@ public class RequestService : IRequestService
 
     public async Task<List<ServiceRequestDto>> GetNearbyAsync(double lat, double lng, double radiusKm)
     {
-        // Step 1: bounding box pre-filter in SQL
-        var delta = radiusKm / 111.0;
+        // Step 1: bounding box pre-filter in SQL.
+        // Cast delta to decimal once in C# so SQL compares decimal columns to decimal
+        // parameters directly — avoids per-row CAST(Latitude AS float) in the query plan.
+        var delta  = radiusKm / 111.0;
+        var latMin = (decimal)(lat - delta);
+        var latMax = (decimal)(lat + delta);
+        var lngMin = (decimal)(lng - delta);
+        var lngMax = (decimal)(lng + delta);
+
         var candidates = await _db.ServiceRequests
             .AsNoTracking()
             .Where(r =>
-                r.Status == RequestStatus.Pending &&
-                (double)r.Latitude  >= lat - delta && (double)r.Latitude  <= lat + delta &&
-                (double)r.Longitude >= lng - delta && (double)r.Longitude <= lng + delta)
+                r.Status    == RequestStatus.Pending &&
+                r.Latitude  >= latMin && r.Latitude  <= latMax &&
+                r.Longitude >= lngMin && r.Longitude <= lngMax)
             .ToListAsync();
 
         // Step 2: exact Haversine filter in memory
@@ -120,7 +127,16 @@ public class RequestService : IRequestService
         request.AcceptedByProviderId = providerId;
         request.UpdatedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Another provider accepted the same request between our read and write.
+            // RowVersion mismatch triggers this — surface it as a 409 Conflict.
+            throw new ConflictException("Request was accepted by another provider. Please refresh.");
+        }
 
         _logger.LogInformation(
             "Request {RequestId} accepted by provider {ProviderId}",

@@ -30,6 +30,8 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .WithMany(o => o.Members)
              .HasForeignKey(u => u.OrganizationId)
              .OnDelete(DeleteBehavior.SetNull);
+            // Supports GetOrgMembersAsync / UpdateMemberPermissionsAsync filters
+            e.HasIndex(u => u.OrganizationId);
         });
 
         // Organization
@@ -61,10 +63,12 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .WithMany()
              .HasForeignKey(r => r.AcceptedByProviderId)
              .OnDelete(DeleteBehavior.SetNull);
-            // Indexes for common query patterns
+            // Individual indexes for customer dashboard and admin list
             e.HasIndex(r => r.CustomerId);
             e.HasIndex(r => r.Status);
-            e.HasIndex(r => r.AcceptedByProviderId);
+            // Compound index for the provider query:
+            // WHERE Status IN (Pending) OR (Status IN (Accepted,PendingConf) AND AcceptedByProviderId = ?)
+            e.HasIndex(r => new { r.AcceptedByProviderId, r.Status });
         });
 
         // ChatMessage

@@ -18,13 +18,35 @@ public class AdminService : IAdminService
 
     public async Task<List<UserDto>> GetAllUsersAsync()
     {
-        var users = await _db.Users
+        // Project in SQL — avoids loading all IdentityUser columns (PasswordHash,
+        // SecurityStamp, ConcurrencyStamp, etc.) and maps directly to the DTO.
+        var raw = await _db.Users
             .AsNoTracking()
-            .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
+            .Select(u => new
+            {
+                u.Id,
+                Email        = u.Email ?? string.Empty,
+                u.Role,
+                u.SubTier,
+                u.OrganizationId,
+                u.CreatedAt,
+                GrantedPermissions = u.UserPermissions
+                    .Where(up => up.Granted)
+                    .Select(up => up.Permission!.Name)
+                    .ToList()
+            })
             .ToListAsync();
 
-        return users.Select(u => MapToDto(u)).ToList();
+        return raw.Select(u => new UserDto
+        {
+            Id             = u.Id,
+            Email          = u.Email,
+            Role           = u.Role.ToString(),
+            SubTier        = u.SubTier.ToString(),
+            OrganizationId = u.OrganizationId,
+            CreatedAt      = u.CreatedAt,
+            Permissions    = u.GrantedPermissions
+        }).ToList();
     }
 
     public async Task UpdateSubscriptionAsync(Guid userId, SubscriptionTier subTier)
@@ -41,16 +63,34 @@ public class AdminService : IAdminService
         var user = await _db.Users.FindAsync(userId)
             ?? throw new KeyNotFoundException("User not found.");
 
+        var permissionNames = overrides.Select(o => o.PermissionName).ToHashSet();
+
+        // Batch load all referenced permissions in one query instead of N queries
+        var permissions = await _db.Permissions
+            .AsNoTracking()
+            .Where(p => permissionNames.Contains(p.Name))
+            .ToDictionaryAsync(p => p.Name);
+
+        var missingName = permissionNames.FirstOrDefault(n => !permissions.ContainsKey(n));
+        if (missingName is not null)
+            throw new KeyNotFoundException($"Permission '{missingName}' not found.");
+
+        var permissionIds = permissions.Values.Select(p => p.Id).ToList();
+
+        // Batch load existing user overrides in one query instead of N queries
+        var existingOverrides = await _db.UserPermissions
+            .Where(up => up.UserId == userId && permissionIds.Contains(up.PermissionId))
+            .ToDictionaryAsync(up => up.PermissionId);
+
         foreach (var o in overrides)
         {
-            var permission = await _db.Permissions
-                .FirstOrDefaultAsync(p => p.Name == o.PermissionName)
-                ?? throw new KeyNotFoundException($"Permission '{o.PermissionName}' not found.");
+            var permission = permissions[o.PermissionName];
 
-            var existing = await _db.UserPermissions
-                .FirstOrDefaultAsync(up => up.UserId == userId && up.PermissionId == permission.Id);
-
-            if (existing is null)
+            if (existingOverrides.TryGetValue(permission.Id, out var existing))
+            {
+                existing.Granted = o.Granted;
+            }
+            else
             {
                 _db.UserPermissions.Add(new UserPermission
                 {
@@ -59,26 +99,9 @@ public class AdminService : IAdminService
                     Granted = o.Granted
                 });
             }
-            else
-            {
-                existing.Granted = o.Granted;
-            }
         }
 
         await _db.SaveChangesAsync();
     }
 
-    private static UserDto MapToDto(Models.Entities.User u) => new()
-    {
-        Id = u.Id,
-        Email = u.Email ?? string.Empty,
-        Role = u.Role.ToString(),
-        SubTier = u.SubTier.ToString(),
-        OrganizationId = u.OrganizationId,
-        CreatedAt = u.CreatedAt,
-        Permissions = u.UserPermissions
-            .Where(up => up.Granted)
-            .Select(up => up.Permission?.Name ?? string.Empty)
-            .ToList()
-    };
 }

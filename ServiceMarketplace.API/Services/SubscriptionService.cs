@@ -18,12 +18,15 @@ public class SubscriptionService : ISubscriptionService
 
     public async Task EnforceCreateLimitAsync(Guid customerId)
     {
-        var user = await _db.Users
+        // Project only SubTier — avoids loading all IdentityUser columns
+        var subTier = await _db.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == customerId)
+            .Where(u => u.Id == customerId)
+            .Select(u => (SubscriptionTier?)u.SubTier)
+            .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("User not found.");
 
-        if (user.SubTier == SubscriptionTier.Paid)
+        if (subTier == SubscriptionTier.Paid)
             return;
 
         var freeLimit = _configuration.GetValue<int>("Subscription:FreeRequestLimit", 3);

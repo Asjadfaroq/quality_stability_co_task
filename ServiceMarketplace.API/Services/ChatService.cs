@@ -21,13 +21,8 @@ public class ChatService : IChatService
 
     public async Task<bool> CanAccessChatAsync(Guid requestId, Guid userId)
     {
-        var request = await _db.ServiceRequests
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == requestId);
-
-        if (request == null) return false;
-
-        return request.CustomerId == userId || request.AcceptedByProviderId == userId;
+        var p = await GetParticipantsAsync(requestId);
+        return p is not null && (p.CustomerId == userId || p.ProviderId == userId);
     }
 
     public async Task<ChatMessageDto> SaveMessageAsync(Guid requestId, Guid senderId, string content)
@@ -38,16 +33,24 @@ public class ChatService : IChatService
         if (content.Length > MaxMessageLength)
             throw new ArgumentException($"Message exceeds maximum length of {MaxMessageLength} characters.");
 
-        var request = await _db.ServiceRequests
+        // Fetch participants and sender email in parallel — two independent reads
+        var participantsTask = GetParticipantsAsync(requestId);
+        var senderEmailTask  = _db.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == requestId)
+            .Where(u => u.Id == senderId)
+            .Select(u => u.Email)
+            .FirstOrDefaultAsync();
+
+        await Task.WhenAll(participantsTask, senderEmailTask);
+
+        var participants = participantsTask.Result
             ?? throw new KeyNotFoundException("Request not found.");
 
-        var isParticipant = request.CustomerId == senderId || request.AcceptedByProviderId == senderId;
+        var isParticipant = participants.CustomerId == senderId || participants.ProviderId == senderId;
         if (!isParticipant)
             throw new UnauthorizedAccessException("You are not a participant in this chat.");
 
-        var sender = await _db.Users.FindAsync(senderId)
+        var senderEmail = senderEmailTask.Result
             ?? throw new KeyNotFoundException("Sender not found.");
 
         var message = new ChatMessage
@@ -55,7 +58,7 @@ public class ChatService : IChatService
             Id          = Guid.NewGuid(),
             RequestId   = requestId,
             SenderId    = senderId,
-            SenderEmail = sender.Email!,
+            SenderEmail = senderEmail,
             Content     = content.Trim(),
             SentAt      = DateTime.UtcNow
         };
@@ -86,20 +89,23 @@ public class ChatService : IChatService
 
     public async Task<Guid?> GetOtherPartyIdAsync(Guid requestId, Guid userId)
     {
-        var request = await _db.ServiceRequests
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == requestId);
-
-        if (request == null) return null;
-
-        if (request.CustomerId == userId)
-            return request.AcceptedByProviderId;
-
-        if (request.AcceptedByProviderId == userId)
-            return request.CustomerId;
-
+        var p = await GetParticipantsAsync(requestId);
+        if (p is null) return null;
+        if (p.CustomerId == userId) return p.ProviderId;
+        if (p.ProviderId == userId) return p.CustomerId;
         return null;
     }
+
+    // Shared projection — fetches only the two Guid fields needed for access checks.
+    // Avoids loading Title, Description, Latitude, Longitude, Status, etc. every call.
+    private async Task<RequestParticipants?> GetParticipantsAsync(Guid requestId) =>
+        await _db.ServiceRequests
+            .AsNoTracking()
+            .Where(r => r.Id == requestId)
+            .Select(r => new RequestParticipants(r.CustomerId, r.AcceptedByProviderId))
+            .FirstOrDefaultAsync();
+
+    private sealed record RequestParticipants(Guid CustomerId, Guid? ProviderId);
 
     private static ChatMessageDto ToDto(ChatMessage m) => new()
     {

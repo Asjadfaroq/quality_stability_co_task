@@ -19,74 +19,105 @@ public class OrgService : IOrgService
 
     public async Task<List<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId)
     {
-        var admin = await _db.Users
+        // Project only OrganizationId — avoids loading all IdentityUser columns.
+        // Use anonymous type so we can distinguish "user not found" from "org is null".
+        var adminInfo = await _db.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
+            .Where(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
+            .Select(u => new { u.OrganizationId })
+            .FirstOrDefaultAsync()
             ?? throw new UnauthorizedAccessException("User is not a ProviderAdmin.");
 
-        if (admin.OrganizationId is null)
+        if (adminInfo.OrganizationId is null)
             return [];
 
-        var members = await _db.Users
+        var adminOrgId = adminInfo.OrganizationId.Value;
+
+        // Single query with SQL projection — no full entity load, no ThenInclude overhead
+        var raw = await _db.Users
             .AsNoTracking()
-            .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
-            .Where(u => u.OrganizationId == admin.OrganizationId && u.Id != providerAdminId)
+            .Where(u => u.OrganizationId == adminOrgId && u.Id != providerAdminId)
+            .Select(u => new
+            {
+                u.Id,
+                Email = u.Email ?? string.Empty,
+                u.Role,
+                GrantedPermissions = u.UserPermissions
+                    .Where(up => up.Granted)
+                    .Select(up => up.Permission!.Name)
+                    .ToList()
+            })
             .ToListAsync();
 
-        return members.Select(m => new OrgMemberDto
+        return raw.Select(m => new OrgMemberDto
         {
-            Id = m.Id,
-            Email = m.Email ?? string.Empty,
-            Role = m.Role.ToString(),
-            Permissions = m.UserPermissions
-                .Where(up => up.Granted)
-                .Select(up => up.Permission?.Name ?? string.Empty)
-                .ToList()
+            Id          = m.Id,
+            Email       = m.Email,
+            Role        = m.Role.ToString(),
+            Permissions = m.GrantedPermissions
         }).ToList();
     }
 
     public async Task UpdateMemberPermissionsAsync(Guid providerAdminId, Guid memberId, List<PermissionOverride> overrides)
     {
-        // Verify providerAdmin exists and has an org
-        var admin = await _db.Users
+        // Project only what we need — avoids loading all IdentityUser columns
+        var adminInfo = await _db.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
+            .Where(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
+            .Select(u => new { u.OrganizationId })
+            .FirstOrDefaultAsync()
             ?? throw new UnauthorizedAccessException("User is not a ProviderAdmin.");
 
-        if (admin.OrganizationId is null)
+        if (adminInfo.OrganizationId is null)
             throw new UnauthorizedAccessException("ProviderAdmin has no organization.");
 
-        // Verify target member belongs to the same org
-        var member = await _db.Users
-            .FirstOrDefaultAsync(u => u.Id == memberId && u.OrganizationId == admin.OrganizationId)
+        var adminOrgId = adminInfo.OrganizationId.Value;
+
+        // Verify target member belongs to the same org — AsNoTracking because we only read
+        var memberRole = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == memberId && u.OrganizationId == adminOrgId)
+            .Select(u => (UserRole?)u.Role)
+            .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Member not found in your organization.");
 
-        // Only allow managing ProviderEmployee permissions
-        if (member.Role != UserRole.ProviderEmployee)
+        if (memberRole != UserRole.ProviderEmployee)
             throw new InvalidOperationException("Can only manage permissions for ProviderEmployee members.");
+
+        // Batch load all referenced permissions in one query
+        var permissionNames = overrides.Select(o => o.PermissionName).ToHashSet();
+        var permissions = await _db.Permissions
+            .AsNoTracking()
+            .Where(p => permissionNames.Contains(p.Name))
+            .ToDictionaryAsync(p => p.Name);
+
+        var missingName = permissionNames.FirstOrDefault(n => !permissions.ContainsKey(n));
+        if (missingName is not null)
+            throw new KeyNotFoundException($"Permission '{missingName}' not found.");
+
+        var permissionIds = permissions.Values.Select(p => p.Id).ToList();
+
+        // Batch load existing overrides in one query
+        var existingOverrides = await _db.UserPermissions
+            .Where(up => up.UserId == memberId && permissionIds.Contains(up.PermissionId))
+            .ToDictionaryAsync(up => up.PermissionId);
 
         foreach (var o in overrides)
         {
-            var permission = await _db.Permissions
-                .FirstOrDefaultAsync(p => p.Name == o.PermissionName)
-                ?? throw new KeyNotFoundException($"Permission '{o.PermissionName}' not found.");
+            var permission = permissions[o.PermissionName];
 
-            var existing = await _db.UserPermissions
-                .FirstOrDefaultAsync(up => up.UserId == memberId && up.PermissionId == permission.Id);
-
-            if (existing is null)
+            if (existingOverrides.TryGetValue(permission.Id, out var existing))
             {
-                _db.UserPermissions.Add(new UserPermission
-                {
-                    UserId = memberId,
-                    PermissionId = permission.Id,
-                    Granted = o.Granted
-                });
+                existing.Granted = o.Granted;
             }
             else
             {
-                existing.Granted = o.Granted;
+                _db.UserPermissions.Add(new UserPermission
+                {
+                    UserId       = memberId,
+                    PermissionId = permission.Id,
+                    Granted      = o.Granted
+                });
             }
         }
 
