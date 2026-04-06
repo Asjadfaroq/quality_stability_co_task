@@ -51,7 +51,8 @@ public class RequestService : IRequestService
         {
             UserRole.Customer => query.Where(r => r.CustomerId == userId),
             UserRole.Admin    => query,
-            _                 => query.Where(r => r.Status == RequestStatus.Pending)
+            _                 => query.Where(r => r.Status == RequestStatus.Pending ||
+                                              (r.Status == RequestStatus.Accepted && r.AcceptedByProviderId == userId))
         };
 
         var requests = await query.OrderByDescending(r => r.CreatedAt).ToListAsync();

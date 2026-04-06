@@ -4,14 +4,14 @@ import type { UserRole } from '../types'
 
 interface Props {
   children: React.ReactNode
-  roleRequired?: UserRole
+  roles?: UserRole[]
 }
 
-export default function ProtectedRoute({ children, roleRequired }: Props) {
+export default function ProtectedRoute({ children, roles }: Props) {
   const { token, role } = useAuthStore()
 
   if (!token) return <Navigate to="/login" replace />
-  if (roleRequired && role !== roleRequired) return <Navigate to="/login" replace />
+  if (roles && role && !roles.includes(role)) return <Navigate to="/login" replace />
 
   return <>{children}</>
 }
