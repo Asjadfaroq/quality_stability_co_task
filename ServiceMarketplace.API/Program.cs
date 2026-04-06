@@ -73,6 +73,12 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1"
     });
 
+    // Include XML doc comments in Swagger UI
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        options.IncludeXmlComments(xmlPath);
+
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -115,6 +121,7 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IOrgService, OrgService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IRequestService, RequestService>();
+builder.Services.AddScoped<IAiService, AiService>();
 
 var app = builder.Build();
 

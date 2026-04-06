@@ -8,6 +8,7 @@ using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
 
+/// <summary>Service request lifecycle management.</summary>
 [Route("api/requests")]
 [Authorize]
 public class RequestsController : BaseController
@@ -21,6 +22,7 @@ public class RequestsController : BaseController
         _validator = validator;
     }
 
+    /// <summary>Create a new service request. Requires request.create permission. Free tier limited to 3 requests.</summary>
     [HttpPost]
     [RequirePermission("request.create")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status201Created)]
@@ -36,6 +38,7 @@ public class RequestsController : BaseController
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    /// <summary>Get requests filtered by role: Customer=own, Provider=all pending, Admin=all.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
@@ -44,6 +47,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
+    /// <summary>Find pending requests within a radius using Haversine. Requires request.view_all permission.</summary>
     [HttpGet("nearby")]
     [RequirePermission("request.view_all")]
     [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
@@ -64,6 +68,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
+    /// <summary>Get a single request by ID. Customers can only access their own.</summary>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -74,6 +79,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
+    /// <summary>Accept a pending request. Returns 409 if already accepted.</summary>
     [HttpPatch("{id:guid}/accept")]
     [RequirePermission("request.accept")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
@@ -86,6 +92,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
+    /// <summary>Complete an accepted request. Returns 403 if caller is not the acceptor, 422 if not in Accepted state.</summary>
     [HttpPatch("{id:guid}/complete")]
     [RequirePermission("request.complete")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
