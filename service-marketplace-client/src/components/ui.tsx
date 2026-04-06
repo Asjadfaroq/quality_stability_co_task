@@ -34,10 +34,10 @@ export function Badge({ label, variant }: BadgeProps) {
 // ── Button ───────────────────────────────────────────────────────────────────
 
 const buttonVariants = {
-  primary:   'bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-sm',
-  secondary: 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300 hover:border-gray-400 shadow-sm',
+  primary:   'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent shadow-sm',
+  secondary: 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300 hover:border-slate-400 shadow-sm',
   danger:    'bg-red-600 hover:bg-red-700 text-white border-transparent shadow-sm',
-  ghost:     'bg-transparent hover:bg-gray-100 text-gray-600 hover:text-gray-900 border-transparent',
+  ghost:     'bg-transparent hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-transparent',
   success:   'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent shadow-sm',
 }
 
@@ -101,19 +101,19 @@ export function Input({ label, error, hint, id, className = '', ...rest }: Input
   return (
     <div className="space-y-1.5">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium text-gray-700">
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700">
           {label}
         </label>
       )}
       <input
         id={inputId}
         className={`
-          w-full border rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white
-          placeholder:text-gray-400
-          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-          disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
+          w-full border rounded-lg px-3 py-2.5 text-sm text-slate-900 bg-white
+          placeholder:text-slate-400
+          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+          disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed
           transition-shadow duration-150
-          ${error ? 'border-red-400 focus:ring-red-400' : 'border-gray-300'}
+          ${error ? 'border-red-400 focus:ring-red-400' : 'border-slate-300'}
           ${className}
         `}
         {...rest}
@@ -140,7 +140,7 @@ export function Textarea({ label, error, hint, actions, id, className = '', ...r
       {(label || actions) && (
         <div className="flex items-center justify-between">
           {label && (
-            <label htmlFor={inputId} className="block text-sm font-medium text-gray-700">
+            <label htmlFor={inputId} className="block text-sm font-medium text-slate-700">
               {label}
             </label>
           )}
@@ -150,11 +150,11 @@ export function Textarea({ label, error, hint, actions, id, className = '', ...r
       <textarea
         id={inputId}
         className={`
-          w-full border rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white
-          placeholder:text-gray-400 resize-none
-          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+          w-full border rounded-lg px-3 py-2.5 text-sm text-slate-900 bg-white
+          placeholder:text-slate-400 resize-none
+          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
           transition-shadow duration-150
-          ${error ? 'border-red-400 focus:ring-red-400' : 'border-gray-300'}
+          ${error ? 'border-red-400 focus:ring-red-400' : 'border-slate-300'}
           ${className}
         `}
         {...rest}
@@ -177,17 +177,17 @@ export function Select({ label, error, id, children, className = '', ...rest }: 
   return (
     <div className="space-y-1.5">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium text-gray-700">
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700">
           {label}
         </label>
       )}
       <select
         id={inputId}
         className={`
-          w-full border rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white
-          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+          w-full border rounded-lg px-3 py-2.5 text-sm text-slate-900 bg-white
+          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
           transition-shadow duration-150
-          ${error ? 'border-red-400' : 'border-gray-300'}
+          ${error ? 'border-red-400' : 'border-slate-300'}
           ${className}
         `}
         {...rest}
@@ -225,8 +225,8 @@ export function CardHeader({ title, description, actions }: CardHeaderProps) {
   return (
     <div className="flex items-start justify-between mb-5 gap-4">
       <div>
-        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-        {description && <p className="text-sm text-gray-500 mt-0.5">{description}</p>}
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        {description && <p className="text-sm text-slate-500 mt-0.5">{description}</p>}
       </div>
       {actions && <div className="shrink-0">{actions}</div>}
     </div>
@@ -243,22 +243,22 @@ interface StatCardProps {
 }
 
 const statColors = {
-  blue:    'bg-blue-50 text-blue-600',
+  blue:    'bg-indigo-50 text-indigo-600',
   emerald: 'bg-emerald-50 text-emerald-600',
   amber:   'bg-amber-50 text-amber-600',
-  purple:  'bg-purple-50 text-purple-600',
+  purple:  'bg-violet-50 text-violet-600',
 }
 
 export function StatCard({ label, value, icon, color = 'blue' }: StatCardProps) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-gray-500">{label}</p>
+        <p className="text-sm font-medium text-slate-500">{label}</p>
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${statColors[color]}`}>
           {icon}
         </div>
       </div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <p className="text-2xl font-bold text-slate-900">{value}</p>
     </div>
   )
 }

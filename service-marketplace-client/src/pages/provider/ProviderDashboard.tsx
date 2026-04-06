@@ -113,10 +113,13 @@ export default function ProviderDashboard() {
 
   return (
     <>
-      <AppLayout
-        title="Provider Dashboard"
-        description={`Signed in as ${email?.split('@')[0]} · ${role}`}
-        actions={
+      <AppLayout title="Provider Dashboard">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Provider Dashboard</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Signed in as {email?.split('@')[0]} · {role}</p>
+          </div>
           <Button
             variant={showNearby ? 'secondary' : 'primary'}
             icon={showNearby ? <X size={15} /> : <SlidersHorizontal size={15} />}
@@ -124,8 +127,8 @@ export default function ProviderDashboard() {
           >
             {showNearby ? 'Hide filter' : 'Find Nearby'}
           </Button>
-        }
-      >
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <StatCard label="Available Jobs" value={pending.length}   icon={<Briefcase size={18} />}    color="blue" />
@@ -162,12 +165,12 @@ export default function ProviderDashboard() {
             <div className="mb-5">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-gray-700">Search radius</label>
-                <span className="text-sm font-semibold text-blue-600">{radius} km</span>
+                <span className="text-sm font-semibold text-indigo-600">{radius} km</span>
               </div>
               <input
                 type="range" min={1} max={100} value={radius}
                 onChange={(e) => setRadius(Number(e.target.value))}
-                className="w-full h-1.5 bg-gray-200 rounded-full appearance-none accent-blue-600 cursor-pointer"
+                className="w-full h-1.5 bg-slate-200 rounded-full appearance-none accent-indigo-600 cursor-pointer"
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
                 <span>1 km</span><span>100 km</span>

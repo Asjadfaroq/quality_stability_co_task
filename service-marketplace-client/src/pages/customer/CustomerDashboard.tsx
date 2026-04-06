@@ -130,15 +130,18 @@ export default function CustomerDashboard() {
 
   return (
     <>
-      <AppLayout
-        title="My Requests"
-        description={`Welcome back, ${email?.split('@')[0]}`}
-        actions={
+      <AppLayout title="My Requests">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">My Requests</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Welcome back, {email?.split('@')[0]}</p>
+          </div>
           <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
             New Request
           </Button>
-        }
-      >
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <StatCard label="Total Requests" value={requests.length} icon={<ClipboardList size={18} />} color="blue" />

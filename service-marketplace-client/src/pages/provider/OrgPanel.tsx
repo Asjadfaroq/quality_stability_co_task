@@ -44,10 +44,13 @@ export default function OrgPanel() {
   }
 
   return (
-    <AppLayout
-      title="Organization"
-      description="Manage your team members and their permissions"
-    >
+    <AppLayout title="Organization">
+      {/* Page header */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-900">Organization</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Manage your team members and their permissions</p>
+      </div>
+
       <Card padding={false}>
         <div className="px-6 py-5 border-b border-gray-100">
           <CardHeader
@@ -112,8 +115,8 @@ export default function OrgPanel() {
                                 key={key}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
                                   granted
-                                    ? 'bg-blue-50 border-blue-200'
-                                    : 'bg-white border-gray-200 hover:border-gray-300'
+                                    ? 'bg-indigo-50 border-indigo-200'
+                                    : 'bg-white border-slate-200 hover:border-slate-300'
                                 }`}
                               >
                                 <input
@@ -121,13 +124,13 @@ export default function OrgPanel() {
                                   checked={granted}
                                   onChange={() => togglePerm(member, key)}
                                   disabled={permMutation.isPending}
-                                  className="w-3.5 h-3.5 accent-blue-600 shrink-0"
+                                  className="w-3.5 h-3.5 accent-indigo-600 shrink-0"
                                 />
                                 <div>
-                                  <p className={`text-xs font-medium ${granted ? 'text-blue-700' : 'text-gray-700'}`}>
+                                  <p className={`text-xs font-medium ${granted ? 'text-indigo-700' : 'text-slate-700'}`}>
                                     {label}
                                   </p>
-                                  <p className="text-[11px] text-gray-400 font-mono mt-0.5">{key}</p>
+                                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">{key}</p>
                                 </div>
                               </label>
                             )

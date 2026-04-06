@@ -5,5 +5,10 @@
 body {
   margin: 0;
   font-family: system-ui, sans-serif;
-  background-color: #f9fafb;
+  background-color: #f4f6fa;
+}
+
+.nav-inactive:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88) !important;
 }
