@@ -44,6 +44,12 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
   useEffect(() => {
     if (!token) return
 
+    // Tracks whether the cleanup has already run (React StrictMode mounts twice in dev,
+    // or the user closes the panel before the connection resolves). Without this flag,
+    // our own cleanup calling connection.stop() would reject the pending start() and
+    // incorrectly show the "Failed to connect" toast.
+    let cancelled = false
+
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(HUB_URL, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
@@ -59,15 +65,17 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
     })
 
     connection.start().then(async () => {
+      if (cancelled) return
       await connection.invoke('JoinRequestChat', requestId)
       setConnected(true)
     }).catch(() => {
-      toast.error('Failed to connect to chat. Please refresh.')
+      if (!cancelled) toast.error('Failed to connect to chat. Please refresh.')
     })
 
     connectionRef.current = connection
 
     return () => {
+      cancelled = true
       connection.invoke('LeaveRequestChat', requestId).catch(() => {})
       connection.stop()
     }

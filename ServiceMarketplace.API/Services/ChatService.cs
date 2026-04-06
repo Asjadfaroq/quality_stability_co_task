@@ -33,24 +33,20 @@ public class ChatService : IChatService
         if (content.Length > MaxMessageLength)
             throw new ArgumentException($"Message exceeds maximum length of {MaxMessageLength} characters.");
 
-        // Fetch participants and sender email in parallel — two independent reads
-        var participantsTask = GetParticipantsAsync(requestId);
-        var senderEmailTask  = _db.Users
-            .AsNoTracking()
-            .Where(u => u.Id == senderId)
-            .Select(u => u.Email)
-            .FirstOrDefaultAsync();
-
-        await Task.WhenAll(participantsTask, senderEmailTask);
-
-        var participants = participantsTask.Result
+        // Sequential reads — DbContext is not thread-safe; never run two queries on the
+        // same instance concurrently (Task.WhenAll would cause "second operation started").
+        var participants = await GetParticipantsAsync(requestId)
             ?? throw new KeyNotFoundException("Request not found.");
 
         var isParticipant = participants.CustomerId == senderId || participants.ProviderId == senderId;
         if (!isParticipant)
             throw new UnauthorizedAccessException("You are not a participant in this chat.");
 
-        var senderEmail = senderEmailTask.Result
+        var senderEmail = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == senderId)
+            .Select(u => u.Email)
+            .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Sender not found.");
 
         var message = new ChatMessage
