@@ -1,10 +1,13 @@
 using System.Text;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Middleware;
+using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Services;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -56,8 +59,9 @@ builder.Services.AddAuthentication(options =>
 // 4. Authorization
 builder.Services.AddAuthorization();
 
-// 5. FluentValidation
+// 5. Controllers + FluentValidation
 builder.Services.AddControllers();
+builder.Services.AddScoped<IValidator<CreateRequestDto>, CreateRequestValidator>();
 
 // 6. Swagger with JWT Bearer button
 builder.Services.AddEndpointsApiExplorer();
@@ -109,8 +113,13 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IOrgService, OrgService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IRequestService, RequestService>();
 
 var app = builder.Build();
+
+// 9. Exception middleware — must be first in pipeline
+app.UseExceptionMiddleware();
 
 // Middleware pipeline
 if (app.Environment.IsDevelopment())
@@ -121,13 +130,14 @@ if (app.Environment.IsDevelopment())
 
 if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
+
 app.UseCors("Frontend");
 
-// 9. Authentication & Authorization (order matters)
+// 10. Authentication & Authorization (order matters)
 app.UseAuthentication();
 app.UseAuthorization();
 
-// 10. Controllers
+// 11. Controllers
 app.MapControllers();
 
 app.Run();
