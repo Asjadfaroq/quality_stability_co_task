@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import { useQuery } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import api from '../api/axios'
 
@@ -53,10 +54,16 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
       setMessages((prev) => [...prev, msg])
     })
 
+    connection.on('ChatError', (error: string) => {
+      toast.error(error)
+    })
+
     connection.start().then(async () => {
       await connection.invoke('JoinRequestChat', requestId)
       setConnected(true)
-    }).catch(console.error)
+    }).catch(() => {
+      toast.error('Failed to connect to chat. Please refresh.')
+    })
 
     connectionRef.current = connection
 
@@ -73,8 +80,14 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
 
   const sendMessage = async () => {
     if (!input.trim() || !connectionRef.current || !connected) return
-    await connectionRef.current.invoke('SendMessage', requestId, input.trim())
+    const text = input.trim()
     setInput('')
+    try {
+      await connectionRef.current.invoke('SendMessage', requestId, text)
+    } catch {
+      setInput(text)
+      toast.error('Failed to send message. Please try again.')
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

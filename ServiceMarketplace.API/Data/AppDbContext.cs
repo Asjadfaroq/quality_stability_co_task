@@ -52,6 +52,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
             e.Property(r => r.Category).HasMaxLength(100);
             e.Property(r => r.Latitude).HasColumnType("decimal(9,6)");
             e.Property(r => r.Longitude).HasColumnType("decimal(9,6)");
+            e.Property(r => r.RowVersion).IsRowVersion();
             e.HasOne(r => r.Customer)
              .WithMany(u => u.ServiceRequests)
              .HasForeignKey(r => r.CustomerId)
@@ -60,6 +61,16 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .WithMany()
              .HasForeignKey(r => r.AcceptedByProviderId)
              .OnDelete(DeleteBehavior.SetNull);
+            // Indexes for common query patterns
+            e.HasIndex(r => r.CustomerId);
+            e.HasIndex(r => r.Status);
+            e.HasIndex(r => r.AcceptedByProviderId);
+        });
+
+        // ChatMessage
+        builder.Entity<ChatMessage>(e =>
+        {
+            e.HasIndex(m => m.RequestId);
         });
 
         // Permission

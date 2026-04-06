@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
 
@@ -10,43 +9,24 @@ namespace ServiceMarketplace.API.Controllers;
 [Authorize]
 public class ChatController : BaseController
 {
-    private readonly AppDbContext _db;
+    private readonly IChatService _chatService;
 
-    public ChatController(AppDbContext db)
+    public ChatController(IChatService chatService)
     {
-        _db = db;
+        _chatService = chatService;
     }
 
     /// <summary>Get message history for a request. Only the customer or accepted provider can access.</summary>
     [HttpGet("{requestId:guid}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMessages(Guid requestId)
     {
-        var request = await _db.ServiceRequests
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == requestId);
+        var canAccess = await _chatService.CanAccessChatAsync(requestId, CurrentUserId);
+        if (!canAccess) return Forbid();
 
-        if (request == null) return NotFound();
-
-        var isCustomer = request.CustomerId == CurrentUserId;
-        var isProvider = request.AcceptedByProviderId == CurrentUserId;
-
-        if (!isCustomer && !isProvider)
-            return Forbid();
-
-        var messages = await _db.ChatMessages
-            .AsNoTracking()
-            .Where(m => m.RequestId == requestId)
-            .OrderBy(m => m.SentAt)
-            .Select(m => new
-            {
-                m.Id,
-                m.SenderId,
-                m.SenderEmail,
-                m.Content,
-                m.SentAt
-            })
-            .ToListAsync();
-
+        var messages = await _chatService.GetHistoryAsync(requestId, CurrentUserId);
         return Ok(messages);
     }
 }

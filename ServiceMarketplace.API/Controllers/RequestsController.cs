@@ -61,8 +61,8 @@ public class RequestsController : BaseController
         if (lng < -180 || lng > 180)
             return BadRequest(new { message = "Longitude must be between -180 and 180." });
 
-        if (radiusKm <= 0)
-            return BadRequest(new { message = "radiusKm must be greater than 0." });
+        if (radiusKm <= 0 || radiusKm > 500)
+            return BadRequest(new { message = "radiusKm must be between 1 and 500." });
 
         var result = await _requestService.GetNearbyAsync(lat, lng, radiusKm);
         return Ok(result);

@@ -12,9 +12,6 @@ public class AiService : IAiService
     private readonly ILogger<AiService> _logger;
     private readonly HttpClient _httpClient;
 
-    private const string Model = "Qwen/Qwen2.5-7B-Instruct-Turbo";
-    private const string Endpoint = "https://router.huggingface.co/together/v1/chat/completions";
-
     public AiService(IConfiguration configuration, ILogger<AiService> logger, IHttpClientFactory httpClientFactory)
     {
         _configuration = configuration;
@@ -26,7 +23,9 @@ public class AiService : IAiService
     {
         try
         {
-            var apiKey = _configuration["HuggingFace:ApiKey"];
+            var apiKey  = _configuration["HuggingFace:ApiKey"];
+            var model    = _configuration["HuggingFace:Model"]    ?? "Qwen/Qwen2.5-7B-Instruct-Turbo";
+            var endpoint = _configuration["HuggingFace:Endpoint"] ?? "https://router.huggingface.co/together/v1/chat/completions";
 
             if (string.IsNullOrWhiteSpace(apiKey) || apiKey == "YOUR-HUGGINGFACE-KEY-HERE")
                 return Mock(request);
@@ -42,13 +41,13 @@ public class AiService : IAiService
 
             var body = new
             {
-                model = Model,
+                model,
                 messages = new[] { new { role = "user", content = prompt } },
                 max_tokens = 512,
                 temperature = 0.5
             };
 
-            var requestMessage = new HttpRequestMessage(HttpMethod.Post, Endpoint);
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, endpoint);
             requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             requestMessage.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 

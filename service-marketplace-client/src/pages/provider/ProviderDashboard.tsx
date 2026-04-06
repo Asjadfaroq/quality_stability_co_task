@@ -86,11 +86,18 @@ export default function ProviderDashboard() {
   })
 
   const handleNearbySearch = async () => {
-    if (!lat || !lng) return toast.error('Enter latitude and longitude.')
+    const latNum = parseFloat(lat)
+    const lngNum = parseFloat(lng)
+    if (!lat || !lng || isNaN(latNum) || isNaN(lngNum))
+      return toast.error('Enter valid latitude and longitude.')
+    if (latNum < -90 || latNum > 90)
+      return toast.error('Latitude must be between -90 and 90.')
+    if (lngNum < -180 || lngNum > 180)
+      return toast.error('Longitude must be between -180 and 180.')
     setSearchingNearby(true)
     try {
       const res = await api.get('/requests/nearby', {
-        params: { lat, lng, radiusKm: radius },
+        params: { lat: latNum, lng: lngNum, radiusKm: radius },
       })
       setNearbyResults(res.data)
       if (res.data.length === 0) toast('No requests found nearby.', { icon: 'ℹ️' })

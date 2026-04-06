@@ -8,11 +8,13 @@ import ProviderDashboard from './pages/provider/ProviderDashboard'
 import OrgPanel from './pages/provider/OrgPanel'
 import AdminPanel from './pages/admin/AdminPanel'
 import ProtectedRoute from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
 
 const queryClient = new QueryClient()
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-right" />
       <BrowserRouter>
@@ -60,5 +62,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
+    </ErrorBoundary>
   )
 }

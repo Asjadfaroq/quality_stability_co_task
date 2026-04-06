@@ -111,6 +111,8 @@ export default function CustomerDashboard() {
       })
       setValue('description', res.data.enhancedDescription)
       if (!watch('category')) setValue('category', res.data.suggestedCategory)
+    } catch {
+      toast.error('AI enhancement failed. Please try again.')
     } finally {
       setEnhancing(false)
     }

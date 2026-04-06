@@ -1,22 +1,22 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
-using ServiceMarketplace.API.Data;
-using ServiceMarketplace.API.Models.Entities;
+using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Hubs;
 
 [Authorize]
 public class NotificationHub : Hub
 {
-    private readonly AppDbContext _db;
+    private readonly IChatService _chatService;
+    private readonly ILogger<NotificationHub> _logger;
 
-    public NotificationHub(AppDbContext db)
+    public NotificationHub(IChatService chatService, ILogger<NotificationHub> logger)
     {
-        _db = db;
+        _chatService = chatService;
+        _logger = logger;
     }
 
-    // Each user joins a group named after their userId for targeted notifications
+    // Each user joins a group named after their userId for targeted notifications.
     public override async Task OnConnectedAsync()
     {
         var userId = Context.UserIdentifier;
@@ -39,19 +39,11 @@ public class NotificationHub : Hub
 
     public async Task JoinRequestChat(string requestId)
     {
-        var userId = Guid.Parse(Context.UserIdentifier!);
+        var userId = GetUserId();
+        if (userId == null) return;
 
-        // Validate: caller must be the customer or accepted provider of this request
-        var request = await _db.ServiceRequests
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == Guid.Parse(requestId));
-
-        if (request == null) return;
-
-        var isCustomer  = request.CustomerId == userId;
-        var isProvider  = request.AcceptedByProviderId == userId;
-
-        if (!isCustomer && !isProvider) return;
+        var canAccess = await _chatService.CanAccessChatAsync(Guid.Parse(requestId), userId.Value);
+        if (!canAccess) return;
 
         await Groups.AddToGroupAsync(Context.ConnectionId, $"chat_{requestId}");
     }
@@ -63,53 +55,52 @@ public class NotificationHub : Hub
 
     public async Task SendMessage(string requestId, string content)
     {
-        if (string.IsNullOrWhiteSpace(content)) return;
+        var userId = GetUserId();
+        if (userId == null) return;
 
-        var userId = Guid.Parse(Context.UserIdentifier!);
-
-        // Validate: caller must be part of this request's chat
-        var request = await _db.ServiceRequests
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == Guid.Parse(requestId));
-
-        if (request == null) return;
-        if (request.CustomerId != userId && request.AcceptedByProviderId != userId) return;
-
-        var user = await _db.Users.FindAsync(userId);
-
-        var message = new ChatMessage
+        try
         {
-            Id          = Guid.NewGuid(),
-            RequestId   = Guid.Parse(requestId),
-            SenderId    = userId,
-            SenderEmail = user!.Email!,
-            Content     = content.Trim(),
-            SentAt      = DateTime.UtcNow
-        };
+            var message = await _chatService.SaveMessageAsync(
+                Guid.Parse(requestId), userId.Value, content);
 
-        _db.ChatMessages.Add(message);
-        await _db.SaveChangesAsync();
+            var payload = new
+            {
+                id          = message.Id,
+                requestId   = message.RequestId,
+                senderId    = message.SenderId,
+                senderEmail = message.SenderEmail,
+                content     = message.Content,
+                sentAt      = message.SentAt
+            };
 
-        var payload = new
+            // Broadcast to everyone in the chat room (open ChatPanel)
+            await Clients.Group($"chat_{requestId}").SendAsync("ReceiveMessage", payload);
+
+            // Notify the other party's dashboard so their unread badge updates
+            var otherPartyId = await _chatService.GetOtherPartyIdAsync(message.RequestId, userId.Value);
+            if (otherPartyId.HasValue)
+                await Clients.Group(otherPartyId.Value.ToString())
+                    .SendAsync("NewMessageNotification", payload);
+
+        }
+        catch (ArgumentException ex)
         {
-            id          = message.Id,
-            requestId   = message.RequestId,
-            senderId    = message.SenderId,
-            senderEmail = message.SenderEmail,
-            content     = message.Content,
-            sentAt      = message.SentAt
-        };
+            await Clients.Caller.SendAsync("ChatError", ex.Message);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            await Clients.Caller.SendAsync("ChatError", "You are not authorized to send messages in this chat.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error saving chat message for request {RequestId}", requestId);
+            await Clients.Caller.SendAsync("ChatError", "Failed to send message. Please try again.");
+        }
+    }
 
-        // Broadcast to everyone in the chat room (open ChatPanel)
-        await Clients.Group($"chat_{requestId}").SendAsync("ReceiveMessage", payload);
-
-        // Also notify the OTHER party via their userId group so dashboards
-        // can show unread badge even when the chat panel is closed
-        var otherPartyId = message.SenderId == request.CustomerId
-            ? request.AcceptedByProviderId?.ToString()
-            : request.CustomerId.ToString();
-
-        if (otherPartyId != null)
-            await Clients.Group(otherPartyId).SendAsync("NewMessageNotification", payload);
+    private Guid? GetUserId()
+    {
+        var raw = Context.UserIdentifier;
+        return Guid.TryParse(raw, out var id) ? id : null;
     }
 }

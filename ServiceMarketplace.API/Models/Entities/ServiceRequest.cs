@@ -18,4 +18,7 @@ public class ServiceRequest
 
     public User? Customer { get; set; }
     public User? AcceptedByProvider { get; set; }
+
+    /// <summary>Optimistic concurrency token — prevents double-accept race conditions.</summary>
+    public byte[]? RowVersion { get; set; }
 }

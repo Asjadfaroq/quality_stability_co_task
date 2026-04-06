@@ -146,6 +146,10 @@ builder.Services.AddScoped<IOrgService, OrgService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IRequestService, RequestService>();
 builder.Services.AddScoped<IAiService, AiService>();
+builder.Services.AddScoped<IChatService, ChatService>();
+
+// In-memory cache for permission lookups
+builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 

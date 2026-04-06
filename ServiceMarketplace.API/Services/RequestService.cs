@@ -15,12 +15,18 @@ public class RequestService : IRequestService
     private readonly AppDbContext _db;
     private readonly ISubscriptionService _subscriptionService;
     private readonly IHubContext<NotificationHub> _hub;
+    private readonly ILogger<RequestService> _logger;
 
-    public RequestService(AppDbContext db, ISubscriptionService subscriptionService, IHubContext<NotificationHub> hub)
+    public RequestService(
+        AppDbContext db,
+        ISubscriptionService subscriptionService,
+        IHubContext<NotificationHub> hub,
+        ILogger<RequestService> logger)
     {
         _db = db;
         _subscriptionService = subscriptionService;
         _hub = hub;
+        _logger = logger;
     }
 
     public async Task<ServiceRequestDto> CreateAsync(Guid customerId, CreateRequestDto dto)
@@ -43,6 +49,10 @@ public class RequestService : IRequestService
 
         _db.ServiceRequests.Add(request);
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Request {RequestId} created by customer {CustomerId}",
+            request.Id, customerId);
 
         return MapToDto(request);
     }
@@ -111,6 +121,11 @@ public class RequestService : IRequestService
         request.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Request {RequestId} accepted by provider {ProviderId}",
+            requestId, providerId);
+
         return MapToDto(request);
     }
 
@@ -136,6 +151,10 @@ public class RequestService : IRequestService
         request.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Request {RequestId} marked PendingConfirmation by provider {ProviderId}",
+            requestId, providerId);
 
         // Notify the customer in real time
         await _hub.Clients
@@ -165,6 +184,10 @@ public class RequestService : IRequestService
         request.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Request {RequestId} confirmed completed by customer {CustomerId}",
+            requestId, customerId);
 
         // Notify the provider in real time
         if (request.AcceptedByProviderId.HasValue)

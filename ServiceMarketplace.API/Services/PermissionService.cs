@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Services.Interfaces;
 
@@ -6,21 +7,36 @@ namespace ServiceMarketplace.API.Services;
 
 public class PermissionService : IPermissionService
 {
-    private readonly AppDbContext _db;
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
 
-    public PermissionService(AppDbContext db)
+    private readonly AppDbContext _db;
+    private readonly IMemoryCache _cache;
+
+    public PermissionService(AppDbContext db, IMemoryCache cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     public async Task<bool> HasPermissionAsync(Guid userId, string permissionName)
     {
+        var permissions = await GetEffectivePermissionsAsync(userId);
+        return permissions.Contains(permissionName);
+    }
+
+    private async Task<HashSet<string>> GetEffectivePermissionsAsync(Guid userId)
+    {
+        var cacheKey = $"permissions:{userId}";
+
+        if (_cache.TryGetValue(cacheKey, out HashSet<string>? cached) && cached is not null)
+            return cached;
+
         // 1. Get user's role
         var user = await _db.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == userId);
 
-        if (user is null) return false;
+        if (user is null) return [];
 
         // 2. Load role default permissions
         var rolePermissionNames = await _db.RolePermissions
@@ -29,25 +45,22 @@ public class PermissionService : IPermissionService
             .Select(rp => rp.Permission!.Name)
             .ToListAsync();
 
-        var effectivePermissions = new HashSet<string>(rolePermissionNames);
+        var effective = new HashSet<string>(rolePermissionNames);
 
-        // 3. Load user-level overrides
+        // 3. Load user-level overrides and apply them
         var userOverrides = await _db.UserPermissions
             .AsNoTracking()
             .Where(up => up.UserId == userId)
             .Select(up => new { up.Permission!.Name, up.Granted })
             .ToListAsync();
 
-        // 4. Apply overrides: granted=true adds, granted=false removes
-        foreach (var override_ in userOverrides)
+        foreach (var o in userOverrides)
         {
-            if (override_.Granted)
-                effectivePermissions.Add(override_.Name);
-            else
-                effectivePermissions.Remove(override_.Name);
+            if (o.Granted) effective.Add(o.Name);
+            else           effective.Remove(o.Name);
         }
 
-        // 5. Check
-        return effectivePermissions.Contains(permissionName);
+        _cache.Set(cacheKey, effective, CacheTtl);
+        return effective;
     }
 }
