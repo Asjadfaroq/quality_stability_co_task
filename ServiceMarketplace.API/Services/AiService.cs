@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using ServiceMarketplace.API.Models.DTOs.Ai;
+using ServiceMarketplace.API.Resilience;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Services;
@@ -16,7 +17,8 @@ public class AiService : IAiService
     {
         _configuration = configuration;
         _logger = logger;
-        _httpClient = httpClientFactory.CreateClient();
+        // Named client carries the Polly resilience pipeline (retry + timeouts)
+        _httpClient = httpClientFactory.CreateClient(ResilienceKeys.HuggingFace);
     }
 
     public async Task<EnhanceDescriptionResponse> EnhanceDescriptionAsync(EnhanceDescriptionRequest request)

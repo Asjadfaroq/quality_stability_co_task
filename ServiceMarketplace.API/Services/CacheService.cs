@@ -1,5 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
+using Polly;
+using Polly.Registry;
+using ServiceMarketplace.API.Resilience;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Services;
@@ -10,18 +13,25 @@ public class CacheService : ICacheService
 
     private readonly IDistributedCache _cache;
     private readonly ILogger<CacheService> _logger;
+    private readonly ResiliencePipeline _pipeline;
 
-    public CacheService(IDistributedCache cache, ILogger<CacheService> logger)
+    public CacheService(
+        IDistributedCache cache,
+        ILogger<CacheService> logger,
+        ResiliencePipelineProvider<string> pipelineProvider)
     {
-        _cache = cache;
-        _logger = logger;
+        _cache    = cache;
+        _logger   = logger;
+        _pipeline = pipelineProvider.GetPipeline(ResilienceKeys.Redis);
     }
 
     public async Task<T?> GetAsync<T>(string key)
     {
         try
         {
-            var bytes = await _cache.GetAsync(key);
+            var bytes = await _pipeline.ExecuteAsync(
+                async ct => await _cache.GetAsync(key, ct));
+
             if (bytes is null || bytes.Length == 0) return default;
             return JsonSerializer.Deserialize<T>(bytes, JsonOptions);
         }
@@ -38,10 +48,11 @@ public class CacheService : ICacheService
         try
         {
             var bytes = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
-            await _cache.SetAsync(key, bytes, new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = ttl
-            });
+            await _pipeline.ExecuteAsync(
+                async ct => await _cache.SetAsync(key, bytes, new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = ttl
+                }, ct));
         }
         catch (Exception ex)
         {
@@ -53,7 +64,8 @@ public class CacheService : ICacheService
     {
         try
         {
-            await _cache.RemoveAsync(key);
+            await _pipeline.ExecuteAsync(
+                async ct => await _cache.RemoveAsync(key, ct));
         }
         catch (Exception ex)
         {

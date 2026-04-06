@@ -6,23 +6,34 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Polly;
+using Polly.CircuitBreaker;
+using Polly.Retry;
 using RedisRateLimiting;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
+using ServiceMarketplace.API.Resilience;
 using ServiceMarketplace.API.Services;
 using ServiceMarketplace.API.Services.Interfaces;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. DbContext
+// 1. DbContext — SQL Server execution strategy retries transient failures (deadlocks,
+//    connection drops, timeouts) automatically before surfacing an exception.
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sql => sql.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorNumbersToAdd: null)));
 
 // 2. Identity
 builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
@@ -138,8 +149,28 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, UserIdProvider>();
 
-// 9. HttpClient factory
-builder.Services.AddHttpClient();
+// 9. Named HttpClient for HuggingFace AI with a resilience pipeline:
+//    - Retries up to 3 times on 5xx / network failures with exponential backoff + jitter.
+//    - 429 (HuggingFace rate limit) is NOT retried — the service falls back to mock instead.
+//    - Per-attempt timeout: 20 s.  Overall timeout across all attempts: 45 s.
+builder.Services.AddHttpClient(ResilienceKeys.HuggingFace)
+    .AddResilienceHandler(ResilienceKeys.HuggingFace, pipeline =>
+    {
+        pipeline.AddTimeout(TimeSpan.FromSeconds(45));
+
+        pipeline.AddRetry(new HttpRetryStrategyOptions
+        {
+            MaxRetryAttempts = 3,
+            Delay            = TimeSpan.FromSeconds(2),
+            BackoffType      = DelayBackoffType.Exponential,
+            UseJitter        = true,
+            ShouldHandle     = args => ValueTask.FromResult(
+                args.Outcome.Exception is HttpRequestException ||
+                (args.Outcome.Result is { } r && (int)r.StatusCode >= 500 && (int)r.StatusCode != 429))
+        });
+
+        pipeline.AddTimeout(TimeSpan.FromSeconds(20));
+    });
 
 // 10. Redis — one shared IConnectionMultiplexer for both distributed cache and rate limiting.
 //     AbortOnConnectFail=false lets the app start even when Redis is temporarily unavailable;
@@ -167,7 +198,40 @@ else
     builder.Services.AddDistributedMemoryCache();
 }
 
-// 11. Rate limiting
+// 11. Redis resilience pipeline used by CacheService:
+//     - Retries up to 2 times on transient Redis connection/timeout errors with
+//       exponential backoff + jitter (100 ms → 200 ms).
+//     - Circuit breaker opens after 50 % failures over 30 s (min 5 calls) and
+//       stays open for 15 s, preventing a Redis outage from hammering every request.
+//     - After all retries fail the existing CacheService try/catch treats it as a
+//       cache miss — the app keeps running without cache.
+builder.Services.AddResiliencePipeline(ResilienceKeys.Redis, pipeline =>
+{
+    pipeline.AddRetry(new RetryStrategyOptions
+    {
+        MaxRetryAttempts = 2,
+        Delay            = TimeSpan.FromMilliseconds(100),
+        BackoffType      = DelayBackoffType.Exponential,
+        UseJitter        = true,
+        ShouldHandle     = new PredicateBuilder()
+            .Handle<RedisConnectionException>()
+            .Handle<RedisTimeoutException>()
+            .Handle<TimeoutException>()
+    });
+
+    pipeline.AddCircuitBreaker(new CircuitBreakerStrategyOptions
+    {
+        SamplingDuration  = TimeSpan.FromSeconds(30),
+        FailureRatio      = 0.5,
+        MinimumThroughput = 5,
+        BreakDuration     = TimeSpan.FromSeconds(15),
+        ShouldHandle      = new PredicateBuilder()
+            .Handle<RedisConnectionException>()
+            .Handle<RedisTimeoutException>()
+    });
+});
+
+// 13. Rate limiting
 //     Redis policies use keys prefixed "sm:rl:{policy}:{partitionKey}" — kept separate from cache keys.
 //     In-memory policies are the fallback when Redis is not configured.
 builder.Services.AddRateLimiter(options =>
