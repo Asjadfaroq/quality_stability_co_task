@@ -504,3 +504,4 @@ ServiceMarketplace.API/bin\Release/
 # macOS
 .DS_Store
 appsettings.json
+service-marketplace-client/.env.production
