@@ -19,6 +19,99 @@ public class OrgController : BaseController
         _orgService = orgService;
     }
 
+    /// <summary>
+    /// Returns the current ProviderAdmin's organization, or 404 if none exists yet.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetMyOrg()
+    {
+        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
+
+        var org = await _orgService.GetOrgByOwnerAsync(CurrentUserId);
+        return org is null ? NotFound(new { message = "You don't have an organization yet." }) : Ok(org);
+    }
+
+    /// <summary>
+    /// Creates a new organization owned by the current ProviderAdmin.
+    /// </summary>
+    [HttpPost]
+    [ProducesResponseType(typeof(OrgDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> CreateOrg([FromBody] CreateOrgRequest request)
+    {
+        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
+
+        try
+        {
+            var org = await _orgService.CreateOrgAsync(CurrentUserId, request.Name);
+            return CreatedAtAction(nameof(GetMyOrg), org);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Adds a ProviderEmployee to the current ProviderAdmin's organization by email.
+    /// Returns 400 if the user is already in another org, not a ProviderEmployee, or not found.
+    /// </summary>
+    [HttpPost("members")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddMember([FromBody] AddMemberRequest request)
+    {
+        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
+
+        try
+        {
+            await _orgService.AddMemberAsync(CurrentUserId, request.Email);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Removes a member from the current ProviderAdmin's organization.
+    /// The owner cannot remove themselves.
+    /// </summary>
+    [HttpDelete("members/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveMember(Guid id)
+    {
+        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
+
+        try
+        {
+            await _orgService.RemoveMemberAsync(CurrentUserId, id);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpGet("members")]
     [ProducesResponseType(typeof(PagedResult<OrgMemberDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]

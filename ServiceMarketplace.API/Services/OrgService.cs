@@ -20,6 +20,120 @@ public class OrgService : IOrgService
         _cache = cache;
     }
 
+    public async Task<OrgDto?> GetOrgByOwnerAsync(Guid providerAdminId)
+    {
+        var org = await _db.Organizations
+            .AsNoTracking()
+            .Where(o => o.OwnerId == providerAdminId)
+            .Select(o => new OrgDto
+            {
+                Id        = o.Id,
+                Name      = o.Name,
+                OwnerId   = o.OwnerId,
+                CreatedAt = o.CreatedAt,
+            })
+            .FirstOrDefaultAsync();
+
+        return org;
+    }
+
+    public async Task<OrgDto> CreateOrgAsync(Guid providerAdminId, string name)
+    {
+        var ownerExists = await _db.Users
+            .AnyAsync(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin);
+
+        if (!ownerExists)
+            throw new UnauthorizedAccessException("User is not a ProviderAdmin.");
+
+        var alreadyOwns = await _db.Organizations
+            .AnyAsync(o => o.OwnerId == providerAdminId);
+
+        if (alreadyOwns)
+            throw new InvalidOperationException("You already have an organization.");
+
+        var org = new Organization
+        {
+            Id        = Guid.NewGuid(),
+            Name      = name.Trim(),
+            OwnerId   = providerAdminId,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        _db.Organizations.Add(org);
+
+        // Link the owner into their own org so they appear in the member list.
+        var owner = await _db.Users.FindAsync(providerAdminId);
+        owner!.OrganizationId = org.Id;
+
+        await _db.SaveChangesAsync();
+
+        return new OrgDto
+        {
+            Id        = org.Id,
+            Name      = org.Name,
+            OwnerId   = org.OwnerId,
+            CreatedAt = org.CreatedAt,
+        };
+    }
+
+    public async Task AddMemberAsync(Guid providerAdminId, string email)
+    {
+        var adminOrg = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
+            .Select(u => new { u.OrganizationId })
+            .FirstOrDefaultAsync()
+            ?? throw new UnauthorizedAccessException("User is not a ProviderAdmin.");
+
+        if (adminOrg.OrganizationId is null)
+            throw new InvalidOperationException("You don't have an organization yet. Create one first.");
+
+        var orgId = adminOrg.OrganizationId.Value;
+
+        var target = await _db.Users
+            .FirstOrDefaultAsync(u => u.NormalizedEmail == email.Trim().ToUpperInvariant())
+            ?? throw new KeyNotFoundException("No user found with that email address.");
+
+        if (target.Role != UserRole.ProviderEmployee)
+            throw new InvalidOperationException("Only ProviderEmployee accounts can be added as members.");
+
+        // Already a member of THIS org — idempotent, no error.
+        if (target.OrganizationId == orgId)
+            return;
+
+        // Blocked: member of a DIFFERENT org.
+        if (target.OrganizationId.HasValue)
+            throw new InvalidOperationException("This user already belongs to another organization.");
+
+        target.OrganizationId = orgId;
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task RemoveMemberAsync(Guid providerAdminId, Guid memberId)
+    {
+        if (memberId == providerAdminId)
+            throw new InvalidOperationException("You cannot remove yourself. Delete the organization instead.");
+
+        var adminOrg = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
+            .Select(u => new { u.OrganizationId })
+            .FirstOrDefaultAsync()
+            ?? throw new UnauthorizedAccessException("User is not a ProviderAdmin.");
+
+        if (adminOrg.OrganizationId is null)
+            throw new InvalidOperationException("You don't have an organization.");
+
+        var orgId = adminOrg.OrganizationId.Value;
+
+        var member = await _db.Users
+            .FirstOrDefaultAsync(u => u.Id == memberId && u.OrganizationId == orgId)
+            ?? throw new KeyNotFoundException("Member not found in your organization.");
+
+        member.OrganizationId = null;
+        await _db.SaveChangesAsync();
+    }
+
     public async Task<PagedResult<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId, int page, int pageSize)
     {
         var adminInfo = await _db.Users

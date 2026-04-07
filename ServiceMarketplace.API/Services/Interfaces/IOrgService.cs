@@ -6,6 +6,10 @@ namespace ServiceMarketplace.API.Services.Interfaces;
 
 public interface IOrgService
 {
+    Task<OrgDto?> GetOrgByOwnerAsync(Guid providerAdminId);
+    Task<OrgDto> CreateOrgAsync(Guid providerAdminId, string name);
+    Task AddMemberAsync(Guid providerAdminId, string email);
+    Task RemoveMemberAsync(Guid providerAdminId, Guid memberId);
     Task<PagedResult<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId, int page, int pageSize);
     Task UpdateMemberPermissionsAsync(Guid providerAdminId, Guid memberId, List<PermissionOverride> overrides);
 }
