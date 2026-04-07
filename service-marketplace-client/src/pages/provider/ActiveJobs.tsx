@@ -67,9 +67,7 @@ export default function ActiveJobs() {
       <AppLayout title="Active Jobs">
         <div className="mb-6">
           <h2 className="text-xl font-bold text-slate-900">Active Jobs</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Jobs you have accepted and are currently working on
-          </p>
+          <p className="text-sm text-slate-500 mt-0.5">Jobs you have accepted and are currently working on</p>
         </div>
 
         <Card padding={false}>
@@ -102,72 +100,80 @@ export default function ActiveJobs() {
               description="Jobs you accept will appear here. Go to Available Jobs to browse and accept."
             />
           ) : (
-            <ul className="divide-y divide-slate-100">
-              {active.map((req) => (
-                <li
-                  key={req.id}
-                  className={`px-6 py-4 transition-colors ${
-                    req.status === 'PendingConfirmation' ? 'bg-orange-50/40' : 'hover:bg-slate-50/50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Info */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="text-sm font-semibold text-slate-900">{req.title}</p>
-                        {statusBadge(req.status)}
+            <>
+              {/* Column headers */}
+              <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Job / Details</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Actions</span>
+              </div>
+
+              <ul className="divide-y divide-slate-100">
+                {active.map((req) => (
+                  <li
+                    key={req.id}
+                    className={`px-6 py-4 transition-colors ${
+                      req.status === 'PendingConfirmation' ? 'bg-orange-50/40' : 'hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      {/* Info */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <p className="text-sm font-medium text-slate-800">{req.title}</p>
+                          {statusBadge(req.status)}
+                        </div>
+                        <p className="text-xs text-slate-400 mb-1">
+                          {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', {
+                            day: 'numeric', month: 'short', year: 'numeric',
+                          })}
+                        </p>
+                        <p className="text-xs text-slate-400 line-clamp-1">{req.description}</p>
                       </div>
-                      <p className="text-xs text-slate-500 mb-1">
-                        {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', {
-                          day: 'numeric', month: 'short', year: 'numeric',
-                        })}
-                      </p>
-                      <p className="text-xs text-slate-400 line-clamp-1">{req.description}</p>
-                    </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="ghost" size="sm"
-                        icon={<MessageSquare size={13} />}
-                        className="relative"
-                        onClick={() => {
-                          setActiveChat({ id: req.id, title: req.title })
-                          setUnread((p) => ({ ...p, [req.id]: 0 }))
-                        }}
-                      >
-                        Chat
-                        {(unread[req.id] ?? 0) > 0 && (
-                          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                            {unread[req.id] > 9 ? '9+' : unread[req.id]}
-                          </span>
-                        )}
-                      </Button>
-
-                      {req.status === 'Accepted' && (
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 shrink-0">
                         <Button
-                          variant="success" size="sm"
-                          loading={completeMutation.isPending}
-                          onClick={() => completeMutation.mutate(req.id)}
+                          variant="ghost" size="sm"
+                          icon={<MessageSquare size={13} />}
+                          className="relative"
+                          onClick={() => {
+                            setActiveChat({ id: req.id, title: req.title })
+                            setUnread((p) => ({ ...p, [req.id]: 0 }))
+                          }}
                         >
-                          Mark Complete
+                          Chat
+                          {(unread[req.id] ?? 0) > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                              {unread[req.id] > 9 ? '9+' : unread[req.id]}
+                            </span>
+                          )}
                         </Button>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Awaiting confirmation banner */}
-                  {req.status === 'PendingConfirmation' && (
-                    <div className="mt-3 flex items-center gap-2.5 bg-white border border-orange-200 rounded-lg px-4 py-2.5">
-                      <AlertCircle size={14} className="text-orange-400 shrink-0" />
-                      <p className="text-xs text-orange-700 font-medium">
-                        Marked complete — waiting for the customer to confirm.
-                      </p>
+                        {req.status === 'Accepted' && (
+                          <Button
+                            variant="success" size="sm"
+                            loading={completeMutation.isPending}
+                            onClick={() => completeMutation.mutate(req.id)}
+                          >
+                            Mark Complete
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+
+                    {/* Awaiting confirmation banner */}
+                    {req.status === 'PendingConfirmation' && (
+                      <div className="mt-3 flex items-center gap-2.5 bg-white border border-orange-200 rounded-lg px-4 py-2.5">
+                        <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                        <p className="text-xs text-orange-700 font-medium">
+                          Marked complete — waiting for the customer to confirm.
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </Card>
       </AppLayout>

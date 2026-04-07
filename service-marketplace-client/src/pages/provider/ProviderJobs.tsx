@@ -1,30 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import {
-  Briefcase,
-  Search, X, SlidersHorizontal,
-} from 'lucide-react'
+import { Briefcase, Search, X, SlidersHorizontal } from 'lucide-react'
 import { useSignalR } from '../../hooks/useSignalR'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import {
-  Button, Badge, Card, CardHeader,
-  Input, EmptyState, SkeletonCard,
-} from '../../components/ui'
+import { Button, Badge, Card, CardHeader, Input, EmptyState, SkeletonCard } from '../../components/ui'
 import type { ServiceRequest } from '../../types'
-
-function statusBadge(status: ServiceRequest['status']) {
-  const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
-    Pending:            { label: 'Pending',    variant: 'pending' },
-    Accepted:           { label: 'Accepted',   variant: 'accepted' },
-    PendingConfirmation:{ label: 'Confirming', variant: 'pendingconfirmation' },
-    Completed:          { label: 'Completed',  variant: 'completed' },
-  }
-  const { label, variant } = map[status]
-  return <Badge label={label} variant={variant as any} />
-}
 
 export default function ProviderJobs() {
   const queryClient = useQueryClient()
@@ -147,27 +130,32 @@ export default function ProviderJobs() {
             description={nearbyResults ? 'Try increasing the search radius.' : 'Check back soon for new service requests.'}
           />
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {displayPending.map((req) => (
-              <li key={req.id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="text-sm font-semibold text-slate-900">{req.title}</p>
-                      {statusBadge(req.status)}
+          <>
+            {/* Column headers */}
+            <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Job / Details</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Action</span>
+            </div>
+
+            <ul className="divide-y divide-slate-100">
+              {displayPending.map((req) => (
+                <li key={req.id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-800 mb-1">{req.title}</p>
+                      <p className="text-xs text-slate-400 mb-1.5">
+                        {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                      <p className="text-xs text-slate-400 line-clamp-2">{req.description}</p>
                     </div>
-                    <p className="text-xs text-slate-500 mb-1.5">
-                      {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </p>
-                    <p className="text-xs text-slate-400 line-clamp-2">{req.description}</p>
+                    <Button size="sm" loading={acceptMutation.isPending} onClick={() => acceptMutation.mutate(req.id)} className="shrink-0">
+                      Accept
+                    </Button>
                   </div>
-                  <Button size="sm" loading={acceptMutation.isPending} onClick={() => acceptMutation.mutate(req.id)} className="shrink-0">
-                    Accept
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </Card>
     </AppLayout>

@@ -86,48 +86,55 @@ export default function CompletedJobs() {
           />
 
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {completed.map((req) => (
-              <li key={req.id} className="px-6 py-4 hover:bg-slate-50/60 transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3.5 min-w-0">
-                    <div
-                      className="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: 'rgba(16,185,129,0.1)' }}
-                    >
-                      <CheckCircle2 size={15} style={{ color: '#10b981' }} />
-                    </div>
+          <>
+            {/* Column headers */}
+            <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Job / Description</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Completed On</span>
+            </div>
 
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{req.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{req.description}</p>
+            <ul className="divide-y divide-slate-100">
+              {completed.map((req) => (
+                <li key={req.id} className="px-6 py-4 hover:bg-slate-50/60 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div
+                        className="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: 'rgba(16,185,129,0.1)' }}
+                      >
+                        <CheckCircle2 size={15} style={{ color: '#10b981' }} />
+                      </div>
 
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{req.title}</p>
+                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{req.description}</p>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 mt-1.5">
                           <MapPin size={10} />
                           {req.category}
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-                          <CalendarDays size={10} />
-                          {new Date(req.updatedAt).toLocaleDateString('en-GB', {
-                            day: 'numeric', month: 'short', year: 'numeric',
-                          })}
-                        </span>
                       </div>
                     </div>
-                  </div>
 
-                  <span
-                    className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                    style={{ background: 'rgba(16,185,129,0.1)', color: '#059669' }}
-                  >
-                    <CheckCircle2 size={11} />
-                    Completed
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <div className="shrink-0 text-right">
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium mb-1"
+                        style={{ background: 'rgba(16,185,129,0.1)', color: '#059669' }}
+                      >
+                        <CheckCircle2 size={11} />
+                        Completed
+                      </span>
+                      <p className="text-[11px] text-slate-400 flex items-center justify-end gap-1 mt-1">
+                        <CalendarDays size={10} />
+                        {new Date(req.updatedAt).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </Card>
     </AppLayout>
