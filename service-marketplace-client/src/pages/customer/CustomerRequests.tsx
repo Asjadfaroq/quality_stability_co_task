@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,7 +16,7 @@ import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import {
-  Button, Badge, Card, CardHeader,
+  Button, Badge, Card,
   Input, Textarea, Select, EmptyState, SkeletonCard,
 } from '../../components/ui'
 import type { ServiceRequest } from '../../types'
@@ -46,16 +47,19 @@ function statusBadge(status: ServiceRequest['status']) {
   return <Badge label={label} variant={variant as any} />
 }
 
-export default function CustomerRequests() {
-  const queryClient = useQueryClient()
-  const { email } = useAuthStore()
-  const [showForm, setShowForm]         = useState(false)
+// ── New Request Modal ─────────────────────────────────────────────────────────
+
+interface NewRequestModalProps {
+  open: boolean
+  onClose: () => void
+}
+
+function NewRequestModal({ open, onClose }: NewRequestModalProps) {
+  const queryClient   = useQueryClient()
   const [enhancing, setEnhancing]       = useState(false)
   const [freeLimitHit, setFreeLimitHit] = useState(false)
-  const [activeChat, setActiveChat]     = useState<{ id: string; title: string } | null>(null)
-  const [unread, setUnread]             = useState<Record<string, number>>({})
-  const activeChatRef = useRef<string | null>(null)
-  activeChatRef.current = activeChat?.id ?? null
+  const [visible, setVisible]           = useState(false)
+  const firstInputRef = useRef<HTMLInputElement>(null)
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -64,31 +68,34 @@ export default function CustomerRequests() {
   const title       = watch('title')
   const description = watch('description')
 
-  useSignalR({
-    RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-      toast(`"${data.title}" marked complete — please confirm!`, { icon: '🔔', duration: 8000 })
-    },
-    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
-      const rid = String(data.requestId)
-      if (activeChatRef.current === rid) return
-      setUnread((p) => ({ ...p, [rid]: (p[rid] ?? 0) + 1 }))
-      toast(`${data.senderEmail} sent you a message`, { icon: '💬', duration: 4000 })
-    },
-  })
+  // Drive enter/leave animation
+  useEffect(() => {
+    if (open) {
+      setVisible(true)
+      // slight delay so the entering animation plays after mount
+      setTimeout(() => firstInputRef.current?.focus(), 120)
+    } else {
+      // let the leave animation finish before unmounting
+      const t = setTimeout(() => setVisible(false), 250)
+      return () => clearTimeout(t)
+    }
+  }, [open])
 
-  const { data: requests = [], isLoading } = useQuery<ServiceRequest[]>({
-    queryKey: ['requests'],
-    queryFn: () => api.get('/requests').then((r) => r.data),
-  })
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const createMutation = useMutation({
     mutationFn: (data: FormData) => api.post('/requests', data).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
       setFreeLimitHit(false)
-      setShowForm(false)
-      reset()
+      handleClose()
       toast.success('Request submitted successfully!')
     },
     onError: (err: any) => {
@@ -97,17 +104,11 @@ export default function CustomerRequests() {
     },
   })
 
-  const confirmMutation = useMutation({
-    mutationFn: (id: string) => api.patch(`/requests/${id}/confirm`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-      toast.success('Job confirmed as complete!')
-    },
-    onError: (err: unknown) => {
-      if (isRateLimited(err)) return
-      toast.error('Failed to confirm completion.')
-    },
-  })
+  const handleClose = () => {
+    reset()
+    setFreeLimitHit(false)
+    onClose()
+  }
 
   const handleEnhance = async () => {
     if (!title || !description) return
@@ -124,44 +125,72 @@ export default function CustomerRequests() {
     }
   }
 
-  return (
-    <>
-      <AppLayout title="My Requests">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">My Requests</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Welcome back, {email?.split('@')[0]}</p>
+  if (!visible && !open) return null
+
+  const isEntering = open && visible
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        transition: 'background 0.25s ease',
+        background: isEntering ? 'rgba(15,23,42,0.45)' : 'rgba(15,23,42,0)',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}
+    >
+      <div
+        style={{
+          transition: 'opacity 0.25s ease, transform 0.25s cubic-bezier(0.34,1.2,0.64,1)',
+          opacity:    isEntering ? 1 : 0,
+          transform:  isEntering ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(12px)',
+          width: '100%',
+          maxWidth: 540,
+        }}
+      >
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+
+          {/* Modal header */}
+          <div
+            className="flex items-center justify-between px-6 py-5"
+            style={{ borderBottom: '1px solid #F1F5F9' }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(99,102,241,0.1)' }}
+              >
+                <Plus size={18} style={{ color: '#6366f1' }} />
+              </div>
+              <div>
+                <h2 className="text-[15px] font-semibold text-slate-900 leading-tight">New Service Request</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Describe your job and we'll match you with a provider</p>
+              </div>
+            </div>
+            <button
+              onClick={handleClose}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <X size={16} />
+            </button>
           </div>
-          <Button icon={<Plus size={16} />} onClick={() => setShowForm(true)}>
-            New Request
-          </Button>
-        </div>
 
-        {/* Create form */}
-        {showForm && (
-          <Card className="mb-6">
-            <CardHeader
-              title="New Service Request"
-              description="Describe what you need done and where"
-              actions={
-                <button
-                  onClick={() => { setShowForm(false); reset(); setFreeLimitHit(false) }}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              }
-            />
-
+          {/* Modal body */}
+          <div className="px-6 py-5">
             {freeLimitHit && (
-              <div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-lg mb-5 text-sm text-amber-800">
+              <div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-5 text-sm text-amber-800">
                 <Clock size={15} className="mt-0.5 shrink-0 text-amber-500" />
                 Free tier limit reached. Upgrade your plan to create more requests.
               </div>
             )}
 
             <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
-              <Input label="Title" placeholder="e.g. Fix leaking kitchen pipe" error={errors.title?.message} {...register('title')} />
+              <Input
+                ref={firstInputRef}
+                label="Title"
+                placeholder="e.g. Fix leaking kitchen pipe"
+                error={errors.title?.message}
+                {...register('title')}
+              />
 
               <Textarea
                 label="Description"
@@ -187,17 +216,95 @@ export default function CustomerRequests() {
               </Select>
 
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Latitude"  type="number" step="any" placeholder="e.g. 51.5074"  error={errors.latitude?.message}  {...register('latitude',  { valueAsNumber: true })} />
-                <Input label="Longitude" type="number" step="any" placeholder="e.g. -0.1278" error={errors.longitude?.message} {...register('longitude', { valueAsNumber: true })} />
+                <Input
+                  label="Latitude"
+                  type="number" step="any" placeholder="e.g. 51.5074"
+                  error={errors.latitude?.message}
+                  {...register('latitude', { valueAsNumber: true })}
+                />
+                <Input
+                  label="Longitude"
+                  type="number" step="any" placeholder="e.g. -0.1278"
+                  error={errors.longitude?.message}
+                  {...register('longitude', { valueAsNumber: true })}
+                />
               </div>
 
-              <div className="flex gap-3 pt-1">
-                <Button type="submit" loading={createMutation.isPending}>Submit Request</Button>
-                <Button type="button" variant="secondary" onClick={() => { setShowForm(false); reset(); setFreeLimitHit(false) }}>Cancel</Button>
+              {/* Footer actions */}
+              <div
+                className="flex items-center justify-end gap-3 pt-2"
+                style={{ borderTop: '1px solid #F1F5F9', marginTop: 20, paddingTop: 20 }}
+              >
+                <Button type="button" variant="secondary" onClick={handleClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" loading={createMutation.isPending} icon={<Plus size={15} />}>
+                  Submit Request
+                </Button>
               </div>
             </form>
-          </Card>
-        )}
+          </div>
+
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function CustomerRequests() {
+  const queryClient = useQueryClient()
+  const { email }   = useAuthStore()
+  const [showModal, setShowModal]     = useState(false)
+  const [activeChat, setActiveChat]   = useState<{ id: string; title: string } | null>(null)
+  const [unread, setUnread]           = useState<Record<string, number>>({})
+  const activeChatRef = useRef<string | null>(null)
+  activeChatRef.current = activeChat?.id ?? null
+
+  const confirmMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/requests/${id}/confirm`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast.success('Job confirmed as complete!')
+    },
+    onError: (err: unknown) => {
+      if (isRateLimited(err)) return
+      toast.error('Failed to confirm completion.')
+    },
+  })
+
+  useSignalR({
+    RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast(`"${data.title}" marked complete — please confirm!`, { icon: '🔔', duration: 8000 })
+    },
+    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
+      const rid = String(data.requestId)
+      if (activeChatRef.current === rid) return
+      setUnread((p) => ({ ...p, [rid]: (p[rid] ?? 0) + 1 }))
+      toast(`${data.senderEmail} sent you a message`, { icon: '💬', duration: 4000 })
+    },
+  })
+
+  const { data: requests = [], isLoading } = useQuery<ServiceRequest[]>({
+    queryKey: ['requests'],
+    queryFn: () => api.get('/requests').then((r) => r.data),
+  })
+
+  return (
+    <>
+      <AppLayout title="My Requests">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">My Requests</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Welcome back, {email?.split('@')[0]}</p>
+          </div>
+          <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
+            New Request
+          </Button>
+        </div>
 
         {/* Requests list */}
         <Card padding={false}>
@@ -213,7 +320,7 @@ export default function CustomerRequests() {
               icon={<ClipboardList size={24} />}
               title="No requests yet"
               description="Submit your first service request to get started."
-              action={<Button icon={<Plus size={15} />} size="sm" onClick={() => setShowForm(true)}>New Request</Button>}
+              action={<Button icon={<Plus size={15} />} size="sm" onClick={() => setShowModal(true)}>New Request</Button>}
             />
           ) : (
             <ul className="divide-y divide-slate-100">
@@ -258,6 +365,8 @@ export default function CustomerRequests() {
           )}
         </Card>
       </AppLayout>
+
+      <NewRequestModal open={showModal} onClose={() => setShowModal(false)} />
 
       {activeChat && (
         <ChatPanel requestId={activeChat.id} requestTitle={activeChat.title} onClose={() => setActiveChat(null)} />

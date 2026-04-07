@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 // ── Badge ────────────────────────────────────────────────────────────────────
@@ -96,7 +97,8 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: string
 }
 
-export function Input({ label, error, hint, id, className = '', ...rest }: InputProps) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(
+  function Input({ label, error, hint, id, className = '', ...rest }, ref) {
   const inputId = id ?? label?.toLowerCase().replace(/\s/g, '-')
   return (
     <div className="space-y-1.5">
@@ -106,6 +108,7 @@ export function Input({ label, error, hint, id, className = '', ...rest }: Input
         </label>
       )}
       <input
+        ref={ref}
         id={inputId}
         className={`
           w-full border rounded-lg px-3 py-2.5 text-sm text-slate-900 bg-white
@@ -122,7 +125,7 @@ export function Input({ label, error, hint, id, className = '', ...rest }: Input
       {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}
     </div>
   )
-}
+})
 
 // ── Textarea ─────────────────────────────────────────────────────────────────
 
