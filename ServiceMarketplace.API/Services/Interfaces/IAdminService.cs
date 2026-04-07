@@ -9,6 +9,14 @@ public interface IAdminService
     Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize);
     Task UpdateSubscriptionAsync(Guid userId, SubscriptionTier subTier);
 
+    /// <summary>
+    /// Returns a paginated list of every service request on the platform.
+    /// Optional <paramref name="status"/> narrows by RequestStatus name (case-insensitive).
+    /// Optional <paramref name="search"/> applies a case-insensitive substring match against
+    /// the request title, category, and customer email.
+    /// </summary>
+    Task<PagedResult<AdminJobDto>> GetAllJobsAsync(int page, int pageSize, string? status, string? search);
+
     /// <summary>Returns all platform permissions and the current role → permission matrix.</summary>
     Task<RolePermissionsDto> GetRolePermissionsAsync();
 

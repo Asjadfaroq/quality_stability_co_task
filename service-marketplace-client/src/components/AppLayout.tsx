@@ -50,6 +50,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   ],
   Admin: [
     { label: 'User Management',     to: '/admin',       icon: <Users       size={16} />, permission: 'admin.manage_users' },
+    { label: 'All Jobs',            to: '/admin/jobs',  icon: <Briefcase   size={16} />, permission: 'admin.manage_users' },
     { label: 'Roles & Permissions', to: '/admin/roles', icon: <ShieldCheck size={16} />, permission: 'admin.manage_users' },
   ],
 }

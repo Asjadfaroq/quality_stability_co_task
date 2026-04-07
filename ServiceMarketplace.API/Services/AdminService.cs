@@ -5,6 +5,7 @@ using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
+using System.Linq.Expressions;
 
 namespace ServiceMarketplace.API.Services;
 
@@ -20,6 +21,92 @@ public class AdminService : IAdminService
         _db    = db;
         _cache = cache;
     }
+
+    // ── Admin jobs view ───────────────────────────────────────────────────────
+
+    public async Task<PagedResult<AdminJobDto>> GetAllJobsAsync(
+        int     page,
+        int     pageSize,
+        string? status,
+        string? search)
+    {
+        // Build a composable query that joins Customer (required) and Provider (optional).
+        // The left join on AcceptedByProviderId is expressed with DefaultIfEmpty() so that
+        // requests without a provider still appear in the result set.
+        var query =
+            from r  in _db.ServiceRequests.AsNoTracking()
+            join cu in _db.Users.AsNoTracking() on r.CustomerId equals cu.Id
+            join pr in _db.Users.AsNoTracking() on r.AcceptedByProviderId equals pr.Id
+                into providerGroup
+            from pr in providerGroup.DefaultIfEmpty()
+            select new
+            {
+                r.Id,
+                r.Title,
+                r.Category,
+                r.Status,
+                r.CustomerId,
+                CustomerEmail        = cu.Email,
+                r.AcceptedByProviderId,
+                ProviderEmail        = (string?)pr.Email,
+                r.CreatedAt,
+                r.UpdatedAt,
+            };
+
+        // ── Status filter ─────────────────────────────────────────────────────
+        // Parse leniently so the API accepts "pending", "Pending", "PENDING" alike.
+        if (!string.IsNullOrWhiteSpace(status) &&
+            Enum.TryParse<RequestStatus>(status, ignoreCase: true, out var parsedStatus))
+        {
+            query = query.Where(x => x.Status == parsedStatus);
+        }
+
+        // ── Text search ───────────────────────────────────────────────────────
+        // SQL Server's default collation is case-insensitive, so Contains() generates
+        // a LIKE '%term%' that is fast and case-insensitive without EF.Functions.Like.
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(x =>
+                x.Title.Contains(term) ||
+                (x.Category != null && x.Category.Contains(term)) ||
+                (x.CustomerEmail != null && x.CustomerEmail.Contains(term)));
+        }
+
+        var totalCount = await query.CountAsync();
+
+        if (totalCount == 0)
+            return PagedResult<AdminJobDto>.Empty(page, pageSize);
+
+        var items = await query
+            .OrderByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new AdminJobDto
+            {
+                Id                   = x.Id,
+                Title                = x.Title,
+                Category             = x.Category,
+                Status               = x.Status.ToString(),
+                CustomerId           = x.CustomerId,
+                CustomerEmail        = x.CustomerEmail ?? string.Empty,
+                AcceptedByProviderId = x.AcceptedByProviderId,
+                ProviderEmail        = x.ProviderEmail,
+                CreatedAt            = x.CreatedAt,
+                UpdatedAt            = x.UpdatedAt,
+            })
+            .ToListAsync();
+
+        return new PagedResult<AdminJobDto>
+        {
+            Items      = items,
+            Page       = page,
+            PageSize   = pageSize,
+            TotalCount = totalCount,
+        };
+    }
+
+    // ── User list ─────────────────────────────────────────────────────────────
 
     public async Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize)
     {

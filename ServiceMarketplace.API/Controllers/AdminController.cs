@@ -23,6 +23,29 @@ public class AdminController : BaseController
         _adminService = adminService;
     }
 
+    // ── Jobs overview ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns all service requests across the platform.
+    /// Supports optional <c>status</c> (Pending | Accepted | PendingConfirmation | Completed)
+    /// and free-text <c>search</c> (matches title, category, or customer email) filters.
+    /// Results are paginated — use <c>page</c> and <c>pageSize</c> (max 200).
+    /// </summary>
+    [HttpGet("jobs")]
+    [ProducesResponseType(typeof(PagedResult<AdminJobDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllJobs(
+        [FromQuery] int     page     = 1,
+        [FromQuery] int     pageSize = DefaultPageSize,
+        [FromQuery] string? status   = null,
+        [FromQuery] string? search   = null)
+    {
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        page     = Math.Max(1, page);
+
+        var result = await _adminService.GetAllJobsAsync(page, pageSize, status, search);
+        return Ok(result);
+    }
+
     // ── User management ───────────────────────────────────────────────────────
 
     [HttpGet("users")]
