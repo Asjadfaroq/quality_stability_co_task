@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Plus, Sparkles, MessageSquare, ClipboardList,
-  Clock, Loader2, X,
+  Clock, Loader2, X, Zap, CheckCircle2, ArrowRight,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useUnreadStore } from '../../store/unreadStore'
@@ -291,6 +292,56 @@ export default function CustomerRequests() {
           <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
             New Request
           </Button>
+        </div>
+
+        {/* Subscription banner */}
+        <div
+          className="mb-5 rounded-2xl flex items-center justify-between gap-4 px-5 py-4"
+          style={{
+            background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5498 55%, #3b6fd4 100%)',
+            boxShadow: '0 4px 20px rgba(30,58,95,0.22)',
+          }}
+        >
+          <div className="flex items-center gap-4 min-w-0">
+            {/* Icon */}
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'rgba(255,255,255,0.12)' }}
+            >
+              <Zap size={18} style={{ color: '#93c5fd' }} />
+            </div>
+
+            {/* Text */}
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-white leading-tight">
+                Unlock unlimited service requests
+              </p>
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
+                {['Unlimited requests', 'Priority matching', 'Dedicated support'].map((f) => (
+                  <span key={f} className="flex items-center gap-1">
+                    <CheckCircle2 size={11} style={{ color: '#86efac', flexShrink: 0 }} />
+                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.7)' }}>{f}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <Link
+            to="/customer/subscription"
+            className="flex items-center gap-1.5 shrink-0 rounded-xl px-4 py-2 text-[12.5px] font-semibold transition-opacity hover:opacity-90"
+            style={{
+              background: 'rgba(255,255,255,0.15)',
+              border: '1px solid rgba(255,255,255,0.25)',
+              color: '#fff',
+              backdropFilter: 'blur(4px)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Upgrade Plan
+            <ArrowRight size={13} />
+          </Link>
         </div>
 
         {/* Requests list */}
