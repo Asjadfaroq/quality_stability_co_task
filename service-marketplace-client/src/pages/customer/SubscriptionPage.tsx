@@ -22,6 +22,10 @@ export default function SubscriptionPage() {
   const { data, isLoading } = useQuery<SubscriptionStatus>({
     queryKey: ['subscription-status'],
     queryFn: () => api.get('/billing/status').then((r) => r.data),
+    // Always re-fetch from the database on every mount so the plan status
+    // is never served from a stale cache (e.g. after returning from Stripe checkout)
+    refetchOnMount: 'always',
+    staleTime: 0,
   })
 
   const checkoutMutation = useMutation({
@@ -137,7 +141,7 @@ export default function SubscriptionPage() {
                       Up to <span className="font-semibold">3 service requests</span>
                     </p>
                     <p className="text-sm text-slate-500">
-                      Upgrade to create unlimited requests.
+                      Upgrade for <span className="font-semibold text-slate-700">$5/month</span> to create unlimited requests.
                     </p>
                   </>
                 )}
@@ -155,7 +159,7 @@ export default function SubscriptionPage() {
                 {checkoutMutation.isPending ? (
                   <><Loader2 size={15} className="animate-spin" /> Redirecting to checkout...</>
                 ) : (
-                  <><CreditCard size={15} /> Upgrade to Paid — Unlimited Requests</>
+                  <><CreditCard size={15} /> Upgrade to Paid — $5/month · Unlimited Requests</>
                 )}
               </button>
             ) : (
