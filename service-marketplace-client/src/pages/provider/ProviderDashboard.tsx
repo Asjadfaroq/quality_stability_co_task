@@ -5,7 +5,7 @@ import { useAuthStore } from '../../store/authStore'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Badge, StatsBar, SkeletonCard } from '../../components/ui'
-import type { ServiceRequest, StatItem } from '../../types'
+import type { PagedResult, ServiceRequest, StatItem } from '../../types'
 
 function statusBadge(status: ServiceRequest['status']) {
   const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
@@ -21,10 +21,12 @@ function statusBadge(status: ServiceRequest['status']) {
 export default function ProviderDashboard() {
   const { email, role } = useAuthStore()
 
-  const { data: allRequests = [], isLoading } = useQuery<ServiceRequest[]>({
+  const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['requests'],
-    queryFn: () => api.get('/requests').then((r) => r.data),
+    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
   })
+
+  const allRequests = data?.items ?? []
 
   const available = allRequests.filter((r) => r.status === 'Pending')
   const active    = allRequests.filter((r) => r.status === 'Accepted' || r.status === 'PendingConfirmation')
