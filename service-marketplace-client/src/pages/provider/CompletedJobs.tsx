@@ -1,19 +1,27 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, MapPin, CalendarDays, AlertCircle, RefreshCw } from 'lucide-react'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Card, EmptyState, SkeletonCard } from '../../components/ui'
+import { Card, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import type { PagedResult, ServiceRequest } from '../../types'
 
+const DEFAULT_PAGE_SIZE = 10
+
 export default function CompletedJobs() {
+  const [page, setPage]         = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   const { data, isLoading, isError, refetch } = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['provider-completed'],
-    queryFn: () => api.get('/requests/completed', { params: { pageSize: 200 } }).then((r) => r.data),
+    queryKey: ['provider-completed', page, pageSize],
+    queryFn: () =>
+      api.get('/requests/completed', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
 
   const completed  = data?.items      ?? []
   const totalCount = data?.totalCount ?? 0
+  const totalPages = data?.totalPages ?? 1
 
   return (
     <AppLayout title="Completed Jobs">
@@ -128,6 +136,15 @@ export default function CompletedJobs() {
                 </li>
               ))}
             </ul>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              pageSizeOptions={[5, 10, 20, 50]}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+            />
           </>
         )}
       </Card>

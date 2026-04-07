@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Chat;
 using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -19,18 +20,23 @@ public class ChatController : BaseController
     }
 
     /// <summary>
-    /// Get all conversations the current user participates in, with the last message preview.
-    /// Not available to Admin.
+    /// Get paginated conversations the current user participates in, with the last message preview.
+    /// Ordered by most recent message. Not available to Admin.
     /// </summary>
     [HttpGet("conversations")]
-    [ProducesResponseType(typeof(List<ConversationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ConversationDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetConversations()
+    public async Task<IActionResult> GetConversations(
+        [FromQuery] int page     = 1,
+        [FromQuery] int pageSize = 20)
     {
         if (CurrentUserRole == UserRole.Admin)
             return Forbid();
 
-        var result = await _chatService.GetConversationsAsync(CurrentUserId, CurrentUserRole);
+        page     = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var result = await _chatService.GetConversationsAsync(CurrentUserId, CurrentUserRole, page, pageSize);
         return Ok(result);
     }
 

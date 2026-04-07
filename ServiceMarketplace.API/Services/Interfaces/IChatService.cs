@@ -1,3 +1,4 @@
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Chat;
 using ServiceMarketplace.API.Models.Enums;
 
@@ -26,6 +27,8 @@ public interface IChatService
     /// </summary>
     Task<List<ChatMessageDto>> GetHistoryAsync(Guid requestId);
 
-    /// <summary>Returns all conversations the user participates in, ordered by most recent message.</summary>
-    Task<List<ConversationDto>> GetConversationsAsync(Guid userId, UserRole role);
+    /// <summary>
+    /// Returns paginated conversations the user participates in, ordered by most recent message.
+    /// </summary>
+    Task<PagedResult<ConversationDto>> GetConversationsAsync(Guid userId, UserRole role, int page, int pageSize);
 }

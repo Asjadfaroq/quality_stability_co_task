@@ -8,7 +8,7 @@ import { useAuthStore } from '../../store/authStore'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Badge, Button, StatsBar, SkeletonCard } from '../../components/ui'
-import type { ServiceRequest, StatItem } from '../../types'
+import type { PagedResult, ServiceRequest, StatItem } from '../../types'
 
 function statusBadge(status: ServiceRequest['status']) {
   const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
@@ -24,10 +24,13 @@ function statusBadge(status: ServiceRequest['status']) {
 export default function CustomerDashboard() {
   const { email } = useAuthStore()
 
-  const { data: requests = [], isLoading } = useQuery<ServiceRequest[]>({
+  const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['requests'],
-    queryFn: () => api.get('/requests').then((r) => r.data),
+    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
   })
+
+  const requests  = data?.items      ?? []
+  const totalCount = data?.totalCount ?? 0
 
   const pending   = requests.filter((r) => r.status === 'Pending').length
   const active    = requests.filter((r) => r.status === 'Accepted' || r.status === 'PendingConfirmation').length
@@ -35,7 +38,7 @@ export default function CustomerDashboard() {
   const recent    = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5)
 
   const stats: StatItem[] = [
-    { label: 'Total Requests', value: requests.length, icon: <ClipboardList size={16} />, color: 'indigo' },
+    { label: 'Total Requests', value: totalCount, icon: <ClipboardList size={16} />, color: 'indigo' },
     { label: 'Pending',        value: pending,          icon: <Clock size={16} />,         color: 'amber'  },
     { label: 'Active',         value: active,           icon: <Loader2 size={16} />,       color: 'sky'    },
     { label: 'Completed',      value: completed,        icon: <CheckCircle2 size={16} />,  color: 'emerald'},

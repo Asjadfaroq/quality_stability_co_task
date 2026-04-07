@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { MessageSquare, Clock, CheckCircle2, Loader2, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react'
+import { MessageSquare, Clock, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react'
 import api from '../api/axios'
 import AppLayout from '../components/AppLayout'
 import ChatPanel from '../components/ChatPanel'
-import { EmptyState, SkeletonCard } from '../components/ui'
+import { EmptyState, Pagination, SkeletonCard } from '../components/ui'
 import { useAuthStore } from '../store/authStore'
+import type { PagedResult } from '../types'
 
 interface Conversation {
   requestId:              string
@@ -36,14 +37,24 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+const DEFAULT_PAGE_SIZE = 20
+
 export default function Chats() {
   const { email: myEmail } = useAuthStore()
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
+  const [page, setPage]             = useState(1)
+  const [pageSize, setPageSize]     = useState(DEFAULT_PAGE_SIZE)
 
-  const { data: conversations = [], isLoading, isError, refetch } = useQuery<Conversation[]>({
-    queryKey: ['conversations'],
-    queryFn: () => api.get('/chat/conversations').then((r) => r.data),
+  const { data, isLoading, isError, refetch } = useQuery<PagedResult<Conversation>>({
+    queryKey: ['conversations', page, pageSize],
+    queryFn: () =>
+      api.get('/chat/conversations', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
+
+  const conversations = data?.items      ?? []
+  const totalCount    = data?.totalCount ?? 0
+  const totalPages    = data?.totalPages ?? 1
 
   return (
     <>
@@ -61,7 +72,9 @@ export default function Chats() {
             <div className="flex items-center gap-2">
               <MessageSquare size={16} className="text-slate-400" />
               <span className="text-sm font-semibold text-slate-900">
-                {isLoading ? 'Loading…' : `${conversations.length} conversation${conversations.length !== 1 ? 's' : ''}`}
+                {isLoading
+                  ? 'Loading…'
+                  : `${totalCount} conversation${totalCount !== 1 ? 's' : ''}`}
               </span>
             </div>
           </div>
@@ -91,7 +104,7 @@ export default function Chats() {
               </button>
             </div>
 
-          ) : conversations.length === 0 ? (
+          ) : conversations.length === 0 && totalCount === 0 ? (
             <EmptyState
               icon={<MessageSquare size={22} />}
               title="No conversations yet"
@@ -99,67 +112,79 @@ export default function Chats() {
             />
 
           ) : (
-            <ul className="divide-y divide-slate-100">
-              {conversations.map((conv) => {
-                const status = STATUS_STYLE[conv.requestStatus] ?? STATUS_STYLE.Pending
-                const isMe   = conv.lastMessageSenderEmail === myEmail
+            <>
+              <ul className="divide-y divide-slate-100">
+                {conversations.map((conv) => {
+                  const status = STATUS_STYLE[conv.requestStatus] ?? STATUS_STYLE.Pending
+                  const isMe   = conv.lastMessageSenderEmail === myEmail
 
-                return (
-                  <li key={conv.requestId}>
-                    <button
-                      className="w-full px-6 py-4 flex items-center gap-4 hover:bg-slate-50/70 transition-colors text-left"
-                      onClick={() => setActiveChat({ id: conv.requestId, title: conv.requestTitle })}
-                    >
-                      {/* Avatar */}
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 select-none"
-                        style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}
+                  return (
+                    <li key={conv.requestId}>
+                      <button
+                        className="w-full px-6 py-4 flex items-center gap-4 hover:bg-slate-50/70 transition-colors text-left"
+                        onClick={() => setActiveChat({ id: conv.requestId, title: conv.requestTitle })}
                       >
-                        {conv.otherPartyEmail.slice(0, 2).toUpperCase()}
-                      </div>
-
-                      {/* Content */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-semibold text-slate-900 truncate">
-                            {conv.requestTitle}
-                          </p>
-                          <span
-                            className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
-                            style={{ background: status.bg, color: status.color }}
-                          >
-                            {status.label}
-                          </span>
+                        {/* Avatar */}
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 select-none"
+                          style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}
+                        >
+                          {conv.otherPartyEmail.slice(0, 2).toUpperCase()}
                         </div>
 
-                        <p className="text-xs text-slate-500 truncate">
-                          <span className="text-slate-400">{conv.otherPartyEmail}</span>
-                        </p>
+                        {/* Content */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-sm font-semibold text-slate-900 truncate">
+                              {conv.requestTitle}
+                            </p>
+                            <span
+                              className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                              style={{ background: status.bg, color: status.color }}
+                            >
+                              {status.label}
+                            </span>
+                          </div>
 
-                        {conv.lastMessage ? (
-                          <p className="text-xs text-slate-400 truncate mt-0.5">
-                            {isMe ? 'You: ' : ''}{conv.lastMessage}
+                          <p className="text-xs text-slate-500 truncate">
+                            <span className="text-slate-400">{conv.otherPartyEmail}</span>
                           </p>
-                        ) : (
-                          <p className="text-xs text-slate-300 italic mt-0.5">No messages yet</p>
-                        )}
-                      </div>
 
-                      {/* Right meta */}
-                      <div className="shrink-0 flex flex-col items-end gap-1.5">
-                        {conv.lastMessageAt && (
-                          <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                            <Clock size={10} />
-                            {timeAgo(conv.lastMessageAt)}
-                          </span>
-                        )}
-                        <ChevronRight size={14} className="text-slate-300" />
-                      </div>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                          {conv.lastMessage ? (
+                            <p className="text-xs text-slate-400 truncate mt-0.5">
+                              {isMe ? 'You: ' : ''}{conv.lastMessage}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-300 italic mt-0.5">No messages yet</p>
+                          )}
+                        </div>
+
+                        {/* Right meta */}
+                        <div className="shrink-0 flex flex-col items-end gap-1.5">
+                          {conv.lastMessageAt && (
+                            <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                              <Clock size={10} />
+                              {timeAgo(conv.lastMessageAt)}
+                            </span>
+                          )}
+                          <ChevronRight size={14} className="text-slate-300" />
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              />
+            </>
           )}
         </div>
       </AppLayout>

@@ -4,7 +4,8 @@ import toast from 'react-hot-toast'
 import { Users, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Card, CardHeader, Badge, EmptyState, SkeletonCard } from '../../components/ui'
+import { Card, CardHeader, Badge, EmptyState, Pagination, SkeletonCard } from '../../components/ui'
+import type { PagedResult } from '../../types'
 
 const PERMISSIONS = [
   { key: 'request.create',   label: 'Create Requests' },
@@ -20,18 +21,30 @@ interface OrgMember {
   permissions: string[]
 }
 
+const DEFAULT_PAGE_SIZE = 20
+
 export default function OrgPanel() {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [page, setPage]         = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
-  const { data: members = [], isLoading } = useQuery<OrgMember[]>({
-    queryKey: ['org-members'],
-    queryFn: () => api.get('/org/members').then((r) => r.data),
+  const { data, isLoading } = useQuery<PagedResult<OrgMember>>({
+    queryKey: ['org-members', page, pageSize],
+    queryFn: () =>
+      api.get('/org/members', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
+
+  const members    = data?.items      ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = data?.totalPages ?? 1
 
   const permMutation = useMutation({
     mutationFn: ({ id, permission, granted }: { id: string; permission: string; granted: boolean }) =>
-      api.patch(`/org/members/${id}/permissions`, { permission, granted }),
+      api.patch(`/org/members/${id}/permissions`, {
+        overrides: [{ permissionName: permission, granted }],
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
       toast.success('Permission updated.')
@@ -54,7 +67,7 @@ export default function OrgPanel() {
         <div className="px-6 py-5 border-b border-gray-100">
           <CardHeader
             title="Team Members"
-            description={`${members.length} member${members.length !== 1 ? 's' : ''} in your organization`}
+            description={`${totalCount} member${totalCount !== 1 ? 's' : ''} in your organization`}
           />
         </div>
 
@@ -62,7 +75,7 @@ export default function OrgPanel() {
           <div className="p-4 space-y-3">
             {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
           </div>
-        ) : members.length === 0 ? (
+        ) : members.length === 0 && totalCount === 0 ? (
           <EmptyState
             icon={<Users size={22} />}
             title="No team members yet"
@@ -152,6 +165,16 @@ export default function OrgPanel() {
                 )
               })}
             </ul>
+
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPageChange={(p) => { setPage(p); setExpanded(null) }}
+              pageSizeOptions={[5, 10, 20, 50]}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); setExpanded(null) }}
+            />
           </>
         )}
       </Card>

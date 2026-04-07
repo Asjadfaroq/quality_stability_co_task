@@ -6,7 +6,7 @@ import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
-import { Button, Badge, Card, EmptyState, SkeletonCard } from '../../components/ui'
+import { Button, Badge, Card, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import { useUnreadStore } from '../../store/unreadStore'
 import type { PagedResult, ServiceRequest } from '../../types'
 
@@ -21,18 +21,25 @@ function statusBadge(status: ServiceRequest['status']) {
   return <Badge label={label} variant={variant as any} />
 }
 
+const DEFAULT_PAGE_SIZE = 10
+
 export default function ActiveJobs() {
   const queryClient = useQueryClient()
+  const [page, setPage]             = useState(1)
+  const [pageSize, setPageSize]     = useState(DEFAULT_PAGE_SIZE)
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
   const unreadCounts = useUnreadStore((s) => s.counts)
   const clearUnread  = useUnreadStore((s) => s.clear)
 
   const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['requests'],
-    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
+    queryKey: ['requests', page, pageSize],
+    queryFn: () => api.get('/requests', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
 
-  const allRequests = data?.items ?? []
+  const allRequests = data?.items      ?? []
+  const totalCount  = data?.totalCount ?? 0
+  const totalPages  = data?.totalPages ?? 1
 
   const completeMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/requests/${id}/complete`),
@@ -63,7 +70,7 @@ export default function ActiveJobs() {
             <div>
               <h3 className="text-base font-semibold text-slate-900">In Progress</h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                {isLoading ? 'Loading…' : `${active.length} active job${active.length !== 1 ? 's' : ''}`}
+                {isLoading ? 'Loading…' : `${totalCount} active job${totalCount !== 1 ? 's' : ''}`}
               </p>
             </div>
             {active.length > 0 && (
@@ -161,6 +168,15 @@ export default function ActiveJobs() {
                   </li>
                 ))}
               </ul>
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                pageSizeOptions={[5, 10, 20, 50]}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              />
             </>
           )}
         </Card>

@@ -5,11 +5,15 @@ import { Briefcase, Search, X, SlidersHorizontal } from 'lucide-react'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Button, Badge, Card, CardHeader, Input, EmptyState, SkeletonCard } from '../../components/ui'
+import { Button, Badge, Card, CardHeader, Input, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import type { PagedResult, ServiceRequest } from '../../types'
+
+const DEFAULT_PAGE_SIZE = 20
 
 export default function ProviderJobs() {
   const queryClient = useQueryClient()
+  const [page, setPage]                   = useState(1)
+  const [pageSize, setPageSize]           = useState(DEFAULT_PAGE_SIZE)
   const [showNearby, setShowNearby]       = useState(false)
   const [lat, setLat]                     = useState('')
   const [lng, setLng]                     = useState('')
@@ -18,11 +22,14 @@ export default function ProviderJobs() {
   const [searching, setSearching]         = useState(false)
 
   const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['requests'],
-    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
+    queryKey: ['requests', page, pageSize],
+    queryFn: () => api.get('/requests', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
 
-  const allRequests = data?.items ?? []
+  const allRequests = data?.items      ?? []
+  const totalCount  = data?.totalCount ?? 0
+  const totalPages  = data?.totalPages ?? 1
 
   const acceptMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/requests/${id}/accept`),
@@ -149,6 +156,18 @@ export default function ProviderJobs() {
                 </li>
               ))}
             </ul>
+            {/* Show pagination only when not filtered by nearby (nearby results are already a subset) */}
+            {!nearbyResults && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                pageSizeOptions={[5, 10, 20, 50]}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              />
+            )}
           </>
         )}
       </Card>

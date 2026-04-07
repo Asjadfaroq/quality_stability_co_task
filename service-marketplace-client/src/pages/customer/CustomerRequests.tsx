@@ -17,7 +17,7 @@ import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import {
   Button, Badge, Card,
-  Input, Textarea, Select, EmptyState, SkeletonCard,
+  Input, Textarea, Select, EmptyState, SkeletonCard, Pagination,
 } from '../../components/ui'
 import type { PagedResult, ServiceRequest } from '../../types'
 
@@ -254,9 +254,13 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const DEFAULT_PAGE_SIZE = 10
+
 export default function CustomerRequests() {
   const queryClient = useQueryClient()
   const { email }   = useAuthStore()
+  const [page, setPage]               = useState(1)
+  const [pageSize, setPageSize]       = useState(DEFAULT_PAGE_SIZE)
   const [showModal, setShowModal]     = useState(false)
   const [activeChat, setActiveChat]   = useState<{ id: string; title: string } | null>(null)
   const unreadCounts = useUnreadStore((s) => s.counts)
@@ -275,11 +279,14 @@ export default function CustomerRequests() {
   })
 
   const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['requests'],
-    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
+    queryKey: ['requests', page, pageSize],
+    queryFn: () => api.get('/requests', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
 
-  const requests = data?.items ?? []
+  const requests   = data?.items      ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = data?.totalPages ?? 1
 
   return (
     <>
@@ -298,7 +305,7 @@ export default function CustomerRequests() {
         <Card padding={false}>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
             <h3 className="text-base font-semibold text-slate-900">All Requests</h3>
-            <span className="text-xs text-slate-400">{requests.length} total</span>
+            <span className="text-xs text-slate-400">{totalCount} total</span>
           </div>
 
           {isLoading ? (
@@ -357,6 +364,15 @@ export default function CustomerRequests() {
                 </li>
               ))}
             </ul>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              pageSizeOptions={[5, 10, 20, 50]}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+            />
             </>
           )}
         </Card>

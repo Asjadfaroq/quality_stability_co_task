@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.DTOs.Org;
 using ServiceMarketplace.API.Models.Entities;
@@ -19,7 +20,7 @@ public class OrgService : IOrgService
         _cache = cache;
     }
 
-    public async Task<List<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId)
+    public async Task<PagedResult<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId, int page, int pageSize)
     {
         var adminInfo = await _db.Users
             .AsNoTracking()
@@ -29,32 +30,63 @@ public class OrgService : IOrgService
             ?? throw new UnauthorizedAccessException("User is not a ProviderAdmin.");
 
         if (adminInfo.OrganizationId is null)
-            return [];
+            return PagedResult<OrgMemberDto>.Empty(page, pageSize);
 
         var adminOrgId = adminInfo.OrganizationId.Value;
 
-        var raw = await _db.Users
+        var baseQuery = _db.Users
             .AsNoTracking()
-            .Where(u => u.OrganizationId == adminOrgId && u.Id != providerAdminId)
+            .Where(u => u.OrganizationId == adminOrgId && u.Id != providerAdminId);
+
+        var totalCount = await baseQuery.CountAsync();
+
+        if (totalCount == 0)
+            return PagedResult<OrgMemberDto>.Empty(page, pageSize);
+
+        // Query 1: scalar member fields only — no permission JOIN fan-out.
+        var members = await baseQuery
+            .OrderBy(u => u.Email)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(u => new
             {
                 u.Id,
                 Email = u.Email ?? string.Empty,
-                u.Role,
-                GrantedPermissions = u.UserPermissions
-                    .Where(up => up.Granted)
-                    .Select(up => up.Permission!.Name)
-                    .ToList()
+                u.Role
             })
             .ToListAsync();
 
-        return raw.Select(m => new OrgMemberDto
+        if (members.Count == 0)
+            return PagedResult<OrgMemberDto>.Empty(page, pageSize);
+
+        var memberIds = members.Select(u => u.Id).ToList();
+
+        // Query 2: granted permissions only for this page's members.
+        var permissionsFlat = await _db.UserPermissions
+            .AsNoTracking()
+            .Where(up => memberIds.Contains(up.UserId) && up.Granted)
+            .Select(up => new { up.UserId, up.Permission!.Name })
+            .ToListAsync();
+
+        var permsByMember = permissionsFlat
+            .GroupBy(p => p.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.Name).ToList());
+
+        var items = members.Select(m => new OrgMemberDto
         {
             Id          = m.Id,
             Email       = m.Email,
             Role        = m.Role.ToString(),
-            Permissions = m.GrantedPermissions
+            Permissions = permsByMember.TryGetValue(m.Id, out var perms) ? perms : []
         }).ToList();
+
+        return new PagedResult<OrgMemberDto>
+        {
+            Items      = items,
+            Page       = page,
+            PageSize   = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task UpdateMemberPermissionsAsync(Guid providerAdminId, Guid memberId, List<PermissionOverride> overrides)

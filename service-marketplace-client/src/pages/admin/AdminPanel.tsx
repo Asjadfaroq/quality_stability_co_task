@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Users, ChevronDown, ChevronUp, ShieldCheck, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, ChevronDown, ChevronUp, ShieldCheck, CreditCard } from 'lucide-react'
 
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Card, CardHeader, Badge, Button, EmptyState, SkeletonCard } from '../../components/ui'
+import { Card, CardHeader, Badge, Button, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import type { PagedResult } from '../../types'
 
 const PERMISSIONS = [
@@ -15,7 +15,7 @@ const PERMISSIONS = [
   { key: 'request.view_all', label: 'View All Requests' },
 ]
 
-const PAGE_SIZE = 50
+const DEFAULT_PAGE_SIZE = 50
 
 interface UserDto {
   id: string
@@ -29,12 +29,13 @@ export default function AdminPanel() {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState<string | null>(null)
   const [page, setPage]         = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   const { data, isLoading } = useQuery<PagedResult<UserDto>>({
-    queryKey: ['admin-users', page],
+    queryKey: ['admin-users', page, pageSize],
     queryFn: () =>
-      api.get('/admin/users', { params: { page, pageSize: PAGE_SIZE } }).then((r) => r.data),
-    placeholderData: (prev) => prev, // keep previous page visible while fetching next
+      api.get('/admin/users', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
 
   const users      = data?.items ?? []
@@ -194,34 +195,15 @@ export default function AdminPanel() {
               })}
             </ul>
 
-            {/* Pagination controls */}
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
-                <p className="text-xs text-slate-500">
-                  Page {page} of {totalPages} &middot; {totalCount} users
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<ChevronLeft size={14} />}
-                    disabled={page === 1}
-                    onClick={() => { setPage((p) => p - 1); setExpanded(null) }}
-                  >
-                    Prev
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={page === totalPages}
-                    onClick={() => { setPage((p) => p + 1); setExpanded(null) }}
-                  >
-                    Next
-                    <ChevronRight size={14} className="ml-1" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPageChange={(p) => { setPage(p); setExpanded(null) }}
+              pageSizeOptions={[10, 25, 50, 100]}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); setExpanded(null) }}
+            />
           </>
         )}
       </Card>

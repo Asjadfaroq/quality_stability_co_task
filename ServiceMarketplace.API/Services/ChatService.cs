@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Chat;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Models.Enums;
@@ -112,41 +113,40 @@ public class ChatService : IChatService
             .ToListAsync();
     }
 
-    public async Task<List<ConversationDto>> GetConversationsAsync(Guid userId, UserRole role)
+    /// <summary>
+    /// Returns paginated conversations ordered by most-recent message.
+    ///
+    /// DB round-trips: 3
+    ///   1. COUNT DISTINCT — total conversations with at least one message
+    ///   2. Paginated GroupBy aggregate — last message per request, sorted newest-first (SQL OFFSET/FETCH)
+    ///   3. Request details (title, status, other-party email) for the current page's IDs
+    /// </summary>
+    public async Task<PagedResult<ConversationDto>> GetConversationsAsync(Guid userId, UserRole role, int page, int pageSize)
     {
-        var requestQuery = _db.ServiceRequests.AsNoTracking();
-
-        var requests = role == UserRole.Customer
-            ? await requestQuery
+        // IQueryable — translated to a subquery by EF Core (no in-memory materialization).
+        IQueryable<Guid> userRequestIds = role == UserRole.Customer
+            ? _db.ServiceRequests.AsNoTracking()
                 .Where(r => r.CustomerId == userId && r.AcceptedByProviderId.HasValue)
-                .Select(r => new
-                {
-                    r.Id,
-                    r.Title,
-                    Status          = r.Status.ToString(),
-                    OtherPartyEmail = r.AcceptedByProvider!.Email ?? string.Empty,
-                })
-                .ToListAsync()
-            : await requestQuery
+                .Select(r => r.Id)
+            : _db.ServiceRequests.AsNoTracking()
                 .Where(r => r.AcceptedByProviderId.HasValue && r.AcceptedByProviderId.Value == userId)
-                .Select(r => new
-                {
-                    r.Id,
-                    r.Title,
-                    Status          = r.Status.ToString(),
-                    OtherPartyEmail = r.Customer!.Email ?? string.Empty,
-                })
-                .ToListAsync();
+                .Select(r => r.Id);
 
-        if (requests.Count == 0)
-            return [];
+        // Query 1: count distinct conversations (requests with at least one message).
+        var totalCount = await _db.ChatMessages
+            .AsNoTracking()
+            .Where(m => userRequestIds.Contains(m.RequestId))
+            .Select(m => m.RequestId)
+            .Distinct()
+            .CountAsync();
 
-        var requestIds = requests.Select(r => r.Id).ToList();
+        if (totalCount == 0)
+            return PagedResult<ConversationDto>.Empty(page, pageSize);
 
-        // Fetch the most recent message per request — covered by IX_ChatMessages_RequestId_SentAt.
+        // Query 2: paginated last-message aggregate, sorted newest-first at SQL level.
         var lastMessages = await _db.ChatMessages
             .AsNoTracking()
-            .Where(m => requestIds.Contains(m.RequestId))
+            .Where(m => userRequestIds.Contains(m.RequestId))
             .GroupBy(m => m.RequestId)
             .Select(g => new
             {
@@ -155,28 +155,57 @@ public class ChatService : IChatService
                 SentAt      = g.Max(m => m.SentAt),
                 SenderEmail = g.OrderByDescending(m => m.SentAt).Select(m => m.SenderEmail).First(),
             })
+            .OrderByDescending(lm => lm.SentAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        var lastMsgMap = lastMessages.ToDictionary(x => x.RequestId);
+        if (lastMessages.Count == 0)
+            return PagedResult<ConversationDto>.Empty(page, pageSize);
 
-        return requests
-            .Where(r => lastMsgMap.ContainsKey(r.Id))
-            .Select(r =>
+        var pageIds = lastMessages.Select(lm => lm.RequestId).ToList();
+
+        // Query 3: request details (title, status, other-party email) for this page only.
+        var requestDetails = role == UserRole.Customer
+            ? await _db.ServiceRequests.AsNoTracking()
+                .Where(r => pageIds.Contains(r.Id))
+                .Select(r => new { r.Id, r.Title, Status = r.Status.ToString(), OtherPartyEmail = r.AcceptedByProvider!.Email ?? string.Empty })
+                .ToListAsync()
+            : await _db.ServiceRequests.AsNoTracking()
+                .Where(r => pageIds.Contains(r.Id))
+                .Select(r => new { r.Id, r.Title, Status = r.Status.ToString(), OtherPartyEmail = r.Customer!.Email ?? string.Empty })
+                .ToListAsync();
+
+        var reqMap = requestDetails.ToDictionary(r => r.Id);
+        var msgMap = lastMessages.ToDictionary(lm => lm.RequestId);
+
+        // Preserve the ordering from Query 2 (sorted by last message time).
+        var items = pageIds
+            .Where(id => reqMap.ContainsKey(id))
+            .Select(id =>
             {
-                var last = lastMsgMap[r.Id];
+                var req  = reqMap[id];
+                var last = msgMap[id];
                 return new ConversationDto
                 {
-                    RequestId              = r.Id,
-                    RequestTitle           = r.Title,
-                    RequestStatus          = r.Status,
-                    OtherPartyEmail        = r.OtherPartyEmail,
+                    RequestId              = req.Id,
+                    RequestTitle           = req.Title,
+                    RequestStatus          = req.Status,
+                    OtherPartyEmail        = req.OtherPartyEmail,
                     LastMessage            = last.Content,
                     LastMessageAt          = last.SentAt,
                     LastMessageSenderEmail = last.SenderEmail,
                 };
             })
-            .OrderByDescending(c => c.LastMessageAt)
             .ToList();
+
+        return new PagedResult<ConversationDto>
+        {
+            Items      = items,
+            Page       = page,
+            PageSize   = pageSize,
+            TotalCount = totalCount,
+        };
     }
 
     // Shared helper: projects only the two participant IDs — no full entity load.

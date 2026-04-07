@@ -321,3 +321,135 @@ export function SkeletonCard() {
 export function Divider() {
   return <hr className="border-gray-100" />
 }
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100]
+
+interface PaginationProps {
+  page: number
+  totalPages: number
+  totalCount: number
+  pageSize: number
+  onPageChange: (page: number) => void
+  /** When provided, renders a "Rows per page" dropdown. Caller must also reset page to 1. */
+  pageSizeOptions?: number[]
+  onPageSizeChange?: (size: number) => void
+}
+
+/** Builds the visible page-number sequence with at most one ellipsis on each side. */
+function buildPageNumbers(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+
+  const pages: (number | '…')[] = [1]
+
+  if (current > 3) pages.push('…')
+
+  const start = Math.max(2, current - 1)
+  const end   = Math.min(total - 1, current + 1)
+  for (let i = start; i <= end; i++) pages.push(i)
+
+  if (current < total - 2) pages.push('…')
+
+  pages.push(total)
+  return pages
+}
+
+export function Pagination({
+  page, totalPages, totalCount, pageSize, onPageChange,
+  pageSizeOptions, onPageSizeChange,
+}: PaginationProps) {
+  const hasPageSizeSelector = !!(onPageSizeChange && pageSizeOptions?.length)
+
+  if (totalPages <= 1 && !hasPageSizeSelector) return null
+
+  const from  = totalCount === 0 ? 0 : Math.min((page - 1) * pageSize + 1, totalCount)
+  const to    = Math.min(page * pageSize, totalCount)
+  const pages = buildPageNumbers(page, totalPages)
+
+  return (
+    <div className="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* Left: result count + page-size selector */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <p className="text-xs text-slate-500 shrink-0">
+          {totalCount === 0 ? (
+            'No results'
+          ) : (
+            <>
+              Showing <span className="font-medium text-slate-700">{from}–{to}</span> of{' '}
+              <span className="font-medium text-slate-700">{totalCount}</span> results
+            </>
+          )}
+        </p>
+
+        {hasPageSizeSelector && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-slate-400">Rows per page</span>
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange!(Number(e.target.value))}
+              className="border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 bg-white
+                         hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500
+                         cursor-pointer transition-colors"
+            >
+              {(pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS).map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Right: page navigation */}
+      {totalPages > 1 && (
+        <div className="flex items-center gap-1">
+          {/* Prev */}
+          <button
+            onClick={() => onPageChange(page - 1)}
+            disabled={page === 1}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500
+                       hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed
+                       transition-colors text-sm"
+            aria-label="Previous page"
+          >
+            ‹
+          </button>
+
+          {/* Page numbers */}
+          {pages.map((p, i) =>
+            p === '…' ? (
+              <span key={`ellipsis-${i}`} className="w-8 h-8 flex items-center justify-center text-slate-400 text-xs select-none">
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => onPageChange(p)}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-medium
+                            transition-colors
+                            ${p === page
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'text-slate-600 hover:bg-slate-100'}`}
+                aria-current={p === page ? 'page' : undefined}
+              >
+                {p}
+              </button>
+            )
+          )}
+
+          {/* Next */}
+          <button
+            onClick={() => onPageChange(page + 1)}
+            disabled={page === totalPages}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500
+                       hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed
+                       transition-colors text-sm"
+            aria-label="Next page"
+          >
+            ›
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

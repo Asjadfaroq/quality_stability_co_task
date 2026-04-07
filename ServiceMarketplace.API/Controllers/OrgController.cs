@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.DTOs.Org;
 using ServiceMarketplace.API.Models.Enums;
@@ -19,14 +20,19 @@ public class OrgController : BaseController
     }
 
     [HttpGet("members")]
-    [ProducesResponseType(typeof(List<OrgMemberDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<OrgMemberDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetMembers()
+    public async Task<IActionResult> GetMembers(
+        [FromQuery] int page     = 1,
+        [FromQuery] int pageSize = 20)
     {
         if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
 
-        var members = await _orgService.GetOrgMembersAsync(CurrentUserId);
-        return Ok(members);
+        page     = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var result = await _orgService.GetOrgMembersAsync(CurrentUserId, page, pageSize);
+        return Ok(result);
     }
 
     [HttpPatch("members/{id:guid}/permissions")]
