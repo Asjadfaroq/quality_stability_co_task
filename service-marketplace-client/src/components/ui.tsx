@@ -1,4 +1,4 @@
-import { forwardRef } from 'react'
+import { forwardRef, useEffect } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 // ── Badge ────────────────────────────────────────────────────────────────────
@@ -361,11 +361,22 @@ export function Pagination({
 }: PaginationProps) {
   const hasPageSizeSelector = !!(onPageSizeChange && pageSizeOptions?.length)
 
+  // When stale placeholder data briefly inflates totalPages, auto-correct back to page 1.
+  useEffect(() => {
+    if (totalPages > 0 && page > totalPages) {
+      onPageChange(1)
+    }
+  }, [page, totalPages, onPageChange])
+
   if (totalPages <= 1 && !hasPageSizeSelector) return null
 
-  const from  = totalCount === 0 ? 0 : Math.min((page - 1) * pageSize + 1, totalCount)
-  const to    = Math.min(page * pageSize, totalCount)
-  const pages = buildPageNumbers(page, totalPages)
+  // Recompute totalPages from live pageSize so stale placeholder data can't show phantom pages.
+  const safeTotalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0
+  const safePage       = Math.min(page, Math.max(1, safeTotalPages))
+
+  const from  = totalCount === 0 ? 0 : Math.min((safePage - 1) * pageSize + 1, totalCount)
+  const to    = Math.min(safePage * pageSize, totalCount)
+  const pages = buildPageNumbers(safePage, safeTotalPages)
 
   return (
     <div className="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -401,12 +412,12 @@ export function Pagination({
       </div>
 
       {/* Right: page navigation */}
-      {totalPages > 1 && (
+      {safeTotalPages > 1 && (
         <div className="flex items-center gap-1">
           {/* Prev */}
           <button
-            onClick={() => onPageChange(page - 1)}
-            disabled={page === 1}
+            onClick={() => onPageChange(safePage - 1)}
+            disabled={safePage === 1}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500
                        hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed
                        transition-colors text-sm"
@@ -427,10 +438,10 @@ export function Pagination({
                 onClick={() => onPageChange(p)}
                 className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-medium
                             transition-colors
-                            ${p === page
+                            ${p === safePage
                               ? 'bg-indigo-600 text-white shadow-sm'
                               : 'text-slate-600 hover:bg-slate-100'}`}
-                aria-current={p === page ? 'page' : undefined}
+                aria-current={p === safePage ? 'page' : undefined}
               >
                 {p}
               </button>
@@ -439,8 +450,8 @@ export function Pagination({
 
           {/* Next */}
           <button
-            onClick={() => onPageChange(page + 1)}
-            disabled={page === totalPages}
+            onClick={() => onPageChange(safePage + 1)}
+            disabled={safePage === safeTotalPages}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500
                        hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed
                        transition-colors text-sm"

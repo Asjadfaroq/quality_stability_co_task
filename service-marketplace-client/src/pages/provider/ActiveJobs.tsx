@@ -32,8 +32,9 @@ export default function ActiveJobs() {
   const clearUnread  = useUnreadStore((s) => s.clear)
 
   const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['requests', page, pageSize],
-    queryFn: () => api.get('/requests', { params: { page, pageSize } }).then((r) => r.data),
+    queryKey: ['requests-active', page, pageSize],
+    queryFn: () =>
+      api.get('/requests', { params: { page, pageSize, statusFilter: 'Active' } }).then((r) => r.data),
     placeholderData: (prev) => prev,
   })
 
@@ -53,9 +54,8 @@ export default function ActiveJobs() {
     },
   })
 
-  const active = allRequests.filter(
-    (r) => r.status === 'Accepted' || r.status === 'PendingConfirmation',
-  )
+  // Server already filters to Accepted + PendingConfirmation only — no client-side filter needed.
+  const active = allRequests
 
   return (
     <>
@@ -73,13 +73,13 @@ export default function ActiveJobs() {
                 {isLoading ? 'Loading…' : `${totalCount} active job${totalCount !== 1 ? 's' : ''}`}
               </p>
             </div>
-            {active.length > 0 && (
+            {totalCount > 0 && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                 style={{ background: 'rgba(59,130,246,0.08)', color: '#2563eb' }}
               >
                 <Loader2 size={11} className="animate-spin" />
-                {active.length} ongoing
+                {totalCount} ongoing
               </span>
             )}
           </div>

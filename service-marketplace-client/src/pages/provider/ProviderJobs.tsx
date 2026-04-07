@@ -22,8 +22,9 @@ export default function ProviderJobs() {
   const [searching, setSearching]         = useState(false)
 
   const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['requests', page, pageSize],
-    queryFn: () => api.get('/requests', { params: { page, pageSize } }).then((r) => r.data),
+    queryKey: ['requests-pending', page, pageSize],
+    queryFn: () =>
+      api.get('/requests', { params: { page, pageSize, statusFilter: 'Pending' } }).then((r) => r.data),
     placeholderData: (prev) => prev,
   })
 
@@ -64,8 +65,8 @@ export default function ProviderJobs() {
     }
   }
 
-  const pending        = allRequests.filter((r) => r.status === 'Pending')
-  const displayPending = nearbyResults ?? pending
+  // Server already filters to Pending only — no client-side filter needed.
+  const displayPending = nearbyResults ?? allRequests
 
   return (
     <AppLayout title="Available Jobs">

@@ -65,7 +65,7 @@ public class RequestService : IRequestService
         return ProjectToDto(request);
     }
 
-    public async Task<PagedResult<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role, int page, int pageSize)
+    public async Task<PagedResult<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null)
     {
         var query = _db.ServiceRequests.AsNoTracking();
 
@@ -73,10 +73,18 @@ public class RequestService : IRequestService
         {
             UserRole.Customer => query.Where(r => r.CustomerId == userId),
             UserRole.Admin    => query,
-            _                 => query.Where(r =>
-                                     r.Status == RequestStatus.Pending ||
-                                     ((r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation)
-                                      && r.AcceptedByProviderId == userId))
+            // Provider: narrow by statusFilter if supplied, otherwise return all visible requests.
+            _ => statusFilter switch
+            {
+                "Pending" => query.Where(r => r.Status == RequestStatus.Pending),
+                "Active"  => query.Where(r =>
+                                 (r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation)
+                                 && r.AcceptedByProviderId == userId),
+                _         => query.Where(r =>
+                                 r.Status == RequestStatus.Pending ||
+                                 ((r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation)
+                                  && r.AcceptedByProviderId == userId))
+            }
         };
 
         var totalCount = await query.CountAsync();
