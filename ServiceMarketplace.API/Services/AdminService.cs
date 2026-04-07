@@ -106,6 +106,64 @@ public class AdminService : IAdminService
         };
     }
 
+    // ── Admin organisations view ──────────────────────────────────────────────
+
+    public async Task<PagedResult<AdminOrgDto>> GetAllOrgsAsync(int page, int pageSize, string? search)
+    {
+        // Join Organizations → Owner (User) and compute member count via a
+        // correlated subquery — no member rows are loaded into memory.
+        // The index on User.OrganizationId makes the COUNT efficient.
+        var query =
+            from org   in _db.Organizations.AsNoTracking()
+            join owner in _db.Users.AsNoTracking() on org.OwnerId equals owner.Id
+            select new
+            {
+                org.Id,
+                org.Name,
+                org.OwnerId,
+                OwnerEmail  = owner.Email,
+                MemberCount = _db.Users.Count(u => u.OrganizationId == org.Id),
+                org.CreatedAt,
+            };
+
+        // ── Optional text search ──────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(x =>
+                x.Name.Contains(term) ||
+                (x.OwnerEmail != null && x.OwnerEmail.Contains(term)));
+        }
+
+        var totalCount = await query.CountAsync();
+
+        if (totalCount == 0)
+            return PagedResult<AdminOrgDto>.Empty(page, pageSize);
+
+        var items = await query
+            .OrderByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new AdminOrgDto
+            {
+                Id          = x.Id,
+                Name        = x.Name,
+                OwnerId     = x.OwnerId,
+                OwnerEmail  = x.OwnerEmail ?? string.Empty,
+                MemberCount = x.MemberCount,
+                CreatedAt   = x.CreatedAt,
+            })
+            .ToListAsync();
+
+        return new PagedResult<AdminOrgDto>
+        {
+            Items      = items,
+            Page       = page,
+            PageSize   = pageSize,
+            TotalCount = totalCount,
+        };
+    }
+
     // ── User list ─────────────────────────────────────────────────────────────
 
     public async Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize)

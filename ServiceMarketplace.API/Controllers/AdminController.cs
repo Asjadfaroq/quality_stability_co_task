@@ -23,6 +23,27 @@ public class AdminController : BaseController
         _adminService = adminService;
     }
 
+    // ── Organisations overview ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns all organisations on the platform.
+    /// Each row includes only the owner's email and a member COUNT — no heavy payloads.
+    /// Optional <c>search</c> matches against organisation name or owner email.
+    /// </summary>
+    [HttpGet("orgs")]
+    [ProducesResponseType(typeof(PagedResult<AdminOrgDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllOrgs(
+        [FromQuery] int     page     = 1,
+        [FromQuery] int     pageSize = DefaultPageSize,
+        [FromQuery] string? search   = null)
+    {
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        page     = Math.Max(1, page);
+
+        var result = await _adminService.GetAllOrgsAsync(page, pageSize, search);
+        return Ok(result);
+    }
+
     // ── Jobs overview ─────────────────────────────────────────────────────────
 
     /// <summary>

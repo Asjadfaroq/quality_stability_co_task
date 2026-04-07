@@ -17,6 +17,14 @@ public interface IAdminService
     /// </summary>
     Task<PagedResult<AdminJobDto>> GetAllJobsAsync(int page, int pageSize, string? status, string? search);
 
+    /// <summary>
+    /// Returns a paginated list of every organization on the platform.
+    /// Each row carries only the owner's email and a SQL COUNT of members —
+    /// no member rows or full user objects are loaded.
+    /// Optional <paramref name="search"/> matches against organization name or owner email.
+    /// </summary>
+    Task<PagedResult<AdminOrgDto>> GetAllOrgsAsync(int page, int pageSize, string? search);
+
     /// <summary>Returns all platform permissions and the current role → permission matrix.</summary>
     Task<RolePermissionsDto> GetRolePermissionsAsync();
 

@@ -21,6 +21,7 @@ import CustomerOrgView from './pages/customer/CustomerOrgView'
 import AdminPanel from './pages/admin/AdminPanel'
 import AdminRoles from './pages/admin/AdminRoles'
 import AdminJobs from './pages/admin/AdminJobs'
+import AdminOrgs from './pages/admin/AdminOrgs'
 import ProtectedRoute from './components/ProtectedRoute'
 import PublicRoute from './components/PublicRoute'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -189,6 +190,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <AdminJobs />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/orgs"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AdminOrgs />
           </ProtectedRoute>
         }
       />
