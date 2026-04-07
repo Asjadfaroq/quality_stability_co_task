@@ -11,6 +11,7 @@ import Chats from './pages/Chats'
 import ProviderDashboard from './pages/provider/ProviderDashboard'
 import ProviderJobs from './pages/provider/ProviderJobs'
 import CompletedJobs from './pages/provider/CompletedJobs'
+import ActiveJobs from './pages/provider/ActiveJobs'
 import OrgPanel from './pages/provider/OrgPanel'
 import AdminPanel from './pages/admin/AdminPanel'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -96,6 +97,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
             <ProviderJobs />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/provider/active"
+        element={
+          <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
+            <ActiveJobs />
           </ProtectedRoute>
         }
       />

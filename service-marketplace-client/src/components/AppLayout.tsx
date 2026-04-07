@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Users, Building2,
-  Menu, X, LogOut, Briefcase, Bell, CheckCircle2, MessageSquare,
+  Menu, X, LogOut, Briefcase, Bell, CheckCircle2, MessageSquare, Loader2,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 
@@ -16,13 +16,15 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   ],
   ProviderEmployee: [
     { label: 'Dashboard',     to: '/provider',           icon: <LayoutDashboard size={16} /> },
-    { label: 'Jobs',          to: '/provider/jobs',      icon: <Briefcase       size={16} /> },
+    { label: 'Available Jobs',to: '/provider/jobs',      icon: <Briefcase       size={16} /> },
+    { label: 'Active Jobs',   to: '/provider/active',    icon: <Loader2         size={16} /> },
     { label: 'Completed Jobs',to: '/provider/completed', icon: <CheckCircle2    size={16} /> },
     { label: 'Chats',         to: '/chats',              icon: <MessageSquare   size={16} /> },
   ],
   ProviderAdmin: [
     { label: 'Dashboard',     to: '/provider',           icon: <LayoutDashboard size={16} /> },
-    { label: 'Jobs',          to: '/provider/jobs',      icon: <Briefcase       size={16} /> },
+    { label: 'Available Jobs',to: '/provider/jobs',      icon: <Briefcase       size={16} /> },
+    { label: 'Active Jobs',   to: '/provider/active',    icon: <Loader2         size={16} /> },
     { label: 'Completed Jobs',to: '/provider/completed', icon: <CheckCircle2    size={16} /> },
     { label: 'Chats',         to: '/chats',              icon: <MessageSquare   size={16} /> },
     { label: 'Organization',  to: '/org',                icon: <Building2       size={16} /> },

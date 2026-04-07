@@ -67,7 +67,7 @@ export default function ProviderDashboard() {
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900">Active Jobs</h3>
           <Link
-            to="/provider/jobs"
+            to="/provider/active"
             className="text-xs font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
           >
             View all <ArrowRight size={12} />
