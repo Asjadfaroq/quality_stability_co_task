@@ -13,6 +13,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useUnreadStore } from '../../store/unreadStore'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
+import { useAiEnhance } from '../../hooks/useAiEnhance'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import {
@@ -56,7 +57,7 @@ interface NewRequestModalProps {
 
 function NewRequestModal({ open, onClose }: NewRequestModalProps) {
   const queryClient   = useQueryClient()
-  const [enhancing, setEnhancing]       = useState(false)
+  const { enhancing, enhance } = useAiEnhance()
   const [freeLimitHit, setFreeLimitHit] = useState(false)
   const [visible, setVisible]           = useState(false)
   const { register, handleSubmit, setValue, watch, reset, setFocus, formState: { errors } } = useForm<FormData>({
@@ -110,17 +111,11 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
 
   const handleEnhance = async () => {
     if (!title || !description) return
-    setEnhancing(true)
-    try {
-      const res = await api.post('/ai/enhance-description', { title, rawDescription: description })
-      setValue('description', res.data.enhancedDescription)
-      if (!watch('category')) setValue('category', res.data.suggestedCategory)
-      toast.success('Description enhanced!')
-    } catch (err) {
-      if (!isRateLimited(err)) toast.error('AI enhancement failed.')
-    } finally {
-      setEnhancing(false)
-    }
+    const data = await enhance(title, description)
+    if (!data) return
+    setValue('description', data.enhancedDescription)
+    if (!watch('category')) setValue('category', data.suggestedCategory)
+    toast.success('Description enhanced!')
   }
 
   if (!visible && !open) return null

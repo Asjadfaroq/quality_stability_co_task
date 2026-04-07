@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
+import AiAssistant from './AiAssistant'
 
 interface NavItem { label: string; to: string; icon: React.ReactNode }
 
@@ -399,6 +400,9 @@ export default function AppLayout({ children, title }: Props) {
           {children}
         </main>
       </div>
+
+      {/* Global AI Writing Assistant — available to all authenticated users on every page */}
+      <AiAssistant />
     </div>
   )
 }

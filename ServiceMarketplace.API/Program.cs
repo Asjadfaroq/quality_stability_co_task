@@ -307,6 +307,25 @@ builder.Services.AddRateLimiter(options =>
                 });
         });
 
+        // AI chat assistant — fixed window per user, 5 requests per 20 minutes.
+        // Keyed by userId so each account has its own independent budget:
+        // two different accounts logged into the same browser each get 5 prompts.
+        options.AddPolicy(RateLimitPolicies.AiChat, httpContext =>
+        {
+            var mux = httpContext.RequestServices.GetRequiredService<IConnectionMultiplexer>();
+            var key = httpContext.User.FindFirst("userId")?.Value
+                      ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                      ?? "unknown";
+            return RedisRateLimitPartition.GetFixedWindowRateLimiter(
+                partitionKey: $"sm:rl:ai-chat:{key}",
+                factory: _ => new RedisFixedWindowRateLimiterOptions
+                {
+                    PermitLimit               = 5,
+                    Window                    = TimeSpan.FromMinutes(20),
+                    ConnectionMultiplexerFactory = () => mux
+                });
+        });
+
         // Geo search — sliding window per user, 60 requests per minute
         options.AddPolicy(RateLimitPolicies.Nearby, httpContext =>
         {
@@ -365,6 +384,19 @@ builder.Services.AddRateLimiter(options =>
                 {
                     PermitLimit           = 20,
                     Window                = TimeSpan.FromHours(1),
+                    QueueProcessingOrder  = QueueProcessingOrder.OldestFirst,
+                    QueueLimit            = 0
+                }));
+
+        options.AddPolicy(RateLimitPolicies.AiChat, httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.User.FindFirst("userId")?.Value
+                              ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                              ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit           = 5,
+                    Window                = TimeSpan.FromMinutes(20),
                     QueueProcessingOrder  = QueueProcessingOrder.OldestFirst,
                     QueueLimit            = 0
                 }));
