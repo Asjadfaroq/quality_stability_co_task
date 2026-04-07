@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ServiceMarketplace.API.Middleware;
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -13,6 +14,9 @@ namespace ServiceMarketplace.API.Controllers;
 [Authorize]
 public class RequestsController : BaseController
 {
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize     = 200;
+
     private readonly IRequestService _requestService;
     private readonly IValidator<CreateRequestDto> _validator;
 
@@ -39,12 +43,20 @@ public class RequestsController : BaseController
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
-    /// <summary>Get requests filtered by role: Customer=own, Provider=all pending, Admin=all.</summary>
+    /// <summary>
+    /// Get requests filtered by role: Customer=own, Provider=all pending + their accepted, Admin=all.
+    /// Results are paginated — use <c>page</c> and <c>pageSize</c> query params (max 200 per page).
+    /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll()
+    [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page     = 1,
+        [FromQuery] int pageSize = DefaultPageSize)
     {
-        var result = await _requestService.GetAllAsync(CurrentUserId, CurrentUserRole);
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        page     = Math.Max(1, page);
+
+        var result = await _requestService.GetAllAsync(CurrentUserId, CurrentUserRole, page, pageSize);
         return Ok(result);
     }
 
@@ -55,31 +67,41 @@ public class RequestsController : BaseController
     [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetNearby([FromQuery] double lat, [FromQuery] double lng, [FromQuery] double radiusKm)
+    public async Task<IActionResult> GetNearby(
+        [FromQuery] double lat,
+        [FromQuery] double lng,
+        [FromQuery] double radiusKm)
     {
-        if (lat < -90 || lat > 90)
+        if (lat is < -90 or > 90)
             return BadRequest(new { message = "Latitude must be between -90 and 90." });
 
-        if (lng < -180 || lng > 180)
+        if (lng is < -180 or > 180)
             return BadRequest(new { message = "Longitude must be between -180 and 180." });
 
-        if (radiusKm <= 0 || radiusKm > 500)
+        if (radiusKm is <= 0 or > 500)
             return BadRequest(new { message = "radiusKm must be between 1 and 500." });
 
         var result = await _requestService.GetNearbyAsync(lat, lng, radiusKm);
         return Ok(result);
     }
 
-    /// <summary>Get all completed jobs for the calling provider (ProviderEmployee or ProviderAdmin only).</summary>
+    /// <summary>
+    /// Get all completed jobs for the calling provider. Paginated.
+    /// </summary>
     [HttpGet("completed")]
-    [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetCompleted()
+    public async Task<IActionResult> GetCompleted(
+        [FromQuery] int page     = 1,
+        [FromQuery] int pageSize = DefaultPageSize)
     {
         if (CurrentUserRole != UserRole.ProviderEmployee && CurrentUserRole != UserRole.ProviderAdmin)
             return Forbid();
 
-        var result = await _requestService.GetCompletedAsync(CurrentUserId);
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        page     = Math.Max(1, page);
+
+        var result = await _requestService.GetCompletedAsync(CurrentUserId, page, pageSize);
         return Ok(result);
     }
 
@@ -108,7 +130,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Mark an accepted request as pending customer confirmation. Returns 403 if caller is not the acceptor, 422 if not in Accepted state.</summary>
+    /// <summary>Mark an accepted request as pending customer confirmation.</summary>
     [HttpPatch("{id:guid}/complete")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission("request.complete")]
@@ -122,7 +144,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Customer confirms completion of a request. Only the request owner can confirm. Returns 422 if not in PendingConfirmation state.</summary>
+    /// <summary>Customer confirms completion of a request.</summary>
     [HttpPatch("{id:guid}/confirm")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]

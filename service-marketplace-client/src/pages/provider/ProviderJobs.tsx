@@ -6,7 +6,7 @@ import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Button, Badge, Card, CardHeader, Input, EmptyState, SkeletonCard } from '../../components/ui'
-import type { ServiceRequest } from '../../types'
+import type { PagedResult, ServiceRequest } from '../../types'
 
 export default function ProviderJobs() {
   const queryClient = useQueryClient()
@@ -17,10 +17,12 @@ export default function ProviderJobs() {
   const [nearbyResults, setNearbyResults] = useState<ServiceRequest[] | null>(null)
   const [searching, setSearching]         = useState(false)
 
-  const { data: allRequests = [], isLoading } = useQuery<ServiceRequest[]>({
+  const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['requests'],
-    queryFn: () => api.get('/requests').then((r) => r.data),
+    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
   })
+
+  const allRequests = data?.items ?? []
 
   const acceptMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/requests/${id}/accept`),

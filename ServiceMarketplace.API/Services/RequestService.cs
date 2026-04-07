@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Hubs;
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Models.Enums;
@@ -52,7 +53,6 @@ public class RequestService : IRequestService
 
         _logger.LogInformation("Request {RequestId} created by customer {CustomerId}", request.Id, customerId);
 
-        // Notify all connected providers of the new available job in real time
         await _hub.Clients
             .Group("providers")
             .SendAsync("NewRequestAvailable", new
@@ -62,10 +62,10 @@ public class RequestService : IRequestService
                 category  = request.Category
             });
 
-        return MapToDto(request);
+        return ProjectToDto(request);
     }
 
-    public async Task<List<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role)
+    public async Task<PagedResult<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role, int page, int pageSize)
     {
         var query = _db.ServiceRequests.AsNoTracking();
 
@@ -79,58 +79,142 @@ public class RequestService : IRequestService
                                       && r.AcceptedByProviderId == userId))
         };
 
-        var requests = await query.OrderByDescending(r => r.CreatedAt).ToListAsync();
-        return requests.Select(MapToDto).ToList();
+        var totalCount = await query.CountAsync();
+
+        // Project directly to DTO in SQL — avoids loading the full entity (including
+        // Description nvarchar(2000)) just to re-map it in memory afterwards.
+        var items = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new ServiceRequestDto
+            {
+                Id                   = r.Id,
+                CustomerId           = r.CustomerId,
+                Title                = r.Title,
+                Description          = r.Description,
+                Category             = r.Category,
+                Latitude             = r.Latitude,
+                Longitude            = r.Longitude,
+                Status               = r.Status.ToString(),
+                AcceptedByProviderId = r.AcceptedByProviderId,
+                CreatedAt            = r.CreatedAt,
+                UpdatedAt            = r.UpdatedAt
+            })
+            .ToListAsync();
+
+        return new PagedResult<ServiceRequestDto>
+        {
+            Items      = items,
+            Page       = page,
+            PageSize   = pageSize,
+            TotalCount = totalCount
+        };
     }
 
-    public async Task<List<ServiceRequestDto>> GetCompletedAsync(Guid providerId)
+    public async Task<PagedResult<ServiceRequestDto>> GetCompletedAsync(Guid providerId, int page, int pageSize)
     {
-        var requests = await _db.ServiceRequests
+        var query = _db.ServiceRequests
             .AsNoTracking()
             .Where(r => r.Status == RequestStatus.Completed
                      && r.AcceptedByProviderId.HasValue
-                     && r.AcceptedByProviderId.Value == providerId)
+                     && r.AcceptedByProviderId.Value == providerId);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
             .OrderByDescending(r => r.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new ServiceRequestDto
+            {
+                Id                   = r.Id,
+                CustomerId           = r.CustomerId,
+                Title                = r.Title,
+                Description          = r.Description,
+                Category             = r.Category,
+                Latitude             = r.Latitude,
+                Longitude            = r.Longitude,
+                Status               = r.Status.ToString(),
+                AcceptedByProviderId = r.AcceptedByProviderId,
+                CreatedAt            = r.CreatedAt,
+                UpdatedAt            = r.UpdatedAt
+            })
             .ToListAsync();
 
-        return requests.Select(MapToDto).ToList();
+        return new PagedResult<ServiceRequestDto>
+        {
+            Items      = items,
+            Page       = page,
+            PageSize   = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<ServiceRequestDto> GetByIdAsync(Guid requestId, Guid userId, UserRole role)
     {
         var request = await _db.ServiceRequests
             .AsNoTracking()
+            .Select(r => new ServiceRequestDto
+            {
+                Id                   = r.Id,
+                CustomerId           = r.CustomerId,
+                Title                = r.Title,
+                Description          = r.Description,
+                Category             = r.Category,
+                Latitude             = r.Latitude,
+                Longitude            = r.Longitude,
+                Status               = r.Status.ToString(),
+                AcceptedByProviderId = r.AcceptedByProviderId,
+                CreatedAt            = r.CreatedAt,
+                UpdatedAt            = r.UpdatedAt
+            })
             .FirstOrDefaultAsync(r => r.Id == requestId)
             ?? throw new KeyNotFoundException("Request not found.");
 
         if (role == UserRole.Customer && request.CustomerId != userId)
             throw new UnauthorizedAccessException("You do not have access to this request.");
 
-        return MapToDto(request);
+        return request;
     }
 
     public async Task<List<ServiceRequestDto>> GetNearbyAsync(double lat, double lng, double radiusKm)
     {
         // Pre-cast bounding box to decimal so EF generates a direct column comparison
-        // rather than CAST(Latitude AS float) per row, allowing index usage
+        // rather than CAST(Latitude AS float) per row, allowing index usage.
         var delta  = radiusKm / 111.0;
         var latMin = (decimal)(lat - delta);
         var latMax = (decimal)(lat + delta);
         var lngMin = (decimal)(lng - delta);
         var lngMax = (decimal)(lng + delta);
 
+        // Bounding-box pre-filter is covered by IX_ServiceRequests_Status_Latitude_Longitude.
+        // Project to DTO inside SQL to avoid loading unnecessary columns.
         var candidates = await _db.ServiceRequests
             .AsNoTracking()
             .Where(r =>
                 r.Status    == RequestStatus.Pending &&
                 r.Latitude  >= latMin && r.Latitude  <= latMax &&
                 r.Longitude >= lngMin && r.Longitude <= lngMax)
+            .Select(r => new ServiceRequestDto
+            {
+                Id                   = r.Id,
+                CustomerId           = r.CustomerId,
+                Title                = r.Title,
+                Description          = r.Description,
+                Category             = r.Category,
+                Latitude             = r.Latitude,
+                Longitude            = r.Longitude,
+                Status               = r.Status.ToString(),
+                AcceptedByProviderId = r.AcceptedByProviderId,
+                CreatedAt            = r.CreatedAt,
+                UpdatedAt            = r.UpdatedAt
+            })
             .ToListAsync();
 
-        // Haversine exact filter after the bounding-box pre-filter
+        // Haversine exact filter runs in-process after the cheap bounding-box pre-filter.
         return candidates
             .Where(r => GeoHelper.CalculateDistance(lat, lng, (double)r.Latitude, (double)r.Longitude) <= radiusKm)
-            .Select(MapToDto)
             .ToList();
     }
 
@@ -143,9 +227,9 @@ public class RequestService : IRequestService
         if (request.Status != RequestStatus.Pending)
             throw new ConflictException("Request has already been accepted.");
 
-        request.Status = RequestStatus.Accepted;
+        request.Status               = RequestStatus.Accepted;
         request.AcceptedByProviderId = providerId;
-        request.UpdatedAt = DateTime.UtcNow;
+        request.UpdatedAt            = DateTime.UtcNow;
 
         try
         {
@@ -153,23 +237,20 @@ public class RequestService : IRequestService
         }
         catch (DbUpdateConcurrencyException)
         {
-            // RowVersion mismatch — another provider accepted between our read and write
             throw new ConflictException("Request was accepted by another provider. Please refresh.");
         }
 
         _logger.LogInformation("Request {RequestId} accepted by provider {ProviderId}", requestId, providerId);
 
-        // Notify all providers so the job is removed from their available list in real time
         await _hub.Clients
             .Group("providers")
             .SendAsync("RequestTaken", new { requestId = request.Id });
 
-        // Notify the customer who owns this request so their tab updates immediately
         await _hub.Clients
             .Group(request.CustomerId.ToString())
             .SendAsync("RequestAccepted", new { requestId = request.Id });
 
-        return MapToDto(request);
+        return ProjectToDto(request);
     }
 
     public async Task<ServiceRequestDto> CompleteAsync(Guid requestId, Guid providerId)
@@ -190,24 +271,22 @@ public class RequestService : IRequestService
         if (request.AcceptedByProviderId != providerId)
             throw new UnauthorizedAccessException("Only the provider who accepted this request can complete it.");
 
-        request.Status = RequestStatus.PendingConfirmation;
+        request.Status    = RequestStatus.PendingConfirmation;
         request.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Request {RequestId} marked PendingConfirmation by provider {ProviderId}", requestId, providerId);
 
-        // Notify the customer that the job is complete and needs their confirmation
         await _hub.Clients
             .Group(request.CustomerId.ToString())
             .SendAsync("RequestNeedsConfirmation", new { requestId = request.Id, title = request.Title });
 
-        // Also notify the accepting provider so their Active Jobs tab updates immediately
         await _hub.Clients
             .Group(providerId.ToString())
             .SendAsync("RequestStatusUpdated", new { requestId = request.Id });
 
-        return MapToDto(request);
+        return ProjectToDto(request);
     }
 
     public async Task<ServiceRequestDto> ConfirmAsync(Guid requestId, Guid customerId)
@@ -222,7 +301,7 @@ public class RequestService : IRequestService
         if (request.Status != RequestStatus.PendingConfirmation)
             throw new InvalidOperationException("Request is not awaiting confirmation.");
 
-        request.Status = RequestStatus.Completed;
+        request.Status    = RequestStatus.Completed;
         request.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -234,15 +313,16 @@ public class RequestService : IRequestService
                 .Group(request.AcceptedByProviderId.Value.ToString())
                 .SendAsync("RequestConfirmed", new { requestId = request.Id, title = request.Title });
 
-        // Notify the customer's own other tabs/sessions that the status moved to Completed
         await _hub.Clients
             .Group(customerId.ToString())
             .SendAsync("RequestStatusUpdated", new { requestId = request.Id });
 
-        return MapToDto(request);
+        return ProjectToDto(request);
     }
 
-    private static ServiceRequestDto MapToDto(ServiceRequest r) => new()
+    // Used only for tracked entities returned after write operations (Accept, Complete, Confirm, Create)
+    // where the entity is already materialised and we cannot project in SQL.
+    private static ServiceRequestDto ProjectToDto(ServiceRequest r) => new()
     {
         Id                   = r.Id,
         CustomerId           = r.CustomerId,

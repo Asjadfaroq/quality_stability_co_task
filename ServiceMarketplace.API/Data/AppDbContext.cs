@@ -61,13 +61,20 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(r => r.CustomerId);
             e.HasIndex(r => r.Status);
-            // Compound index covers the provider query: pending requests OR accepted by this provider
+            // Covers the provider query: pending requests OR accepted by this provider
             e.HasIndex(r => new { r.AcceptedByProviderId, r.Status });
+            // Covers the bounding-box geo filter in GetNearbyAsync:
+            // WHERE Status = Pending AND Latitude BETWEEN x AND y AND Longitude BETWEEN a AND b
+            e.HasIndex(r => new { r.Status, r.Latitude, r.Longitude })
+             .HasDatabaseName("IX_ServiceRequests_Status_Latitude_Longitude");
         });
 
         builder.Entity<ChatMessage>(e =>
         {
-            e.HasIndex(m => m.RequestId);
+            // Composite index covers both the history query (WHERE RequestId = x ORDER BY SentAt)
+            // and the conversation query (GROUP BY RequestId, MAX(SentAt)) without a separate sort.
+            e.HasIndex(m => new { m.RequestId, m.SentAt })
+             .HasDatabaseName("IX_ChatMessages_RequestId_SentAt");
         });
 
         builder.Entity<Permission>(e =>

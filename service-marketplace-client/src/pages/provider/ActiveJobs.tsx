@@ -8,7 +8,7 @@ import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import { Button, Badge, Card, EmptyState, SkeletonCard } from '../../components/ui'
 import { useUnreadStore } from '../../store/unreadStore'
-import type { ServiceRequest } from '../../types'
+import type { PagedResult, ServiceRequest } from '../../types'
 
 function statusBadge(status: ServiceRequest['status']) {
   const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
@@ -27,10 +27,12 @@ export default function ActiveJobs() {
   const unreadCounts = useUnreadStore((s) => s.counts)
   const clearUnread  = useUnreadStore((s) => s.clear)
 
-  const { data: allRequests = [], isLoading } = useQuery<ServiceRequest[]>({
+  const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['requests'],
-    queryFn: () => api.get('/requests').then((r) => r.data),
+    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
   })
+
+  const allRequests = data?.items ?? []
 
   const completeMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/requests/${id}/complete`),

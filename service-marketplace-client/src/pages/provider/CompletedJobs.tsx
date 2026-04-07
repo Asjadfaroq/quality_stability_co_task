@@ -3,14 +3,17 @@ import { CheckCircle2, MapPin, CalendarDays, AlertCircle, RefreshCw } from 'luci
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, EmptyState, SkeletonCard } from '../../components/ui'
-import type { ServiceRequest } from '../../types'
+import type { PagedResult, ServiceRequest } from '../../types'
 
 export default function CompletedJobs() {
 
-  const { data: completed = [], isLoading, isError, refetch } = useQuery<ServiceRequest[]>({
+  const { data, isLoading, isError, refetch } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['provider-completed'],
-    queryFn: () => api.get('/requests/completed').then((r) => r.data),
+    queryFn: () => api.get('/requests/completed', { params: { pageSize: 200 } }).then((r) => r.data),
   })
+
+  const completed  = data?.items      ?? []
+  const totalCount = data?.totalCount ?? 0
 
   return (
     <AppLayout title="Completed Jobs">
@@ -28,7 +31,7 @@ export default function CompletedJobs() {
           <div>
             <h3 className="text-base font-semibold text-slate-900">Job History</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              {isLoading ? 'Loading…' : `${completed.length} completed job${completed.length !== 1 ? 's' : ''}`}
+              {isLoading ? 'Loading…' : `${totalCount} completed job${totalCount !== 1 ? 's' : ''}`}
             </p>
           </div>
           {completed.length > 0 && (

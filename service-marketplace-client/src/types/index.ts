@@ -20,3 +20,14 @@ export interface ServiceRequest {
   createdAt: string
   updatedAt: string
 }
+
+/** Generic paginated response envelope returned by all list endpoints. */
+export interface PagedResult<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}

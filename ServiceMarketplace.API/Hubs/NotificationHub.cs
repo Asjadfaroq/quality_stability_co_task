@@ -23,7 +23,6 @@ public class NotificationHub : Hub
         if (userId != null)
             await Groups.AddToGroupAsync(Context.ConnectionId, userId);
 
-        // All providers join a shared group so new jobs can be broadcast to all of them at once
         var role = Context.User?.FindFirst(ClaimConstants.Role)?.Value;
         if (role is "ProviderEmployee" or "ProviderAdmin")
             await Groups.AddToGroupAsync(Context.ConnectionId, "providers");
@@ -60,6 +59,13 @@ public class NotificationHub : Hub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chat_{requestId}");
     }
 
+    /// <summary>
+    /// Saves and broadcasts a chat message.
+    ///
+    /// DB round-trips: 2 total (1 in SaveMessageAsync for participant+email, 1 for INSERT).
+    /// Previously: 3 (GetParticipants + GetSenderEmail + GetParticipants again for OtherPartyId).
+    /// OtherPartyId is now returned directly from SaveMessageAsync — no extra query.
+    /// </summary>
     public async Task SendMessage(string requestId, string content)
     {
         var userId = GetUserId();
@@ -67,26 +73,27 @@ public class NotificationHub : Hub
 
         try
         {
-            var message = await _chatService.SaveMessageAsync(
+            var result = await _chatService.SaveMessageAsync(
                 Guid.Parse(requestId), userId.Value, content);
 
             var payload = new
             {
-                id          = message.Id,
-                requestId   = message.RequestId,
-                senderId    = message.SenderId,
-                senderEmail = message.SenderEmail,
-                content     = message.Content,
-                sentAt      = message.SentAt
+                id          = result.Message.Id,
+                requestId   = result.Message.RequestId,
+                senderId    = result.Message.SenderId,
+                senderEmail = result.Message.SenderEmail,
+                content     = result.Message.Content,
+                sentAt      = result.Message.SentAt
             };
 
+            // Broadcast to everyone in the chat group (both parties if both connected).
             await Clients.Group($"chat_{requestId}").SendAsync("ReceiveMessage", payload);
 
-            // Push to the other party's personal group so their unread badge updates
-            // even if they don't have the chat panel open
-            var otherPartyId = await _chatService.GetOtherPartyIdAsync(message.RequestId, userId.Value);
-            if (otherPartyId.HasValue)
-                await Clients.Group(otherPartyId.Value.ToString())
+            // Push an unread notification to the other party's personal group
+            // using OtherPartyId returned by SaveMessageAsync — zero extra DB queries.
+            if (result.OtherPartyId.HasValue)
+                await Clients
+                    .Group(result.OtherPartyId.Value.ToString())
                     .SendAsync("NewMessageNotification", payload);
         }
         catch (ArgumentException ex)

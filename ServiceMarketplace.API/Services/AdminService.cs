@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Models.Enums;
@@ -18,26 +19,50 @@ public class AdminService : IAdminService
         _cache = cache;
     }
 
-    public async Task<List<UserDto>> GetAllUsersAsync()
+    public async Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize)
     {
-        var raw = await _db.Users
-            .AsNoTracking()
+        var query = _db.Users.AsNoTracking();
+
+        var totalCount = await query.CountAsync();
+
+        if (totalCount == 0)
+            return PagedResult<UserDto>.Empty(page, pageSize);
+
+        // Query 1: Scalar user fields only — no collection navigation, no JOIN fan-out.
+        var users = await query
+            .OrderBy(u => u.Email)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(u => new
             {
                 u.Id,
-                Email        = u.Email ?? string.Empty,
+                Email          = u.Email ?? string.Empty,
                 u.Role,
                 u.SubTier,
                 u.OrganizationId,
-                u.CreatedAt,
-                GrantedPermissions = u.UserPermissions
-                    .Where(up => up.Granted)
-                    .Select(up => up.Permission!.Name)
-                    .ToList()
+                u.CreatedAt
             })
             .ToListAsync();
 
-        return raw.Select(u => new UserDto
+        if (users.Count == 0)
+            return PagedResult<UserDto>.Empty(page, pageSize);
+
+        var userIds = users.Select(u => u.Id).ToList();
+
+        // Query 2: Permissions for the current page's users only.
+        // Splitting into a separate query avoids the Cartesian product that a single
+        // LEFT JOIN on UserPermissions would generate (one user row × N permission rows).
+        var permissionsFlat = await _db.UserPermissions
+            .AsNoTracking()
+            .Where(up => userIds.Contains(up.UserId) && up.Granted)
+            .Select(up => new { up.UserId, up.Permission!.Name })
+            .ToListAsync();
+
+        var permsByUser = permissionsFlat
+            .GroupBy(p => p.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.Name).ToList());
+
+        var items = users.Select(u => new UserDto
         {
             Id             = u.Id,
             Email          = u.Email,
@@ -45,8 +70,16 @@ public class AdminService : IAdminService
             SubTier        = u.SubTier.ToString(),
             OrganizationId = u.OrganizationId,
             CreatedAt      = u.CreatedAt,
-            Permissions    = u.GrantedPermissions
+            Permissions    = permsByUser.TryGetValue(u.Id, out var perms) ? perms : []
         }).ToList();
+
+        return new PagedResult<UserDto>
+        {
+            Items      = items,
+            Page       = page,
+            PageSize   = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task UpdateSubscriptionAsync(Guid userId, SubscriptionTier subTier)
@@ -101,6 +134,9 @@ public class AdminService : IAdminService
 
         await _db.SaveChangesAsync();
 
+        // Invalidate the per-user effective permissions cache so the next request
+        // recomputes from the new overrides. The role_permissions cache is intentionally
+        // left intact because role-level grants are not changed here.
         await _cache.RemoveAsync($"permissions:{userId}");
     }
 }

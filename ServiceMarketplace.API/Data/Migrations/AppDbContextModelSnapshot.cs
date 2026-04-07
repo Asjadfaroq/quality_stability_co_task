@@ -178,7 +178,8 @@ namespace ServiceMarketplace.API.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RequestId");
+                    b.HasIndex("RequestId", "SentAt")
+                        .HasDatabaseName("IX_ChatMessages_RequestId_SentAt");
 
                     b.ToTable("ChatMessages");
                 });
@@ -350,6 +351,9 @@ namespace ServiceMarketplace.API.Data.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("AcceptedByProviderId", "Status");
+
+                    b.HasIndex("Status", "Latitude", "Longitude")
+                        .HasDatabaseName("IX_ServiceRequests_Status_Latitude_Longitude");
 
                     b.ToTable("ServiceRequests");
                 });

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Users, ChevronDown, ChevronUp, ShieldCheck, CreditCard } from 'lucide-react'
+import { Users, ChevronDown, ChevronUp, ShieldCheck, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, CardHeader, Badge, Button, EmptyState, SkeletonCard } from '../../components/ui'
+import type { PagedResult } from '../../types'
 
 const PERMISSIONS = [
   { key: 'request.create',   label: 'Create Requests' },
@@ -13,6 +14,8 @@ const PERMISSIONS = [
   { key: 'request.complete', label: 'Complete Requests' },
   { key: 'request.view_all', label: 'View All Requests' },
 ]
+
+const PAGE_SIZE = 50
 
 interface UserDto {
   id: string
@@ -25,11 +28,18 @@ interface UserDto {
 export default function AdminPanel() {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [page, setPage]         = useState(1)
 
-  const { data: users = [], isLoading } = useQuery<UserDto[]>({
-    queryKey: ['admin-users'],
-    queryFn: () => api.get('/admin/users').then((r) => r.data),
+  const { data, isLoading } = useQuery<PagedResult<UserDto>>({
+    queryKey: ['admin-users', page],
+    queryFn: () =>
+      api.get('/admin/users', { params: { page, pageSize: PAGE_SIZE } }).then((r) => r.data),
+    placeholderData: (prev) => prev, // keep previous page visible while fetching next
   })
+
+  const users      = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = data?.totalPages ?? 1
 
   const subMutation = useMutation({
     mutationFn: ({ id, subTier }: { id: string; subTier: string }) =>
@@ -70,7 +80,7 @@ export default function AdminPanel() {
         <div className="px-6 py-5 border-b border-gray-100">
           <CardHeader
             title="All Users"
-            description={`${users.length} registered user${users.length !== 1 ? 's' : ''}`}
+            description={`${totalCount} registered user${totalCount !== 1 ? 's' : ''}`}
           />
         </div>
 
@@ -104,12 +114,10 @@ export default function AdminPanel() {
                 return (
                   <li key={user.id}>
                     <div className="px-6 py-3.5 flex items-center gap-4">
-                      {/* Avatar */}
                       <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold shrink-0">
                         {user.email.slice(0, 2).toUpperCase()}
                       </div>
 
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{user.email}</p>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -120,7 +128,6 @@ export default function AdminPanel() {
                         </div>
                       </div>
 
-                      {/* Subscription + actions */}
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge label={user.subTier} variant={user.subTier.toLowerCase() as any} />
                         <Button
@@ -141,7 +148,6 @@ export default function AdminPanel() {
                       </div>
                     </div>
 
-                    {/* Permissions panel */}
                     {isOpen && (
                       <div className="px-6 pb-5 bg-gray-50/50 border-t border-gray-100">
                         <div className="pt-4">
@@ -187,6 +193,35 @@ export default function AdminPanel() {
                 )
               })}
             </ul>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+                <p className="text-xs text-slate-500">
+                  Page {page} of {totalPages} &middot; {totalCount} users
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<ChevronLeft size={14} />}
+                    disabled={page === 1}
+                    onClick={() => { setPage((p) => p - 1); setExpanded(null) }}
+                  >
+                    Prev
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page === totalPages}
+                    onClick={() => { setPage((p) => p + 1); setExpanded(null) }}
+                  >
+                    Next
+                    <ChevronRight size={14} className="ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </Card>

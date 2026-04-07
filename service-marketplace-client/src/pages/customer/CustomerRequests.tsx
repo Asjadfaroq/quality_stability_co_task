@@ -19,7 +19,7 @@ import {
   Button, Badge, Card,
   Input, Textarea, Select, EmptyState, SkeletonCard,
 } from '../../components/ui'
-import type { ServiceRequest } from '../../types'
+import type { PagedResult, ServiceRequest } from '../../types'
 
 const schema = z.object({
   title:       z.string().min(1, 'Title is required').max(200),
@@ -274,10 +274,12 @@ export default function CustomerRequests() {
     },
   })
 
-  const { data: requests = [], isLoading } = useQuery<ServiceRequest[]>({
+  const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['requests'],
-    queryFn: () => api.get('/requests').then((r) => r.data),
+    queryFn: () => api.get('/requests', { params: { pageSize: 200 } }).then((r) => r.data),
   })
+
+  const requests = data?.items ?? []
 
   return (
     <>
