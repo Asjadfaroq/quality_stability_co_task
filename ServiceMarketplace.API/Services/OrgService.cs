@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.DTOs.Org;
@@ -13,11 +15,30 @@ public class OrgService : IOrgService
 {
     private readonly AppDbContext _db;
     private readonly ICacheService _cache;
+    private readonly IHubContext<NotificationHub> _hub;
 
-    public OrgService(AppDbContext db, ICacheService cache)
+    public OrgService(AppDbContext db, ICacheService cache, IHubContext<NotificationHub> hub)
     {
-        _db = db;
+        _db    = db;
         _cache = cache;
+        _hub   = hub;
+    }
+
+    public async Task<OrgDto?> GetOrgForUserAsync(Guid userId)
+    {
+        // Looks up the org any user (ProviderAdmin or ProviderEmployee) belongs to
+        // via their User.OrganizationId foreign key.
+        return await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId && u.OrganizationId != null)
+            .Select(u => new OrgDto
+            {
+                Id        = u.Organization!.Id,
+                Name      = u.Organization!.Name,
+                OwnerId   = u.Organization!.OwnerId,
+                CreatedAt = u.Organization!.CreatedAt,
+            })
+            .FirstOrDefaultAsync();
     }
 
     public async Task<OrgDto?> GetOrgByOwnerAsync(Guid providerAdminId)
@@ -107,6 +128,18 @@ public class OrgService : IOrgService
 
         target.OrganizationId = orgId;
         await _db.SaveChangesAsync();
+
+        // Notify the added user in real-time.
+        await _hub.Clients
+            .Group(target.Id.ToString())
+            .SendAsync("OrgMemberAdded", new
+            {
+                organizationId   = orgId,
+                organizationName = (await _db.Organizations.AsNoTracking()
+                                       .Where(o => o.Id == orgId)
+                                       .Select(o => o.Name)
+                                       .FirstOrDefaultAsync()) ?? string.Empty,
+            });
     }
 
     public async Task RemoveMemberAsync(Guid providerAdminId, Guid memberId)
@@ -130,8 +163,22 @@ public class OrgService : IOrgService
             .FirstOrDefaultAsync(u => u.Id == memberId && u.OrganizationId == orgId)
             ?? throw new KeyNotFoundException("Member not found in your organization.");
 
+        var orgName = await _db.Organizations.AsNoTracking()
+            .Where(o => o.Id == orgId)
+            .Select(o => o.Name)
+            .FirstOrDefaultAsync() ?? string.Empty;
+
         member.OrganizationId = null;
         await _db.SaveChangesAsync();
+
+        // Notify the removed user in real-time.
+        await _hub.Clients
+            .Group(memberId.ToString())
+            .SendAsync("OrgMemberRemoved", new
+            {
+                organizationId   = orgId,
+                organizationName = orgName,
+            });
     }
 
     public async Task<PagedResult<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId, int page, int pageSize)

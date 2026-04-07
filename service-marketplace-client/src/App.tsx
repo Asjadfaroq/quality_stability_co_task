@@ -14,6 +14,7 @@ import ProviderJobs from './pages/provider/ProviderJobs'
 import CompletedJobs from './pages/provider/CompletedJobs'
 import ActiveJobs from './pages/provider/ActiveJobs'
 import OrgPanel from './pages/provider/OrgPanel'
+import ProviderOrgStatus from './pages/provider/ProviderOrgStatus'
 import AdminPanel from './pages/admin/AdminPanel'
 import ProtectedRoute from './components/ProtectedRoute'
 import PublicRoute from './components/PublicRoute'
@@ -129,6 +130,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['ProviderAdmin']}>
             <OrgPanel />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/provider/org"
+        element={
+          <ProtectedRoute roles={['ProviderEmployee']}>
+            <ProviderOrgStatus />
           </ProtectedRoute>
         }
       />

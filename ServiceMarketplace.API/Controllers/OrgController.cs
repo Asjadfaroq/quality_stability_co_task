@@ -20,6 +20,23 @@ public class OrgController : BaseController
     }
 
     /// <summary>
+    /// Returns the organization the calling user belongs to (ProviderAdmin or ProviderEmployee),
+    /// or null if they haven't been added to one yet. Always 200.
+    /// </summary>
+    [HttpGet("mine")]
+    [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetMyOrgAsMember()
+    {
+        var role = CurrentUserRole;
+        if (role != UserRole.ProviderAdmin && role != UserRole.ProviderEmployee)
+            return Forbid();
+
+        var org = await _orgService.GetOrgForUserAsync(CurrentUserId);
+        return Ok(org);
+    }
+
+    /// <summary>
     /// Returns the current ProviderAdmin's organization, or null if none exists yet.
     /// Always 200 — callers distinguish "no org" by checking for a null body.
     /// </summary>

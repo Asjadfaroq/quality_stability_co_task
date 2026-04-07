@@ -77,6 +77,27 @@ export default function SignalRProvider() {
       queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
     },
 
+    // ── Org membership events (ProviderEmployee) ──
+    OrgMemberAdded: (data: { organizationId: string; organizationName: string }) => {
+      add({
+        type:  'org_added',
+        title: 'Added to Organization',
+        body:  `You've been added to "${data.organizationName}"`,
+        link:  '/provider/org',
+      })
+      queryClient.invalidateQueries({ queryKey: ['my-org-member'] })
+    },
+
+    OrgMemberRemoved: (data: { organizationId: string; organizationName: string }) => {
+      add({
+        type:  'org_removed',
+        title: 'Removed from Organization',
+        body:  `You've been removed from "${data.organizationName}"`,
+        link:  '/provider/org',
+      })
+      queryClient.invalidateQueries({ queryKey: ['my-org-member'] })
+    },
+
     // ── Both ──
     NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
       add({

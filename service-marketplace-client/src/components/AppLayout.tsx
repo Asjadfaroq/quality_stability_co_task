@@ -4,6 +4,7 @@ import {
   LayoutDashboard, MapPin, Users, Building2,
   Menu, X, LogOut, Briefcase, Bell, CheckCircle2,
   MessageSquare, Loader2, BriefcaseBusiness, Clock, Trash2,
+  UserPlus, UserMinus,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
@@ -22,6 +23,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'Active Jobs',   to: '/provider/active',    icon: <Loader2         size={16} /> },
     { label: 'Completed Jobs',to: '/provider/completed', icon: <CheckCircle2    size={16} /> },
     { label: 'Chats',         to: '/chats',              icon: <MessageSquare   size={16} /> },
+    { label: 'My Organization',to: '/provider/org',      icon: <Building2       size={16} /> },
   ],
   ProviderAdmin: [
     { label: 'Dashboard',     to: '/provider',           icon: <LayoutDashboard size={16} /> },
@@ -50,6 +52,8 @@ const NOTIF_ICON: Record<AppNotification['type'], { icon: React.ReactNode; bg: s
   job_confirmed:    { icon: <CheckCircle2      size={14} />, bg: 'rgba(16,185,129,0.1)',  color: '#10b981' },
   message:          { icon: <MessageSquare     size={14} />, bg: 'rgba(59,130,246,0.1)',  color: '#3b82f6' },
   confirm_needed:   { icon: <Clock             size={14} />, bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' },
+  org_added:        { icon: <UserPlus          size={14} />, bg: 'rgba(16,185,129,0.1)',  color: '#10b981' },
+  org_removed:      { icon: <UserMinus         size={14} />, bg: 'rgba(239,68,68,0.1)',   color: '#ef4444' },
 }
 
 function timeAgo(date: Date): string {
