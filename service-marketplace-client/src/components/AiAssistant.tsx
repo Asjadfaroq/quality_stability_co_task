@@ -42,6 +42,29 @@ const KEYFRAMES = `
   @keyframes ai-spin    { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
   @keyframes ai-msg-in  { from { opacity:0; transform:translateY(6px) scale(0.98) } to { opacity:1; transform:translateY(0) scale(1) } }
   @keyframes ai-dot     { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-4px) } }
+
+  /* Trigger pill: expands right-to-left (button is anchored right:24)
+     Cycle: 6 s — expanded 0-40 %, collapsing 40-55 %, circle 55-85 %, expanding 85-100 % */
+  @keyframes ai-pill {
+    0%,  38% { width: 178px; border-radius: 26px; }
+    54%, 83% { width: 52px;  border-radius: 50%; }
+    99%,100% { width: 178px; border-radius: 26px; }
+  }
+
+  /* Label text: fades out AND collapses to zero width before the pill shrinks,
+     so the icon is perfectly centered in the circle with no leftover space.
+     max-width drives the flex space; opacity drives visibility. */
+  @keyframes ai-label {
+    0%,  30% { opacity:1; max-width:130px; margin-left:9px; }
+    42%, 85% { opacity:0; max-width:0;     margin-left:0;   }
+    97%,100% { opacity:1; max-width:130px; margin-left:9px; }
+  }
+
+  /* Sparkles icon gentle pulse while in pill state */
+  @keyframes ai-icon-pulse {
+    0%,100% { transform: scale(1)    rotate(0deg);  }
+    50%     { transform: scale(1.18) rotate(12deg); }
+  }
 `
 
 // ── Shared input style ────────────────────────────────────────────────────────
@@ -138,22 +161,40 @@ export default function AiAssistant() {
       <button
         onClick={() => setOpen((p) => !p)}
         aria-label={open ? 'Close AI Assistant' : 'Open AI Assistant'}
-        title="AI Assistant"
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 40,
-          width: 52, height: 52, borderRadius: '50%', border: 'none',
-          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: 52, border: 'none', cursor: 'pointer', overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          paddingInline: 16,
           background: 'linear-gradient(135deg,#6366f1,#4f46e5)',
-          boxShadow: open
-            ? '0 2px 12px rgba(79,70,229,0.5)'
-            : '0 4px 24px rgba(99,102,241,0.45), 0 2px 8px rgba(0,0,0,0.12)',
           color: '#fff',
-          transition: 'box-shadow 0.2s ease, transform 0.15s ease',
+          boxShadow: open
+            ? '0 2px 14px rgba(79,70,229,0.5)'
+            : '0 4px 24px rgba(99,102,241,0.45), 0 2px 8px rgba(0,0,0,0.12)',
+          // When panel is open: freeze as a plain 52 px circle with no text
+          ...(open
+            ? { width: 52, borderRadius: '50%', animation: 'none' }
+            : { animation: 'ai-pill 6s ease-in-out infinite' }),
         }}
-        onMouseEnter={(e) => { if (!open) e.currentTarget.style.transform = 'scale(1.08)' }}
-        onMouseLeave={(e) => { if (!open) e.currentTarget.style.transform = 'scale(1)' }}
       >
-        {open ? <ChevronDown size={20} /> : <Sparkles size={20} />}
+        {/* Icon — pulses gently while the pill is visible, stops when panel is open */}
+        <span style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          animation: open ? 'none' : 'ai-icon-pulse 6s ease-in-out infinite',
+        }}>
+          {open ? <ChevronDown size={20} /> : <Sparkles size={20} />}
+        </span>
+
+        {/* Animated label — collapsed to zero-width when hidden so the icon stays centred */}
+        {!open && (
+          <span style={{
+            fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', letterSpacing: '0.01em',
+            overflow: 'hidden',
+            animation: 'ai-label 6s ease-in-out infinite',
+          }}>
+            AI Assistant
+          </span>
+        )}
       </button>
 
       {/* ── Panel ────────────────────────────────────────────────────────── */}
