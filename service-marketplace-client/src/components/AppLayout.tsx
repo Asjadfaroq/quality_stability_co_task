@@ -278,17 +278,19 @@ interface Props {
 }
 
 export default function AppLayout({ children, title }: Props) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [notifOpen, setNotifOpen]     = useState(false)
-  const notifRef  = useRef<HTMLDivElement>(null)
-  const navigate  = useNavigate()
+  const [sidebarOpen, setSidebarOpen]   = useState(false)
+  const [notifOpen, setNotifOpen]       = useState(false)
+  const [profileOpen, setProfileOpen]   = useState(false)
+  const notifRef   = useRef<HTMLDivElement>(null)
+  const profileRef = useRef<HTMLDivElement>(null)
+  const navigate   = useNavigate()
 
-  const { email } = useAuthStore()
+  const { email, role, logout } = useAuthStore()
   const { items } = useNotificationStore()
   const unreadCount = items.filter((n) => !n.read).length
   const initials    = (email ?? 'U').slice(0, 2).toUpperCase()
 
-  // Close dropdown when clicking outside
+  // Close notification dropdown when clicking outside
   useEffect(() => {
     if (!notifOpen) return
     const handler = (e: MouseEvent) => {
@@ -299,10 +301,21 @@ export default function AppLayout({ children, title }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [notifOpen])
 
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    if (!profileOpen) return
+    const handler = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node))
+        setProfileOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [profileOpen])
+
   // Toggle the notification panel — intentionally does NOT mark anything as
   // read. Read state is only updated by explicit user actions: clicking an
   // individual notification item or pressing "Mark all read".
-  const handleBellClick = () => setNotifOpen((prev) => !prev)
+  const handleBellClick = () => { setNotifOpen((prev) => !prev); setProfileOpen(false) }
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#F0F4F8' }}>
@@ -385,12 +398,60 @@ export default function AppLayout({ children, title }: Props) {
               )}
             </div>
 
-            {/* Avatar */}
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white select-none"
-              style={{ background: 'linear-gradient(135deg,#1E3A5F,#3B82F6)' }}
-            >
-              {initials}
+            {/* Avatar + profile dropdown */}
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => { setProfileOpen((p) => !p); setNotifOpen(false) }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white select-none transition-opacity hover:opacity-85"
+                style={{
+                  background: 'linear-gradient(135deg,#1E3A5F,#3B82F6)',
+                  outline: profileOpen ? '2px solid #93C5FD' : 'none',
+                  outlineOffset: 2,
+                }}
+                aria-label="Account menu"
+                aria-expanded={profileOpen}
+              >
+                {initials}
+              </button>
+
+              {profileOpen && (
+                <div
+                  className="absolute right-0 top-11 z-50 w-56 bg-white rounded-2xl shadow-2xl overflow-hidden"
+                  style={{
+                    border: '1px solid #E2E8F0',
+                    animation: 'notifSlideIn 0.18s cubic-bezier(0.16,1,0.3,1)',
+                  }}
+                >
+                  {/* User info */}
+                  <div className="px-4 py-3.5" style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold text-white shrink-0 select-none"
+                        style={{ background: 'linear-gradient(135deg,#1E3A5F,#3B82F6)' }}
+                      >
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-900 truncate leading-tight">
+                          {email}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{role}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Logout */}
+                  <div className="p-1.5">
+                    <button
+                      onClick={() => { logout(); navigate('/login', { replace: true }) }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut size={14} />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
