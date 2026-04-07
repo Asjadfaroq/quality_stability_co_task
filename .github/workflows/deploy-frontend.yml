@@ -39,8 +39,6 @@ jobs:
       - name: Build
         working-directory: service-marketplace-client
         run: npm run build
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
       # ── 5. Deploy to Azure Static Web Apps ───────────────────────────────────
       # SETUP: Azure Portal → your Static Web App → "Manage deployment token"
