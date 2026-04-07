@@ -1,20 +1,11 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, MapPin, CalendarDays, AlertCircle, RefreshCw } from 'lucide-react'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, EmptyState, SkeletonCard } from '../../components/ui'
-import { useSignalR } from '../../hooks/useSignalR'
 import type { ServiceRequest } from '../../types'
 
 export default function CompletedJobs() {
-  const queryClient = useQueryClient()
-
-  // Refresh automatically when a customer confirms a job complete
-  useSignalR({
-    RequestConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
-    },
-  })
 
   const { data: completed = [], isLoading, isError, refetch } = useQuery<ServiceRequest[]>({
     queryKey: ['provider-completed'],

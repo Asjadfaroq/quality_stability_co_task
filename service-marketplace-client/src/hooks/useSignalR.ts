@@ -30,7 +30,11 @@ export function useSignalR(handlers: EventHandlers) {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(HUB_URL, { accessTokenFactory: () => token })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-      .configureLogging(signalR.LogLevel.Warning)
+      // Suppress SignalR's internal logger entirely — our lifecycle callbacks
+      // (onreconnecting, onreconnected, onclose) handle all relevant events.
+      // Without this, every intentional stop() during navigation or StrictMode
+      // teardown prints a loud "Failed to start the connection" error.
+      .configureLogging(signalR.LogLevel.None)
       .build()
 
     // Register a stable wrapper per event — the wrapper always reads the
@@ -42,13 +46,17 @@ export function useSignalR(handlers: EventHandlers) {
       })
     })
 
+    let cancelled = false
+
     connection
       .start()
       .then(() => {
-        console.debug('[SignalR] Connected to', HUB_URL)
+        if (!cancelled) console.debug('[SignalR] Connected to', HUB_URL)
       })
       .catch((err) => {
-        console.error('[SignalR] Connection failed:', err)
+        // When React StrictMode tears down the effect during negotiation,
+        // stop() throws an AbortError — that's expected, not a real failure.
+        if (!cancelled) console.error('[SignalR] Connection failed:', err)
       })
 
     connectionRef.current = connection
@@ -59,9 +67,10 @@ export function useSignalR(handlers: EventHandlers) {
     connection.onreconnected((id) =>
       console.debug('[SignalR] Reconnected, connectionId:', id))
     connection.onclose((err) =>
-      err && console.error('[SignalR] Connection closed with error:', err))
+      err && !cancelled && console.error('[SignalR] Connection closed with error:', err))
 
     return () => {
+      cancelled = true
       connection.stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

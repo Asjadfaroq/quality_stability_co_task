@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { MessageSquare, Clock, CheckCircle2, Loader2, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react'
 import api from '../api/axios'
 import AppLayout from '../components/AppLayout'
 import ChatPanel from '../components/ChatPanel'
 import { EmptyState, SkeletonCard } from '../components/ui'
-import { useSignalR } from '../hooks/useSignalR'
 import { useAuthStore } from '../store/authStore'
 
 interface Conversation {
@@ -38,19 +37,8 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function Chats() {
-  const queryClient = useQueryClient()
   const { email: myEmail } = useAuthStore()
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
-
-  // Refresh conversation list when a new message arrives
-  useSignalR({
-    NewMessageNotification: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
-    },
-    RequestConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
-    },
-  })
 
   const { data: conversations = [], isLoading, isError, refetch } = useQuery<Conversation[]>({
     queryKey: ['conversations'],

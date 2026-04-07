@@ -1,13 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard, MapPin, Users, Building2,
   Menu, X, LogOut, Briefcase, Bell, CheckCircle2,
   MessageSquare, Loader2, BriefcaseBusiness, Clock, Trash2,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { useSignalR } from '../hooks/useSignalR'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
 
 interface NavItem { label: string; to: string; icon: React.ReactNode }
@@ -129,9 +127,25 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 // ── Notification panel ────────────────────────────────────────────────────────
 
-function NotificationPanel({ onClose }: { onClose: () => void }) {
-  const { items, markAllRead, clear } = useNotificationStore()
+interface NotificationPanelProps {
+  onClose:   () => void
+  onNavigate: (path: string) => void
+}
+
+function NotificationPanel({ onClose, onNavigate }: NotificationPanelProps) {
+  const { items, markRead, markAllRead, clear } = useNotificationStore()
   const unread = items.filter((n) => !n.read).length
+
+  const handleItemClick = (n: AppNotification) => {
+    // Mark this specific notification as read on explicit interaction.
+    // The markRead action also broadcasts the change to all other open tabs
+    // via BroadcastChannel so their unread counts stay accurate.
+    if (!n.read) markRead(n.id)
+    if (n.link) {
+      onNavigate(n.link)
+      onClose()
+    }
+  }
 
   return (
     <div
@@ -198,32 +212,38 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
             {items.map((n) => {
               const meta = NOTIF_ICON[n.type]
               return (
-                <li
-                  key={n.id}
-                  className="flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50/80"
-                  style={{ background: n.read ? 'transparent' : 'rgba(99,102,241,0.025)' }}
-                >
-                  {/* Type icon */}
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ background: meta.bg, color: meta.color }}>
-                    {meta.icon}
-                  </div>
-
-                  {/* Content */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-xs font-semibold leading-tight ${n.read ? 'text-slate-600' : 'text-slate-900'}`}>
-                        {n.title}
-                      </p>
-                      <span className="text-[10px] text-slate-400 shrink-0 mt-0.5">{timeAgo(n.at)}</span>
+                <li key={n.id}>
+                  {/* Each notification is a button so keyboard users can interact.
+                      Clicking marks it as read (explicit user action) and navigates
+                      to the relevant section if a link is provided. */}
+                  <button
+                    type="button"
+                    onClick={() => handleItemClick(n)}
+                    className="w-full flex items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-slate-50/80"
+                    style={{ background: n.read ? 'transparent' : 'rgba(99,102,241,0.025)' }}
+                  >
+                    {/* Type icon */}
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                      style={{ background: meta.bg, color: meta.color }}>
+                      {meta.icon}
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{n.body}</p>
-                  </div>
 
-                  {/* Unread dot */}
-                  {!n.read && (
-                    <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0" style={{ background: '#6366f1' }} />
-                  )}
+                    {/* Content */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`text-xs font-semibold leading-tight ${n.read ? 'text-slate-600' : 'text-slate-900'}`}>
+                          {n.title}
+                        </p>
+                        <span className="text-[10px] text-slate-400 shrink-0 mt-0.5">{timeAgo(n.at)}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{n.body}</p>
+                    </div>
+
+                    {/* Unread dot */}
+                    {!n.read && (
+                      <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0" style={{ background: '#6366f1' }} />
+                    )}
+                  </button>
                 </li>
               )
             })}
@@ -255,70 +275,12 @@ export default function AppLayout({ children, title }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen]     = useState(false)
   const notifRef  = useRef<HTMLDivElement>(null)
+  const navigate  = useNavigate()
 
-  const { email, role } = useAuthStore()
-  const queryClient     = useQueryClient()
-  const { add, markAllRead, items } = useNotificationStore()
+  const { email } = useAuthStore()
+  const { items } = useNotificationStore()
   const unreadCount = items.filter((n) => !n.read).length
   const initials    = (email ?? 'U').slice(0, 2).toUpperCase()
-
-  const isProvider = role === 'ProviderEmployee' || role === 'ProviderAdmin'
-  const isCustomer = role === 'Customer'
-
-  // ── SignalR: push notifications + invalidate queries ──────────────────────
-  useSignalR({
-    // ── Provider events ──
-    NewRequestAvailable: (data: { requestId: string; title: string; category: string }) => {
-      if (!isProvider) return
-      add({
-        type:  'new_job',
-        title: 'New Job Available',
-        body:  `"${data.title}" · ${data.category}`,
-        link:  '/provider/jobs',
-      })
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-    },
-
-    RequestTaken: () => {
-      if (!isProvider) return
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-    },
-
-    RequestConfirmed: (data: { requestId: string; title: string }) => {
-      if (!isProvider) return
-      add({
-        type:  'job_confirmed',
-        title: 'Job Confirmed Complete',
-        body:  `"${data.title}" was confirmed by the customer`,
-        link:  '/provider/completed',
-      })
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-      queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
-    },
-
-    // ── Customer events ──
-    RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
-      if (!isCustomer) return
-      add({
-        type:  'confirm_needed',
-        title: 'Awaiting Your Confirmation',
-        body:  `"${data.title}" has been marked complete by the provider`,
-        link:  '/customer/requests',
-      })
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-    },
-
-    // ── Both ──
-    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
-      add({
-        type:  'message',
-        title: 'New Message',
-        body:  `${data.senderEmail} sent you a message`,
-        link:  '/chats',
-      })
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
-    },
-  })
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -331,13 +293,10 @@ export default function AppLayout({ children, title }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [notifOpen])
 
-  // Mark all read when opening the panel
-  const handleBellClick = () => {
-    setNotifOpen((prev) => {
-      if (!prev) markAllRead()   // mark read as soon as panel opens
-      return !prev
-    })
-  }
+  // Toggle the notification panel — intentionally does NOT mark anything as
+  // read. Read state is only updated by explicit user actions: clicking an
+  // individual notification item or pressing "Mark all read".
+  const handleBellClick = () => setNotifOpen((prev) => !prev)
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#F0F4F8' }}>
@@ -413,7 +372,10 @@ export default function AppLayout({ children, title }: Props) {
               </button>
 
               {notifOpen && (
-                <NotificationPanel onClose={() => setNotifOpen(false)} />
+                <NotificationPanel
+                  onClose={() => setNotifOpen(false)}
+                  onNavigate={(path) => navigate(path)}
+                />
               )}
             </div>
 

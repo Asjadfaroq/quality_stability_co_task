@@ -10,7 +10,7 @@ import {
   Clock, CheckCircle2, Loader2, X,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
-import { useSignalR } from '../../hooks/useSignalR'
+import { useUnreadStore } from '../../store/unreadStore'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
@@ -259,9 +259,8 @@ export default function CustomerRequests() {
   const { email }   = useAuthStore()
   const [showModal, setShowModal]     = useState(false)
   const [activeChat, setActiveChat]   = useState<{ id: string; title: string } | null>(null)
-  const [unread, setUnread]           = useState<Record<string, number>>({})
-  const activeChatRef = useRef<string | null>(null)
-  activeChatRef.current = activeChat?.id ?? null
+  const unreadCounts = useUnreadStore((s) => s.counts)
+  const clearUnread  = useUnreadStore((s) => s.clear)
 
   const confirmMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/requests/${id}/confirm`),
@@ -272,17 +271,6 @@ export default function CustomerRequests() {
     onError: (err: unknown) => {
       if (isRateLimited(err)) return
       toast.error('Failed to confirm completion.')
-    },
-  })
-
-  // Only manage local unread badge state — query invalidation and notifications
-  // are handled centrally in AppLayout.
-  useSignalR({
-    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
-      const rid = String(data.requestId)
-      if (activeChatRef.current === rid) return
-      setUnread((p) => ({ ...p, [rid]: (p[rid] ?? 0) + 1 }))
-      toast(`${data.senderEmail} sent you a message`, { icon: '💬', duration: 4000 })
     },
   })
 
@@ -344,11 +332,11 @@ export default function CustomerRequests() {
                     <div className="flex items-center gap-2 shrink-0">
                       {(req.status === 'Accepted' || req.status === 'PendingConfirmation') && (
                         <Button variant="ghost" size="sm" icon={<MessageSquare size={13} />} className="relative"
-                          onClick={() => { setActiveChat({ id: req.id, title: req.title }); setUnread((p) => ({ ...p, [req.id]: 0 })) }}>
+                          onClick={() => { setActiveChat({ id: req.id, title: req.title }); clearUnread(req.id) }}>
                           Chat
-                          {(unread[req.id] ?? 0) > 0 && (
+                          {(unreadCounts[req.id] ?? 0) > 0 && (
                             <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                              {unread[req.id] > 9 ? '9+' : unread[req.id]}
+                              {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
                             </span>
                           )}
                         </Button>

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Loader2, MessageSquare, AlertCircle } from 'lucide-react'
@@ -7,6 +7,7 @@ import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import { Button, Badge, Card, EmptyState, SkeletonCard } from '../../components/ui'
+import { useUnreadStore } from '../../store/unreadStore'
 import type { ServiceRequest } from '../../types'
 
 function statusBadge(status: ServiceRequest['status']) {
@@ -23,19 +24,8 @@ function statusBadge(status: ServiceRequest['status']) {
 export default function ActiveJobs() {
   const queryClient = useQueryClient()
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
-  const [unread, setUnread]         = useState<Record<string, number>>({})
-  const activeChatRef = useRef<string | null>(null)
-  activeChatRef.current = activeChat?.id ?? null
-
-  // Only handle unread badge state here — query invalidation and notifications
-  // are managed centrally in AppLayout via its single SignalR connection.
-  useSignalR({
-    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
-      const rid = String(data.requestId)
-      if (activeChatRef.current === rid) return
-      setUnread((p) => ({ ...p, [rid]: (p[rid] ?? 0) + 1 }))
-    },
-  })
+  const unreadCounts = useUnreadStore((s) => s.counts)
+  const clearUnread  = useUnreadStore((s) => s.clear)
 
   const { data: allRequests = [], isLoading } = useQuery<ServiceRequest[]>({
     queryKey: ['requests'],
@@ -134,13 +124,13 @@ export default function ActiveJobs() {
                           className="relative"
                           onClick={() => {
                             setActiveChat({ id: req.id, title: req.title })
-                            setUnread((p) => ({ ...p, [req.id]: 0 }))
+                            clearUnread(req.id)
                           }}
                         >
                           Chat
-                          {(unread[req.id] ?? 0) > 0 && (
+                          {(unreadCounts[req.id] ?? 0) > 0 && (
                             <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                              {unread[req.id] > 9 ? '9+' : unread[req.id]}
+                              {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
                             </span>
                           )}
                         </Button>

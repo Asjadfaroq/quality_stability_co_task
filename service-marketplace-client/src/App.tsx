@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './store/authStore'
+import SignalRProvider from './components/SignalRProvider'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import CustomerDashboard from './pages/customer/CustomerDashboard'
@@ -46,7 +47,11 @@ function AppRoutes() {
   }
 
   return (
-    <Routes>
+    <>
+      {/* Single SignalR connection for the entire session — must not live inside
+          AppLayout, which remounts on every navigation. */}
+      <SignalRProvider />
+      <Routes>
       <Route
         path="/login"
         element={
@@ -149,6 +154,7 @@ function AppRoutes() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </>
   )
 }
 
