@@ -89,6 +89,15 @@ builder.Services.AddAuthentication(options =>
 // 4. Authorization
 builder.Services.AddAuthorization();
 
+// 4a. Response compression — shrinks JSON payloads over HTTPS (gzip + brotli)
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
+
+// 4b. Health check — used by Azure App Service health probe and uptime monitoring
+builder.Services.AddHealthChecks();
+
 // 5. Controllers + FluentValidation
 builder.Services.AddControllers()
     .AddJsonOptions(o =>
@@ -137,10 +146,15 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // 7. CORS — must allow credentials for SignalR WebSocket
+var allowedOrigins = builder.Configuration
+    .GetSection("AllowedOrigins")
+    .Get<string[]>()
+    ?? ["http://localhost:5173", "http://localhost:3000"];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials());
@@ -423,6 +437,9 @@ app.Use(async (context, next) =>
 // Exception middleware — must be first
 app.UseExceptionMiddleware();
 
+// Response compression — before anything that writes a response body
+app.UseResponseCompression();
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -439,5 +456,8 @@ app.UseRateLimiter();
 app.MapControllers();
 
 app.MapHub<NotificationHub>("/hubs/notifications");
+
+// Health check endpoint — Azure App Service polls this to confirm the app is alive
+app.MapHealthChecks("/health");
 
 app.Run();
