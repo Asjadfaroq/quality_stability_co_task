@@ -1,0 +1,258 @@
+import { useState, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import {
+  Briefcase, MapPin, MessageSquare,
+  Search, X, SlidersHorizontal, Loader2,
+} from 'lucide-react'
+import { useAuthStore } from '../../store/authStore'
+import { useSignalR } from '../../hooks/useSignalR'
+import { isRateLimited } from '../../api/axios'
+import api from '../../api/axios'
+import AppLayout from '../../components/AppLayout'
+import ChatPanel from '../../components/ChatPanel'
+import {
+  Button, Badge, Card, CardHeader,
+  Input, EmptyState, SkeletonCard,
+} from '../../components/ui'
+import type { ServiceRequest } from '../../types'
+
+function statusBadge(status: ServiceRequest['status']) {
+  const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
+    Pending:            { label: 'Pending',    variant: 'pending' },
+    Accepted:           { label: 'Accepted',   variant: 'accepted' },
+    PendingConfirmation:{ label: 'Confirming', variant: 'pendingconfirmation' },
+    Completed:          { label: 'Completed',  variant: 'completed' },
+  }
+  const { label, variant } = map[status]
+  return <Badge label={label} variant={variant as any} />
+}
+
+export default function ProviderJobs() {
+  const queryClient = useQueryClient()
+  const { email, role } = useAuthStore()
+  const [activeChat, setActiveChat]       = useState<{ id: string; title: string } | null>(null)
+  const [unread, setUnread]               = useState<Record<string, number>>({})
+  const [showNearby, setShowNearby]       = useState(false)
+  const [lat, setLat]                     = useState('')
+  const [lng, setLng]                     = useState('')
+  const [radius, setRadius]               = useState(10)
+  const [nearbyResults, setNearbyResults] = useState<ServiceRequest[] | null>(null)
+  const [searching, setSearching]         = useState(false)
+  const activeChatRef = useRef<string | null>(null)
+  activeChatRef.current = activeChat?.id ?? null
+
+  useSignalR({
+    RequestConfirmed: (data: { requestId: string; title: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast.success(`"${data.title}" confirmed complete!`)
+    },
+    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
+      const rid = String(data.requestId)
+      if (activeChatRef.current === rid) return
+      setUnread((p) => ({ ...p, [rid]: (p[rid] ?? 0) + 1 }))
+      toast(`${data.senderEmail} sent you a message`, { icon: '💬', duration: 4000 })
+    },
+  })
+
+  const { data: allRequests = [], isLoading } = useQuery<ServiceRequest[]>({
+    queryKey: ['requests'],
+    queryFn: () => api.get('/requests').then((r) => r.data),
+  })
+
+  const acceptMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/requests/${id}/accept`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast.success('Request accepted!')
+    },
+    onError: (err: any) => {
+      if (isRateLimited(err)) return
+      toast.error(err?.response?.status === 409
+        ? 'This request was already accepted by someone else.'
+        : 'Failed to accept request.')
+    },
+  })
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/requests/${id}/complete`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast.success('Marked as complete — awaiting customer confirmation.')
+    },
+    onError: (err: unknown) => {
+      if (isRateLimited(err)) return
+      toast.error('Failed to mark as complete.')
+    },
+  })
+
+  const handleNearbySearch = async () => {
+    const latNum = parseFloat(lat)
+    const lngNum = parseFloat(lng)
+    if (!lat || !lng || isNaN(latNum) || isNaN(lngNum))
+      return toast.error('Enter valid coordinates.')
+    if (latNum < -90  || latNum > 90)  return toast.error('Latitude must be between -90 and 90.')
+    if (lngNum < -180 || lngNum > 180) return toast.error('Longitude must be between -180 and 180.')
+    setSearching(true)
+    try {
+      const res = await api.get('/requests/nearby', { params: { lat: latNum, lng: lngNum, radiusKm: radius } })
+      setNearbyResults(res.data)
+      if (res.data.length === 0) toast('No requests found nearby.', { icon: 'ℹ️' })
+    } catch (err) {
+      if (!isRateLimited(err)) toast.error('Failed to fetch nearby requests.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const pending        = allRequests.filter((r) => r.status === 'Pending')
+  const active         = allRequests.filter((r) => r.status === 'Accepted' || r.status === 'PendingConfirmation')
+  const displayPending = nearbyResults ?? pending
+
+  return (
+    <>
+      <AppLayout title="Jobs">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Jobs</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {email?.split('@')[0]} · {role}
+            </p>
+          </div>
+          <Button
+            variant={showNearby ? 'secondary' : 'primary'}
+            icon={showNearby ? <X size={15} /> : <SlidersHorizontal size={15} />}
+            onClick={() => { setShowNearby(!showNearby); setNearbyResults(null) }}
+          >
+            {showNearby ? 'Hide filter' : 'Find Nearby'}
+          </Button>
+        </div>
+
+        {/* Nearby filter */}
+        {showNearby && (
+          <Card className="mb-6">
+            <CardHeader
+              title="Find Nearby Requests"
+              description="Search for pending jobs within a radius of your location"
+            />
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <Input label="Latitude"  type="number" step="any" placeholder="e.g. 51.5074"  value={lat} onChange={(e) => setLat(e.target.value)} />
+              <Input label="Longitude" type="number" step="any" placeholder="e.g. -0.1278" value={lng} onChange={(e) => setLng(e.target.value)} />
+            </div>
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-slate-700">Search radius</label>
+                <span className="text-sm font-semibold text-indigo-600">{radius} km</span>
+              </div>
+              <input type="range" min={1} max={100} value={radius} onChange={(e) => setRadius(Number(e.target.value))}
+                className="w-full h-1.5 bg-slate-200 rounded-full appearance-none accent-indigo-600 cursor-pointer" />
+              <div className="flex justify-between text-xs text-slate-400 mt-1"><span>1 km</span><span>100 km</span></div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button icon={<Search size={14} />} loading={searching} onClick={handleNearbySearch}>Search</Button>
+              {nearbyResults && <Button variant="ghost" icon={<X size={14} />} onClick={() => setNearbyResults(null)}>Clear</Button>}
+            </div>
+          </Card>
+        )}
+
+        {/* Available jobs */}
+        <Card padding={false} className="mb-6">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">
+                {nearbyResults ? `Nearby Results (${nearbyResults.length})` : 'Available Jobs'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">Pending requests you can accept</p>
+            </div>
+            {nearbyResults && <Badge label={`${nearbyResults.length} found`} variant="accepted" />}
+          </div>
+
+          {isLoading ? (
+            <div className="p-4 space-y-3">{[1,2].map((i) => <SkeletonCard key={i} />)}</div>
+          ) : displayPending.length === 0 ? (
+            <EmptyState
+              icon={<Briefcase size={22} />}
+              title={nearbyResults ? 'No nearby requests found' : 'No available jobs'}
+              description={nearbyResults ? 'Try increasing the search radius.' : 'Check back soon for new service requests.'}
+            />
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {displayPending.map((req) => (
+                <li key={req.id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="text-sm font-semibold text-slate-900">{req.title}</p>
+                        {statusBadge(req.status)}
+                      </div>
+                      <p className="text-xs text-slate-500 mb-1.5">
+                        {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                      <p className="text-xs text-slate-400 line-clamp-2">{req.description}</p>
+                    </div>
+                    <Button size="sm" loading={acceptMutation.isPending} onClick={() => acceptMutation.mutate(req.id)} className="shrink-0">
+                      Accept
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Active jobs */}
+        <Card padding={false}>
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-base font-semibold text-slate-900">My Active Jobs</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Jobs you've accepted and are working on</p>
+          </div>
+
+          {active.length === 0 ? (
+            <EmptyState icon={<MapPin size={22} />} title="No active jobs" description="Accept a pending request above to get started." />
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {active.map((req) => (
+                <li key={req.id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="text-sm font-semibold text-slate-900">{req.title}</p>
+                        {statusBadge(req.status)}
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button variant="ghost" size="sm" icon={<MessageSquare size={13} />} className="relative"
+                        onClick={() => { setActiveChat({ id: req.id, title: req.title }); setUnread((p) => ({ ...p, [req.id]: 0 })) }}>
+                        Chat
+                        {(unread[req.id] ?? 0) > 0 && (
+                          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                            {unread[req.id] > 9 ? '9+' : unread[req.id]}
+                          </span>
+                        )}
+                      </Button>
+                      {req.status === 'Accepted' && (
+                        <Button variant="success" size="sm" loading={completeMutation.isPending} onClick={() => completeMutation.mutate(req.id)}>
+                          Mark Complete
+                        </Button>
+                      )}
+                      {req.status === 'PendingConfirmation' && (
+                        <span className="text-xs text-orange-600 font-medium italic">Awaiting customer...</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </AppLayout>
+
+      {activeChat && (
+        <ChatPanel requestId={activeChat.id} requestTitle={activeChat.title} onClose={() => setActiveChat(null)} />
+      )}
+    </>
+  )
+}

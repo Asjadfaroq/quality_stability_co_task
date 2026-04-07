@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Users, ChevronDown, ChevronUp, ShieldCheck, CreditCard } from 'lucide-react'
+
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Card, CardHeader, Badge, Button, StatCard, EmptyState, SkeletonCard } from '../../components/ui'
+import { Card, CardHeader, Badge, Button, EmptyState, SkeletonCard } from '../../components/ui'
 
 const PERMISSIONS = [
   { key: 'request.create',   label: 'Create Requests' },
@@ -58,24 +59,12 @@ export default function AdminPanel() {
   const togglePerm = (user: UserDto, permission: string) =>
     permMutation.mutate({ id: user.id, permission, granted: !user.permissions.includes(permission) })
 
-  const totalPaid      = users.filter((u) => u.subTier === 'Paid').length
-  const totalProviders = users.filter((u) => u.role.startsWith('Provider')).length
-  const totalCustomers = users.filter((u) => u.role === 'Customer').length
-
   return (
     <AppLayout title="User Management">
       {/* Page header */}
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-900">User Management</h2>
         <p className="text-sm text-gray-500 mt-0.5">Manage subscriptions and permissions for all platform users</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Users"  value={users.length}   icon={<Users size={18} />}       color="blue" />
-        <StatCard label="Paid Tier"    value={totalPaid}      icon={<CreditCard size={18} />}  color="emerald" />
-        <StatCard label="Providers"    value={totalProviders} icon={<ShieldCheck size={18} />} color="purple" />
-        <StatCard label="Customers"    value={totalCustomers} icon={<Users size={18} />}       color="amber" />
       </div>
 
       <Card padding={false}>

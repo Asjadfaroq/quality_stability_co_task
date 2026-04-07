@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, MapPin, CalendarDays, AlertCircle, RefreshCw } from 'lucide-react'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Card, StatCard, EmptyState, SkeletonCard } from '../../components/ui'
+import { Card, EmptyState, SkeletonCard } from '../../components/ui'
 import { useSignalR } from '../../hooks/useSignalR'
 import type { ServiceRequest } from '../../types'
 
@@ -29,16 +29,6 @@ export default function CompletedJobs() {
         <p className="text-sm text-slate-500 mt-0.5">
           Full history of every job you have successfully completed
         </p>
-      </div>
-
-      {/* Stat */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label="Total Completed"
-          value={isLoading ? '—' : completed.length}
-          icon={<CheckCircle2 size={18} />}
-          color="emerald"
-        />
       </div>
 
       {/* Jobs list */}

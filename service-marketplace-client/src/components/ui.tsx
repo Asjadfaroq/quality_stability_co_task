@@ -233,32 +233,41 @@ export function CardHeader({ title, description, actions }: CardHeaderProps) {
   )
 }
 
-// ── Stat card ────────────────────────────────────────────────────────────────
+// ── Stats bar (compact horizontal strip) ─────────────────────────────────────
 
-interface StatCardProps {
+const statBarColors = {
+  indigo:  { bg: 'bg-indigo-50',  icon: 'text-indigo-500',  val: 'text-indigo-700'  },
+  emerald: { bg: 'bg-emerald-50', icon: 'text-emerald-500', val: 'text-emerald-700' },
+  amber:   { bg: 'bg-amber-50',   icon: 'text-amber-500',   val: 'text-amber-700'   },
+  violet:  { bg: 'bg-violet-50',  icon: 'text-violet-500',  val: 'text-violet-700'  },
+  sky:     { bg: 'bg-sky-50',     icon: 'text-sky-500',     val: 'text-sky-700'     },
+  slate:   { bg: 'bg-slate-100',  icon: 'text-slate-500',   val: 'text-slate-700'   },
+}
+
+export interface StatItem {
   label: string
   value: number | string
   icon: React.ReactNode
-  color?: 'blue' | 'emerald' | 'amber' | 'purple'
+  color?: keyof typeof statBarColors
 }
 
-const statColors = {
-  blue:    'bg-indigo-50 text-indigo-600',
-  emerald: 'bg-emerald-50 text-emerald-600',
-  amber:   'bg-amber-50 text-amber-600',
-  purple:  'bg-violet-50 text-violet-600',
-}
-
-export function StatCard({ label, value, icon, color = 'blue' }: StatCardProps) {
+export function StatsBar({ items }: { items: StatItem[] }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-slate-500">{label}</p>
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${statColors[color]}`}>
-          {icon}
-        </div>
-      </div>
-      <p className="text-2xl font-bold text-slate-900">{value}</p>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex divide-x divide-slate-100 overflow-hidden">
+      {items.map((item, i) => {
+        const c = statBarColors[item.color ?? 'indigo']
+        return (
+          <div key={i} className="flex items-center gap-3 px-5 py-4 flex-1 min-w-0">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${c.bg}`}>
+              <span className={c.icon}>{item.icon}</span>
+            </div>
+            <div className="min-w-0">
+              <p className={`text-[22px] font-bold leading-none ${c.val}`}>{item.value}</p>
+              <p className="text-[11px] text-slate-500 mt-1 truncate">{item.label}</p>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
