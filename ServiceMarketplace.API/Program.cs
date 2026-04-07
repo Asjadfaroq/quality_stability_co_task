@@ -16,6 +16,7 @@ using RedisRateLimiting;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Middleware;
+using ServiceMarketplace.API.Models.Config;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Resilience;
@@ -396,6 +397,10 @@ builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddSingleton<ICacheService, CacheService>();
 
+// Stripe
+builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
+builder.Services.AddScoped<IStripeService, StripeService>();
+
 var app = builder.Build();
 
 // Auto-apply migrations on startup (used in Docker)
@@ -404,6 +409,16 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 }
+
+// Enable request body buffering for the Stripe webhook endpoint.
+// Stripe signature verification requires the raw unmodified body, which ASP.NET Core
+// normally consumes before it reaches the controller. EnableBuffering() allows re-reading.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/billing/webhook"))
+        context.Request.EnableBuffering();
+    await next();
+});
 
 // Exception middleware — must be first
 app.UseExceptionMiddleware();

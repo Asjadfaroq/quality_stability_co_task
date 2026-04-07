@@ -16,6 +16,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<UserStripeInfo> UserStripeInfos => Set<UserStripeInfo>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -104,6 +105,20 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .WithMany(p => p.UserPermissions)
              .HasForeignKey(up => up.PermissionId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<UserStripeInfo>(e =>
+        {
+            e.HasKey(s => s.UserId);
+            e.HasOne(s => s.User)
+             .WithOne()
+             .HasForeignKey<UserStripeInfo>(s => s.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => s.StripeCustomerId).IsUnique();
+            e.HasIndex(s => s.StripeSubscriptionId);
+            e.Property(s => s.StripeCustomerId).IsRequired().HasMaxLength(100);
+            e.Property(s => s.StripeSubscriptionId).HasMaxLength(100);
+            e.Property(s => s.SubscriptionStatus).HasMaxLength(50);
         });
 
         SeedPermissions(builder);

@@ -8,6 +8,8 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import CustomerDashboard from './pages/customer/CustomerDashboard'
 import CustomerRequests from './pages/customer/CustomerRequests'
+import SubscriptionPage from './pages/customer/SubscriptionPage'
+import SubscriptionSuccess from './pages/customer/SubscriptionSuccess'
 import Chats from './pages/Chats'
 import ProviderDashboard from './pages/provider/ProviderDashboard'
 import ProviderJobs from './pages/provider/ProviderJobs'
@@ -85,6 +87,24 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['Customer']}>
             <CustomerRequests />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/customer/subscription"
+        element={
+          <ProtectedRoute roles={['Customer']}>
+            <SubscriptionPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/customer/subscription/success"
+        element={
+          <ProtectedRoute roles={['Customer']}>
+            <SubscriptionSuccess />
           </ProtectedRoute>
         }
       />

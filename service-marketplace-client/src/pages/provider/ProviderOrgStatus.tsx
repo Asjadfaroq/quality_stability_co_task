@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Building2, Users, CalendarDays, ShieldOff } from 'lucide-react'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Card, CardHeader, Badge, SkeletonCard } from '../../components/ui'
+import { Card, Badge, SkeletonCard } from '../../components/ui'
 
 interface Org {
   id: string

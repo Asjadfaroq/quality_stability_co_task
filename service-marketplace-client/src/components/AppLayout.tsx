@@ -4,7 +4,7 @@ import {
   LayoutDashboard, MapPin, Users, Building2,
   Menu, X, LogOut, Briefcase, Bell, CheckCircle2,
   MessageSquare, Loader2, BriefcaseBusiness, Clock, Trash2,
-  UserPlus, UserMinus,
+  UserPlus, UserMinus, CreditCard,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
@@ -13,9 +13,10 @@ interface NavItem { label: string; to: string; icon: React.ReactNode }
 
 const NAV_ITEMS: Record<string, NavItem[]> = {
   Customer: [
-    { label: 'Dashboard',    to: '/customer',           icon: <LayoutDashboard size={16} /> },
-    { label: 'My Requests',  to: '/customer/requests',  icon: <Briefcase       size={16} /> },
-    { label: 'Chats',        to: '/chats',              icon: <MessageSquare   size={16} /> },
+    { label: 'Dashboard',    to: '/customer',                  icon: <LayoutDashboard size={16} /> },
+    { label: 'My Requests',  to: '/customer/requests',         icon: <Briefcase       size={16} /> },
+    { label: 'Chats',        to: '/chats',                     icon: <MessageSquare   size={16} /> },
+    { label: 'Subscription', to: '/customer/subscription',     icon: <CreditCard      size={16} /> },
   ],
   ProviderEmployee: [
     { label: 'Dashboard',     to: '/provider',           icon: <LayoutDashboard size={16} /> },

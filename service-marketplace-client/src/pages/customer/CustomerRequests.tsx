@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Plus, Sparkles, MessageSquare, ClipboardList,
-  Clock, CheckCircle2, Loader2, X,
+  Clock, Loader2, X,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useUnreadStore } from '../../store/unreadStore'
@@ -25,8 +25,8 @@ const schema = z.object({
   title:       z.string().min(1, 'Title is required').max(200),
   description: z.string().min(10, 'Min 10 characters').max(2000),
   category:    z.string().min(1, 'Select a category'),
-  latitude:    z.number({ invalid_type_error: 'Required' }).min(-90).max(90),
-  longitude:   z.number({ invalid_type_error: 'Required' }).min(-180).max(180),
+  latitude:    z.number({ error: 'Required' }).min(-90).max(90),
+  longitude:   z.number({ error: 'Required' }).min(-180).max(180),
 })
 
 type FormData = z.infer<typeof schema>
@@ -59,9 +59,7 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
   const [enhancing, setEnhancing]       = useState(false)
   const [freeLimitHit, setFreeLimitHit] = useState(false)
   const [visible, setVisible]           = useState(false)
-  const firstInputRef = useRef<HTMLInputElement>(null)
-
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, reset, setFocus, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { category: '' },
   })
@@ -73,7 +71,7 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
     if (open) {
       setVisible(true)
       // slight delay so the entering animation plays after mount
-      setTimeout(() => firstInputRef.current?.focus(), 120)
+      setTimeout(() => setFocus('title'), 120)
     } else {
       // let the leave animation finish before unmounting
       const t = setTimeout(() => setVisible(false), 250)
@@ -185,7 +183,6 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
 
             <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
               <Input
-                ref={firstInputRef}
                 label="Title"
                 placeholder="e.g. Fix leaking kitchen pipe"
                 error={errors.title?.message}
