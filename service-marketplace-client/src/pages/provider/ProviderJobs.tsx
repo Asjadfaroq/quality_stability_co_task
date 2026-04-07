@@ -19,6 +19,15 @@ export default function ProviderJobs() {
   const [searching, setSearching]         = useState(false)
 
   useSignalR({
+    // A customer just posted a new job — refresh the list and show a notification
+    NewRequestAvailable: (data: { requestId: string; title: string; category: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      toast(`New job: "${data.title}" (${data.category})`, { icon: '🔔', duration: 6000 })
+    },
+    // Another provider accepted a job — remove it from available list silently
+    RequestTaken: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
     RequestConfirmed: (data: { requestId: string; title: string }) => {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
       toast.success(`"${data.title}" confirmed complete!`)

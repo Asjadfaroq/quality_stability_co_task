@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Hubs;
@@ -22,6 +23,11 @@ public class NotificationHub : Hub
         if (userId != null)
             await Groups.AddToGroupAsync(Context.ConnectionId, userId);
 
+        // All providers join a shared group so new jobs can be broadcast to all of them at once
+        var role = Context.User?.FindFirst(ClaimConstants.Role)?.Value;
+        if (role is "ProviderEmployee" or "ProviderAdmin")
+            await Groups.AddToGroupAsync(Context.ConnectionId, "providers");
+
         await base.OnConnectedAsync();
     }
 
@@ -30,6 +36,10 @@ public class NotificationHub : Hub
         var userId = Context.UserIdentifier;
         if (userId != null)
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, userId);
+
+        var role = Context.User?.FindFirst(ClaimConstants.Role)?.Value;
+        if (role is "ProviderEmployee" or "ProviderAdmin")
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, "providers");
 
         await base.OnDisconnectedAsync(exception);
     }

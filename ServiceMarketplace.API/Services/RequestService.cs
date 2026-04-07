@@ -52,6 +52,16 @@ public class RequestService : IRequestService
 
         _logger.LogInformation("Request {RequestId} created by customer {CustomerId}", request.Id, customerId);
 
+        // Notify all connected providers of the new available job in real time
+        await _hub.Clients
+            .Group("providers")
+            .SendAsync("NewRequestAvailable", new
+            {
+                requestId = request.Id,
+                title     = request.Title,
+                category  = request.Category
+            });
+
         return MapToDto(request);
     }
 
@@ -148,6 +158,11 @@ public class RequestService : IRequestService
         }
 
         _logger.LogInformation("Request {RequestId} accepted by provider {ProviderId}", requestId, providerId);
+
+        // Notify all providers so the job is removed from their available list in real time
+        await _hub.Clients
+            .Group("providers")
+            .SendAsync("RequestTaken", new { requestId = request.Id });
 
         return MapToDto(request);
     }

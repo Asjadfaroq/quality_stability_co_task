@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Briefcase, CheckCircle2, Loader2, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
+import { useSignalR } from '../../hooks/useSignalR'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Badge, StatsBar, SkeletonCard } from '../../components/ui'
@@ -20,6 +21,19 @@ function statusBadge(status: ServiceRequest['status']) {
 
 export default function ProviderDashboard() {
   const { email, role } = useAuthStore()
+  const queryClient = useQueryClient()
+
+  useSignalR({
+    NewRequestAvailable: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+    RequestTaken: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+    RequestConfirmed: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+  })
 
   const { data: allRequests = [], isLoading } = useQuery<ServiceRequest[]>({
     queryKey: ['requests'],
