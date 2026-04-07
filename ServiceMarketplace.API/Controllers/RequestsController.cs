@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.RateLimiting;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Requests;
-using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
@@ -90,15 +89,13 @@ public class RequestsController : BaseController
     /// Get all completed jobs for the calling provider. Paginated.
     /// </summary>
     [HttpGet("completed")]
+    [RequirePermission("request.complete")]
     [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetCompleted(
         [FromQuery] int page     = 1,
         [FromQuery] int pageSize = DefaultPageSize)
     {
-        if (CurrentUserRole != UserRole.ProviderEmployee && CurrentUserRole != UserRole.ProviderAdmin)
-            return Forbid();
-
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
         page     = Math.Max(1, page);
 

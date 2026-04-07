@@ -26,8 +26,6 @@ public class OrgService : IOrgService
 
     public async Task<OrgDto?> GetOrgForUserAsync(Guid userId)
     {
-        // Looks up the org any user (ProviderAdmin or ProviderEmployee) belongs to
-        // via their User.OrganizationId foreign key.
         return await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == userId && u.OrganizationId != null)
@@ -43,7 +41,7 @@ public class OrgService : IOrgService
 
     public async Task<OrgDto?> GetOrgByOwnerAsync(Guid providerAdminId)
     {
-        var org = await _db.Organizations
+        return await _db.Organizations
             .AsNoTracking()
             .Where(o => o.OwnerId == providerAdminId)
             .Select(o => new OrgDto
@@ -54,8 +52,6 @@ public class OrgService : IOrgService
                 CreatedAt = o.CreatedAt,
             })
             .FirstOrDefaultAsync();
-
-        return org;
     }
 
     public async Task<OrgDto> CreateOrgAsync(Guid providerAdminId, string name)
@@ -82,7 +78,6 @@ public class OrgService : IOrgService
 
         _db.Organizations.Add(org);
 
-        // Link the owner into their own org so they appear in the member list.
         var owner = await _db.Users.FindAsync(providerAdminId);
         owner!.OrganizationId = org.Id;
 
@@ -118,28 +113,24 @@ public class OrgService : IOrgService
         if (target.Role != UserRole.ProviderEmployee)
             throw new InvalidOperationException("Only ProviderEmployee accounts can be added as members.");
 
-        // Already a member of THIS org — idempotent, no error.
         if (target.OrganizationId == orgId)
-            return;
+            return; // already a member — idempotent
 
-        // Blocked: member of a DIFFERENT org.
         if (target.OrganizationId.HasValue)
             throw new InvalidOperationException("This user already belongs to another organization.");
 
         target.OrganizationId = orgId;
         await _db.SaveChangesAsync();
 
-        // Notify the added user in real-time.
+        var orgName = await _db.Organizations
+            .AsNoTracking()
+            .Where(o => o.Id == orgId)
+            .Select(o => o.Name)
+            .FirstOrDefaultAsync() ?? string.Empty;
+
         await _hub.Clients
             .Group(target.Id.ToString())
-            .SendAsync("OrgMemberAdded", new
-            {
-                organizationId   = orgId,
-                organizationName = (await _db.Organizations.AsNoTracking()
-                                       .Where(o => o.Id == orgId)
-                                       .Select(o => o.Name)
-                                       .FirstOrDefaultAsync()) ?? string.Empty,
-            });
+            .SendAsync("OrgMemberAdded", new { organizationId = orgId, organizationName = orgName });
     }
 
     public async Task RemoveMemberAsync(Guid providerAdminId, Guid memberId)
@@ -163,7 +154,8 @@ public class OrgService : IOrgService
             .FirstOrDefaultAsync(u => u.Id == memberId && u.OrganizationId == orgId)
             ?? throw new KeyNotFoundException("Member not found in your organization.");
 
-        var orgName = await _db.Organizations.AsNoTracking()
+        var orgName = await _db.Organizations
+            .AsNoTracking()
             .Where(o => o.Id == orgId)
             .Select(o => o.Name)
             .FirstOrDefaultAsync() ?? string.Empty;
@@ -171,14 +163,9 @@ public class OrgService : IOrgService
         member.OrganizationId = null;
         await _db.SaveChangesAsync();
 
-        // Notify the removed user in real-time.
         await _hub.Clients
             .Group(memberId.ToString())
-            .SendAsync("OrgMemberRemoved", new
-            {
-                organizationId   = orgId,
-                organizationName = orgName,
-            });
+            .SendAsync("OrgMemberRemoved", new { organizationId = orgId, organizationName = orgName });
     }
 
     public async Task<PagedResult<OrgMemberDto>> GetOrgMembersAsync(Guid providerAdminId, int page, int pageSize)
@@ -193,125 +180,122 @@ public class OrgService : IOrgService
         if (adminInfo.OrganizationId is null)
             return PagedResult<OrgMemberDto>.Empty(page, pageSize);
 
-        var adminOrgId = adminInfo.OrganizationId.Value;
-
+        var orgId     = adminInfo.OrganizationId.Value;
         var baseQuery = _db.Users
             .AsNoTracking()
-            .Where(u => u.OrganizationId == adminOrgId && u.Id != providerAdminId);
+            .Where(u => u.OrganizationId == orgId && u.Id != providerAdminId);
 
         var totalCount = await baseQuery.CountAsync();
-
         if (totalCount == 0)
             return PagedResult<OrgMemberDto>.Empty(page, pageSize);
 
-        // Query 1: scalar member fields only — no permission JOIN fan-out.
-        var members = await baseQuery
+        var items = await baseQuery
             .OrderBy(u => u.Email)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(u => new
+            .Select(u => new OrgMemberDto
             {
-                u.Id,
+                Id    = u.Id,
                 Email = u.Email ?? string.Empty,
-                u.Role
+                Role  = u.Role.ToString(),
             })
             .ToListAsync();
-
-        if (members.Count == 0)
-            return PagedResult<OrgMemberDto>.Empty(page, pageSize);
-
-        var memberIds = members.Select(u => u.Id).ToList();
-
-        // Query 2: granted permissions only for this page's members.
-        var permissionsFlat = await _db.UserPermissions
-            .AsNoTracking()
-            .Where(up => memberIds.Contains(up.UserId) && up.Granted)
-            .Select(up => new { up.UserId, up.Permission!.Name })
-            .ToListAsync();
-
-        var permsByMember = permissionsFlat
-            .GroupBy(p => p.UserId)
-            .ToDictionary(g => g.Key, g => g.Select(p => p.Name).ToList());
-
-        var items = members.Select(m => new OrgMemberDto
-        {
-            Id          = m.Id,
-            Email       = m.Email,
-            Role        = m.Role.ToString(),
-            Permissions = permsByMember.TryGetValue(m.Id, out var perms) ? perms : []
-        }).ToList();
 
         return new PagedResult<OrgMemberDto>
         {
             Items      = items,
             Page       = page,
             PageSize   = pageSize,
-            TotalCount = totalCount
+            TotalCount = totalCount,
         };
     }
 
-    public async Task UpdateMemberPermissionsAsync(Guid providerAdminId, Guid memberId, List<PermissionOverride> overrides)
+    // ── Member permission overrides ───────────────────────────────────────────
+
+    public async Task<List<PermissionDto>> GetAllPermissionsAsync()
     {
-        var adminInfo = await _db.Users
+        return await _db.Permissions
+            .AsNoTracking()
+            .OrderBy(p => p.Name)
+            .Select(p => new PermissionDto { Id = p.Id, Name = p.Name })
+            .ToListAsync();
+    }
+
+    public async Task<List<UserPermissionOverrideDto>> GetMemberPermissionsAsync(Guid providerAdminId, Guid memberId)
+    {
+        await EnsureMemberInOrgAsync(providerAdminId, memberId);
+
+        return await _db.UserPermissions
+            .AsNoTracking()
+            .Where(up => up.UserId == memberId)
+            .Select(up => new UserPermissionOverrideDto
+            {
+                PermissionName = up.Permission!.Name,
+                Granted        = up.Granted,
+            })
+            .ToListAsync();
+    }
+
+    public async Task UpdateMemberPermissionAsync(
+        Guid providerAdminId, Guid memberId, string permissionName, bool? granted)
+    {
+        await EnsureMemberInOrgAsync(providerAdminId, memberId);
+
+        var permission = await _db.Permissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Name == permissionName)
+            ?? throw new KeyNotFoundException($"Permission '{permissionName}' not found.");
+
+        var existing = await _db.UserPermissions
+            .FirstOrDefaultAsync(up => up.UserId == memberId && up.PermissionId == permission.Id);
+
+        if (granted is null)
+        {
+            if (existing is null) return;
+            _db.UserPermissions.Remove(existing);
+        }
+        else if (existing is null)
+        {
+            _db.UserPermissions.Add(new UserPermission
+            {
+                UserId       = memberId,
+                PermissionId = permission.Id,
+                Granted      = granted.Value,
+            });
+        }
+        else if (existing.Granted != granted.Value)
+        {
+            existing.Granted = granted.Value;
+        }
+        else
+        {
+            return; // Idempotent.
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Invalidate per-user effective-permissions cache immediately.
+        await _cache.RemoveAsync($"permissions:{memberId}");
+    }
+
+    /// <summary>Validates that <paramref name="memberId"/> belongs to the ProviderAdmin's org.</summary>
+    private async Task EnsureMemberInOrgAsync(Guid providerAdminId, Guid memberId)
+    {
+        var adminOrg = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == providerAdminId && u.Role == UserRole.ProviderAdmin)
             .Select(u => new { u.OrganizationId })
             .FirstOrDefaultAsync()
             ?? throw new UnauthorizedAccessException("User is not a ProviderAdmin.");
 
-        if (adminInfo.OrganizationId is null)
-            throw new UnauthorizedAccessException("ProviderAdmin has no organization.");
+        if (adminOrg.OrganizationId is null)
+            throw new InvalidOperationException("You don't have an organization.");
 
-        var adminOrgId = adminInfo.OrganizationId.Value;
-
-        var memberRole = await _db.Users
+        var isMember = await _db.Users
             .AsNoTracking()
-            .Where(u => u.Id == memberId && u.OrganizationId == adminOrgId)
-            .Select(u => (UserRole?)u.Role)
-            .FirstOrDefaultAsync()
-            ?? throw new KeyNotFoundException("Member not found in your organization.");
+            .AnyAsync(u => u.Id == memberId && u.OrganizationId == adminOrg.OrganizationId);
 
-        if (memberRole != UserRole.ProviderEmployee)
-            throw new InvalidOperationException("Can only manage permissions for ProviderEmployee members.");
-
-        var permissionNames = overrides.Select(o => o.PermissionName).ToHashSet();
-
-        var permissions = await _db.Permissions
-            .AsNoTracking()
-            .Where(p => permissionNames.Contains(p.Name))
-            .ToDictionaryAsync(p => p.Name);
-
-        var missingName = permissionNames.FirstOrDefault(n => !permissions.ContainsKey(n));
-        if (missingName is not null)
-            throw new KeyNotFoundException($"Permission '{missingName}' not found.");
-
-        var permissionIds = permissions.Values.Select(p => p.Id).ToList();
-
-        var existingOverrides = await _db.UserPermissions
-            .Where(up => up.UserId == memberId && permissionIds.Contains(up.PermissionId))
-            .ToDictionaryAsync(up => up.PermissionId);
-
-        foreach (var o in overrides)
-        {
-            var permission = permissions[o.PermissionName];
-
-            if (existingOverrides.TryGetValue(permission.Id, out var existing))
-            {
-                existing.Granted = o.Granted;
-            }
-            else
-            {
-                _db.UserPermissions.Add(new UserPermission
-                {
-                    UserId       = memberId,
-                    PermissionId = permission.Id,
-                    Granted      = o.Granted
-                });
-            }
-        }
-
-        await _db.SaveChangesAsync();
-
-        await _cache.RemoveAsync($"permissions:{memberId}");
+        if (!isMember)
+            throw new KeyNotFoundException("Member not found in your organization.");
     }
 }

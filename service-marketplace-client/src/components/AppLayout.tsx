@@ -4,7 +4,7 @@ import {
   LayoutDashboard, MapPin, Users, Building2,
   Menu, X, LogOut, Briefcase, Bell, CheckCircle2,
   MessageSquare, Loader2, BriefcaseBusiness, Clock, Trash2,
-  UserPlus, UserMinus, CreditCard,
+  UserPlus, UserMinus, CreditCard, ShieldCheck,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
@@ -36,7 +36,8 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'Organization',  to: '/org',                icon: <Building2       size={16} /> },
   ],
   Admin: [
-    { label: 'User Management', to: '/admin', icon: <Users size={16} /> },
+    { label: 'User Management',     to: '/admin',       icon: <Users       size={16} /> },
+    { label: 'Roles & Permissions', to: '/admin/roles', icon: <ShieldCheck size={16} /> },
   ],
 }
 

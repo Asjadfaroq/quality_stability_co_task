@@ -128,24 +128,39 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     private static void SeedPermissions(ModelBuilder builder)
     {
         builder.Entity<Permission>().HasData(
-            new Permission { Id = 1, Name = "request.create" },
-            new Permission { Id = 2, Name = "request.accept" },
-            new Permission { Id = 3, Name = "request.complete" },
-            new Permission { Id = 4, Name = "request.view_all" }
+            // Service-request lifecycle
+            new Permission { Id = 1, Name = "request.create"      },
+            new Permission { Id = 2, Name = "request.accept"      },
+            new Permission { Id = 3, Name = "request.complete"    },
+            new Permission { Id = 4, Name = "request.view_all"    },
+            // Platform administration
+            new Permission { Id = 5, Name = "admin.manage_users"  },
+            // Organisation management
+            new Permission { Id = 6, Name = "org.manage"          },
+            new Permission { Id = 7, Name = "org.view"            }
         );
     }
 
     private static void SeedRolePermissions(ModelBuilder builder)
     {
+        // Assumption: Admin is short-circuited in PermissionService (always returns true),
+        // so no rows are seeded for the Admin role here.
         builder.Entity<RolePermission>().HasData(
+            // Customer — can create requests
             new RolePermission { Role = UserRole.Customer,         PermissionId = 1 },
 
+            // ProviderAdmin — full provider suite + org ownership
             new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 2 },
             new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 3 },
             new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 4 },
+            new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 6 },
+            new RolePermission { Role = UserRole.ProviderAdmin,    PermissionId = 7 },
 
+            // ProviderEmployee — accept/complete jobs, browse all requests, view their org
             new RolePermission { Role = UserRole.ProviderEmployee, PermissionId = 2 },
-            new RolePermission { Role = UserRole.ProviderEmployee, PermissionId = 3 }
+            new RolePermission { Role = UserRole.ProviderEmployee, PermissionId = 3 },
+            new RolePermission { Role = UserRole.ProviderEmployee, PermissionId = 4 },
+            new RolePermission { Role = UserRole.ProviderEmployee, PermissionId = 7 }
         );
     }
 }

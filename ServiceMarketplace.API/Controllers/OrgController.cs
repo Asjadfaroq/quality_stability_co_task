@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.DTOs.Org;
-using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
@@ -20,48 +20,37 @@ public class OrgController : BaseController
     }
 
     /// <summary>
-    /// Returns the organization the calling user belongs to (ProviderAdmin or ProviderEmployee),
-    /// or null if they haven't been added to one yet. Always 200.
+    /// Returns the org the calling user belongs to (ProviderAdmin or ProviderEmployee).
+    /// Always 200; null body means not yet assigned to an org.
     /// </summary>
     [HttpGet("mine")]
+    [RequirePermission("org.view")]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMyOrgAsMember()
     {
-        var role = CurrentUserRole;
-        if (role != UserRole.ProviderAdmin && role != UserRole.ProviderEmployee)
-            return Forbid();
-
         var org = await _orgService.GetOrgForUserAsync(CurrentUserId);
         return Ok(org);
     }
 
     /// <summary>
-    /// Returns the current ProviderAdmin's organization, or null if none exists yet.
-    /// Always 200 — callers distinguish "no org" by checking for a null body.
+    /// Returns the calling ProviderAdmin's organization.
+    /// Always 200; null body means no org created yet.
     /// </summary>
     [HttpGet]
+    [RequirePermission("org.manage")]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMyOrg()
     {
-        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
-
         var org = await _orgService.GetOrgByOwnerAsync(CurrentUserId);
         return Ok(org);
     }
 
-    /// <summary>
-    /// Creates a new organization owned by the current ProviderAdmin.
-    /// </summary>
     [HttpPost]
+    [RequirePermission("org.manage")]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateOrg([FromBody] CreateOrgRequest request)
     {
-        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
-
         try
         {
             var org = await _orgService.CreateOrgAsync(CurrentUserId, request.Name);
@@ -73,19 +62,13 @@ public class OrgController : BaseController
         }
     }
 
-    /// <summary>
-    /// Adds a ProviderEmployee to the current ProviderAdmin's organization by email.
-    /// Returns 400 if the user is already in another org, not a ProviderEmployee, or not found.
-    /// </summary>
     [HttpPost("members")]
+    [RequirePermission("org.manage")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddMember([FromBody] AddMemberRequest request)
     {
-        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
-
         try
         {
             await _orgService.AddMemberAsync(CurrentUserId, request.Email);
@@ -101,19 +84,13 @@ public class OrgController : BaseController
         }
     }
 
-    /// <summary>
-    /// Removes a member from the current ProviderAdmin's organization.
-    /// The owner cannot remove themselves.
-    /// </summary>
     [HttpDelete("members/{id:guid}")]
+    [RequirePermission("org.manage")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveMember(Guid id)
     {
-        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
-
         try
         {
             await _orgService.RemoveMemberAsync(CurrentUserId, id);
@@ -130,14 +107,12 @@ public class OrgController : BaseController
     }
 
     [HttpGet("members")]
+    [RequirePermission("org.manage")]
     [ProducesResponseType(typeof(PagedResult<OrgMemberDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMembers(
         [FromQuery] int page     = 1,
         [FromQuery] int pageSize = 20)
     {
-        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
-
         page     = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
@@ -145,22 +120,56 @@ public class OrgController : BaseController
         return Ok(result);
     }
 
-    [HttpPatch("members/{id:guid}/permissions")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateMemberPermissions(Guid id, [FromBody] UpdatePermissionsRequest request)
-    {
-        if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
+    // ── Member permission overrides ───────────────────────────────────────────
 
+    /// <summary>
+    /// Returns all platform permissions (list only — no role assignments).
+    /// Used by ProviderAdmin to populate the member permission override UI.
+    /// </summary>
+    [HttpGet("permissions")]
+    [RequirePermission("org.manage")]
+    [ProducesResponseType(typeof(List<PermissionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllPermissions()
+    {
+        var result = await _orgService.GetAllPermissionsAsync();
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns explicit permission overrides for a member of the calling ProviderAdmin's org.
+    /// </summary>
+    [HttpGet("members/{id:guid}/permissions")]
+    [RequirePermission("org.manage")]
+    [ProducesResponseType(typeof(List<UserPermissionOverrideDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMemberPermissions(Guid id)
+    {
         try
         {
-            await _orgService.UpdateMemberPermissionsAsync(CurrentUserId, id, request.Overrides);
-            return Ok(new { message = "Permissions updated." });
+            var result = await _orgService.GetMemberPermissionsAsync(CurrentUserId, id);
+            return Ok(result);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (KeyNotFoundException ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Sets or removes an explicit permission override for an org member.
+    /// granted=true → force-grant; false → force-revoke; null → remove override.
+    /// </summary>
+    [HttpPatch("members/{id:guid}/permissions")]
+    [RequirePermission("org.manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateMemberPermission(Guid id, [FromBody] UpdateUserPermissionRequest request)
+    {
+        try
+        {
+            await _orgService.UpdateMemberPermissionAsync(CurrentUserId, id, request.PermissionName, request.Granted);
+            return Ok(new { message = "Member permission updated." });
         }
         catch (KeyNotFoundException ex)
         {

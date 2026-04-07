@@ -505,3 +505,4 @@ ServiceMarketplace.API/bin\Release/
 .DS_Store
 appsettings.json
 service-marketplace-client/.env.production
+Roles.md

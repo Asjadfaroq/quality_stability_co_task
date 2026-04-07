@@ -2,20 +2,12 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
-import { Users, ChevronDown, ChevronUp, ShieldCheck, Building2, UserPlus, UserMinus } from 'lucide-react'
+import { Users, Building2, UserPlus, UserMinus, ChevronDown, ChevronUp, Minus } from 'lucide-react'
+
 import api, { isRateLimited } from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, CardHeader, Badge, Button, Input, EmptyState, Pagination, SkeletonCard } from '../../components/ui'
 import type { PagedResult } from '../../types'
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const PERMISSIONS = [
-  { key: 'request.create',   label: 'Create Requests' },
-  { key: 'request.accept',   label: 'Accept Requests' },
-  { key: 'request.complete', label: 'Complete Requests' },
-  { key: 'request.view_all', label: 'View All Requests' },
-]
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -32,15 +24,19 @@ interface OrgMember {
   id: string
   email: string
   role: string
-  permissions: string[]
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
+interface UserPermissionOverride {
+  permissionName: string
+  granted: boolean
+}
 
-const getMyOrg    = () => api.get<Org | null>('/org').then(r => r.data)
-const createOrg   = (name: string) => api.post<Org>('/org', { name }).then(r => r.data)
-const addMember   = (email: string) => api.post('/org/members', { email })
-const removeMember = (id: string) => api.delete(`/org/members/${id}`)
+interface PermissionDto {
+  id: number
+  name: string
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === 'object' && 'response' in err) {
@@ -50,35 +46,170 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
+// 3-state override cycle: null → true → false → null
+type OverrideState = true | false | null
+function nextOverrideState(current: OverrideState): OverrideState {
+  if (current === null) return true
+  if (current === true) return false
+  return null
+}
+
+const PERMISSION_LABELS: Record<string, string> = {
+  'request.create':     'Create Requests',
+  'request.accept':     'Accept Requests',
+  'request.complete':   'Complete Requests',
+  'request.view_all':   'View All Requests',
+  'admin.manage_users': 'Manage Users',
+  'org.manage':         'Manage Organisation',
+  'org.view':           'View Organisation',
+}
+
+// ── MemberPermissionsPanel ────────────────────────────────────────────────────
+
+function MemberPermissionsPanel({ memberId }: { memberId: string }) {
+  const queryClient = useQueryClient()
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null)
+
+  const { data: allPermissions = [] } = useQuery<PermissionDto[]>({
+    queryKey: ['org-permissions'],
+    queryFn:  () => api.get('/org/permissions').then(r => r.data),
+    staleTime: 60_000,
+  })
+
+  const { data: overrides = [], isLoading } = useQuery<UserPermissionOverride[]>({
+    queryKey: ['org-member-permissions', memberId],
+    queryFn:  () => api.get(`/org/members/${memberId}/permissions`).then(r => r.data),
+  })
+
+  const mutation = useMutation({
+    mutationFn: ({ permissionName, granted }: { permissionName: string; granted: boolean | null }) =>
+      api.patch(`/org/members/${memberId}/permissions`, { permissionName, granted }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-member-permissions', memberId] })
+      toast.success('Permission updated.')
+    },
+    onError: err => {
+      if (!isRateLimited(err)) toast.error(apiErrorMessage(err, 'Failed to update permission.'))
+    },
+    onSettled: () => setUpdatingKey(null),
+  })
+
+  const permissions  = allPermissions
+  const overrideMap  = new Map<string, boolean>(overrides.map(o => [o.permissionName, o.granted]))
+
+  const toggle = (permName: string) => {
+    if (updatingKey !== null) return
+    const current: OverrideState = overrideMap.has(permName)
+      ? (overrideMap.get(permName) as boolean)
+      : null
+    const next = nextOverrideState(current)
+    setUpdatingKey(permName)
+    mutation.mutate({ permissionName: permName, granted: next })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
+        <div className="h-4 bg-slate-200 rounded animate-pulse w-48" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3">
+        Permission Overrides
+        <span className="ml-2 font-normal normal-case text-slate-400">
+          — overrides take precedence over the member's role
+        </span>
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        {permissions.map(perm => {
+          const override   = overrideMap.has(perm.name) ? overrideMap.get(perm.name)! : null
+          const isUpdating = updatingKey === perm.name
+          const label      = PERMISSION_LABELS[perm.name] ?? perm.name
+
+          let btnStyle = 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+          let icon: React.ReactNode = <Minus size={11} className="text-slate-300" />
+
+          if (override === true) {
+            btnStyle = 'bg-emerald-50 border-emerald-300 text-emerald-700'
+            icon = (
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                <path d="M2.5 7L5.5 10L11.5 4" stroke="#059669" strokeWidth="2.2"
+                  strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )
+          } else if (override === false) {
+            btnStyle = 'bg-red-50 border-red-300 text-red-700'
+            icon = (
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                <path d="M3 3L11 11M11 3L3 11" stroke="#dc2626" strokeWidth="2.2"
+                  strokeLinecap="round" />
+              </svg>
+            )
+          }
+
+          return (
+            <button
+              key={perm.name}
+              type="button"
+              disabled={updatingKey !== null}
+              onClick={() => toggle(perm.name)}
+              title={
+                override === null
+                  ? `${label}: inheriting from role (click to grant)`
+                  : override
+                  ? `${label}: explicitly granted (click to revoke)`
+                  : `${label}: explicitly revoked (click to remove override)`
+              }
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium
+                transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60
+                ${isUpdating ? 'opacity-50' : 'hover:scale-105'}
+                ${btnStyle}
+              `}
+            >
+              {isUpdating ? (
+                <span className="w-2.5 h-2.5 rounded-full border-2 border-t-transparent border-current animate-spin block" />
+              ) : icon}
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      <p className="text-[10px] text-slate-400 mt-3">
+        <span className="inline-flex items-center gap-1 mr-3">
+          <Minus size={9} className="text-slate-300" /> inherits from role
+        </span>
+        <span className="text-emerald-600 mr-3">✓ explicitly granted</span>
+        <span className="text-red-500">✕ explicitly revoked</span>
+        <span className="ml-1 text-slate-400">— click to cycle</span>
+      </p>
+    </div>
+  )
+}
+
 // ── Root component ────────────────────────────────────────────────────────────
 
 export default function OrgPanel() {
   const { data: org, isLoading } = useQuery<Org | null>({
     queryKey: ['my-org'],
-    queryFn: getMyOrg,
+    queryFn:  () => api.get<Org | null>('/org').then(r => r.data),
   })
 
   if (isLoading) {
     return (
       <AppLayout title="Organization">
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
-        </div>
-      </AppLayout>
-    )
-  }
-
-  if (!org) {
-    return (
-      <AppLayout title="Organization">
-        <CreateOrgForm />
+        <div className="space-y-3">{[1, 2, 3].map(i => <SkeletonCard key={i} />)}</div>
       </AppLayout>
     )
   }
 
   return (
     <AppLayout title="Organization">
-      <OrgDashboard org={org} />
+      {org ? <OrgDashboard org={org} /> : <CreateOrgForm />}
     </AppLayout>
   )
 }
@@ -90,14 +221,14 @@ function CreateOrgForm() {
   const { register, handleSubmit, formState: { errors } } = useForm<{ name: string }>()
 
   const mutation = useMutation({
-    mutationFn: ({ name }: { name: string }) => createOrg(name),
+    mutationFn: ({ name }: { name: string }) =>
+      api.post<Org>('/org', { name }).then(r => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-org'] })
       toast.success('Organization created.')
     },
-    onError: (err) => {
-      if (!isRateLimited(err))
-        toast.error(apiErrorMessage(err, 'Failed to create organization.'))
+    onError: err => {
+      if (!isRateLimited(err)) toast.error(apiErrorMessage(err, 'Failed to create organization.'))
     },
   })
 
@@ -115,22 +246,17 @@ function CreateOrgForm() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit(data => mutation.mutate(data))} className="space-y-4">
+          <form onSubmit={handleSubmit(d => mutation.mutate(d))} className="space-y-4">
             <Input
               label="Organization Name"
               placeholder="e.g. Acme Services"
               error={errors.name?.message}
               {...register('name', {
-                required: 'Organization name is required.',
+                required:  'Organization name is required.',
                 maxLength: { value: 200, message: 'Name must be 200 characters or fewer.' },
               })}
             />
-            <Button
-              type="submit"
-              fullWidth
-              loading={mutation.isPending}
-              icon={<Building2 size={15} />}
-            >
+            <Button type="submit" fullWidth loading={mutation.isPending} icon={<Building2 size={15} />}>
               Create Organization
             </Button>
           </form>
@@ -143,15 +269,15 @@ function CreateOrgForm() {
 // ── OrgDashboard ──────────────────────────────────────────────────────────────
 
 function OrgDashboard({ org }: { org: Org }) {
-  const queryClient = useQueryClient()
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [page, setPage]         = useState(1)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const queryClient               = useQueryClient()
+  const [page, setPage]           = useState(1)
+  const [pageSize, setPageSize]   = useState(DEFAULT_PAGE_SIZE)
+  const [removingId, setRemovingId]       = useState<string | null>(null)
+  const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
 
   const { data, isLoading: membersLoading } = useQuery<PagedResult<OrgMember>>({
     queryKey: ['org-members', page, pageSize],
-    queryFn: () =>
-      api.get('/org/members', { params: { page, pageSize } }).then(r => r.data),
+    queryFn:  () => api.get('/org/members', { params: { page, pageSize } }).then(r => r.data),
     placeholderData: prev => prev,
   })
 
@@ -159,63 +285,34 @@ function OrgDashboard({ org }: { org: Org }) {
   const totalCount = data?.totalCount ?? 0
   const totalPages = data?.totalPages ?? 1
 
-  const invalidateMembers = () =>
-    queryClient.invalidateQueries({ queryKey: ['org-members'] })
+  const invalidateMembers = () => queryClient.invalidateQueries({ queryKey: ['org-members'] })
 
-  // ── Add member ──
+  // ── Add member ──────────────────────────────────────────────────────────────
+
   const { register: regAdd, handleSubmit: handleAdd, reset: resetAdd, formState: { errors: addErrors } } =
     useForm<{ email: string }>()
 
   const addMutation = useMutation({
-    mutationFn: ({ email }: { email: string }) => addMember(email),
-    onSuccess: () => {
-      resetAdd()
-      invalidateMembers()
-      toast.success('Member added.')
-    },
-    onError: (err) => {
-      if (!isRateLimited(err))
-        toast.error(apiErrorMessage(err, 'Failed to add member.'))
+    mutationFn: ({ email }: { email: string }) => api.post('/org/members', { email }),
+    onSuccess: () => { resetAdd(); invalidateMembers(); toast.success('Member added.') },
+    onError:   err => {
+      if (!isRateLimited(err)) toast.error(apiErrorMessage(err, 'Failed to add member.'))
     },
   })
 
-  // ── Remove member ──
+  // ── Remove member ───────────────────────────────────────────────────────────
+
   const removeMutation = useMutation({
-    mutationFn: (id: string) => removeMember(id),
-    onSuccess: () => {
-      setExpanded(null)
-      invalidateMembers()
-      toast.success('Member removed.')
-    },
-    onError: (err) => {
-      if (!isRateLimited(err))
-        toast.error(apiErrorMessage(err, 'Failed to remove member.'))
+    mutationFn: (id: string) => api.delete(`/org/members/${id}`),
+    onSuccess: () => { setRemovingId(null); invalidateMembers(); toast.success('Member removed.') },
+    onError:   err => {
+      setRemovingId(null)
+      if (!isRateLimited(err)) toast.error(apiErrorMessage(err, 'Failed to remove member.'))
     },
   })
 
-  // ── Toggle permission ──
-  const permMutation = useMutation({
-    mutationFn: ({ id, permission, granted }: { id: string; permission: string; granted: boolean }) =>
-      api.patch(`/org/members/${id}/permissions`, {
-        overrides: [{ permissionName: permission, granted }],
-      }),
-    onSuccess: () => {
-      invalidateMembers()
-      toast.success('Permission updated.')
-    },
-    onError: (err) => {
-      if (!isRateLimited(err))
-        toast.error(apiErrorMessage(err, 'Failed to update permission.'))
-    },
-  })
-
-  const togglePerm = (member: OrgMember, permission: string) => {
-    permMutation.mutate({
-      id: member.id,
-      permission,
-      granted: !member.permissions.includes(permission),
-    })
-  }
+  const toggleExpand = (id: string) =>
+    setExpandedMemberId(prev => (prev === id ? null : id))
 
   return (
     <div className="space-y-6">
@@ -232,36 +329,25 @@ function OrgDashboard({ org }: { org: Org }) {
         </div>
       </div>
 
-      {/* Add member form */}
+      {/* Add member */}
       <Card>
         <div className="p-5">
           <CardHeader
             title="Add Team Member"
             description="Enter the email address of a registered ProviderEmployee."
           />
-          <form
-            onSubmit={handleAdd(data => addMutation.mutate(data))}
-            className="flex gap-3 mt-4"
-          >
+          <form onSubmit={handleAdd(d => addMutation.mutate(d))} className="flex gap-3 mt-4">
             <div className="flex-1">
               <Input
                 placeholder="employee@example.com"
                 error={addErrors.email?.message}
                 {...regAdd('email', {
                   required: 'Email is required.',
-                  pattern: {
-                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                    message: 'Enter a valid email address.',
-                  },
+                  pattern:  { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address.' },
                 })}
               />
             </div>
-            <Button
-              type="submit"
-              loading={addMutation.isPending}
-              icon={<UserPlus size={15} />}
-              className="self-start mt-0"
-            >
+            <Button type="submit" loading={addMutation.isPending} icon={<UserPlus size={15} />} className="self-start">
               Add
             </Button>
           </form>
@@ -278,9 +364,7 @@ function OrgDashboard({ org }: { org: Org }) {
         </div>
 
         {membersLoading ? (
-          <div className="p-4 space-y-3">
-            {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
-          </div>
+          <div className="p-4 space-y-3">{[1, 2, 3].map(i => <SkeletonCard key={i} />)}</div>
         ) : members.length === 0 ? (
           <EmptyState
             icon={<Users size={22} />}
@@ -296,94 +380,52 @@ function OrgDashboard({ org }: { org: Org }) {
                   Member / Role
                 </span>
               </div>
-              <div className="w-6 shrink-0" />
+              <div className="w-28 shrink-0" />
+              <div className="w-8 shrink-0" />
             </div>
 
             <ul className="divide-y divide-gray-100">
               {members.map(member => {
-                const isOpen = expanded === member.id
+                const isExpanded = expandedMemberId === member.id
                 return (
                   <li key={member.id}>
-                    <button
-                      className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-gray-50/60 transition-colors text-left"
-                      onClick={() => setExpanded(isOpen ? null : member.id)}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold shrink-0">
-                          {member.email.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">{member.email}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge label={member.role} variant={member.role.toLowerCase() as any} />
-                            <span className="text-xs text-slate-400">
-                              {member.permissions.length} permission{member.permissions.length !== 1 ? 's' : ''}
-                            </span>
-                          </div>
+                    {/* Main row */}
+                    <div className="px-6 py-3.5 flex items-center gap-4">
+                      <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold shrink-0">
+                        {member.email.slice(0, 2).toUpperCase()}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{member.email}</p>
+                        <div className="mt-1">
+                          <Badge label={member.role} variant={member.role.toLowerCase() as any} />
                         </div>
                       </div>
-                      <span className="text-slate-400 shrink-0">
-                        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </span>
-                    </button>
 
-                    {isOpen && (
-                      <div className="px-6 pb-5 bg-gray-50/50 border-t border-gray-100">
-                        <div className="pt-4 space-y-4">
-                          {/* Permissions */}
-                          <div>
-                            <div className="flex items-center gap-2 mb-3">
-                              <ShieldCheck size={14} className="text-slate-400" />
-                              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                                Permissions
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {PERMISSIONS.map(({ key, label }) => {
-                                const granted = member.permissions.includes(key)
-                                return (
-                                  <label
-                                    key={key}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-                                      granted
-                                        ? 'bg-indigo-50 border-indigo-200'
-                                        : 'bg-white border-slate-200 hover:border-slate-300'
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={granted}
-                                      onChange={() => togglePerm(member, key)}
-                                      disabled={permMutation.isPending}
-                                      className="w-3.5 h-3.5 accent-indigo-600 shrink-0"
-                                    />
-                                    <div>
-                                      <p className={`text-xs font-medium ${granted ? 'text-indigo-700' : 'text-slate-700'}`}>
-                                        {label}
-                                      </p>
-                                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">{key}</p>
-                                    </div>
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        icon={<UserMinus size={13} />}
+                        loading={removingId === member.id}
+                        disabled={removingId !== null}
+                        onClick={() => { setRemovingId(member.id); removeMutation.mutate(member.id) }}
+                      >
+                        Remove
+                      </Button>
 
-                          {/* Remove member */}
-                          <div className="flex justify-end pt-1">
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              icon={<UserMinus size={13} />}
-                              loading={removeMutation.isPending}
-                              onClick={() => removeMutation.mutate(member.id)}
-                            >
-                              Remove from Organization
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                      {/* Expand toggle */}
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(member.id)}
+                        title={isExpanded ? 'Hide permissions' : 'Manage permissions'}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+                      >
+                        {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                      </button>
+                    </div>
+
+                    {/* Permission overrides panel */}
+                    {isExpanded && <MemberPermissionsPanel memberId={member.id} />}
                   </li>
                 )
               })}
@@ -394,9 +436,9 @@ function OrgDashboard({ org }: { org: Org }) {
               totalPages={totalPages}
               totalCount={totalCount}
               pageSize={pageSize}
-              onPageChange={p => { setPage(p); setExpanded(null) }}
+              onPageChange={p => setPage(p)}
               pageSizeOptions={[5, 10, 20, 50]}
-              onPageSizeChange={s => { setPageSize(s); setPage(1); setExpanded(null) }}
+              onPageSizeChange={s => { setPageSize(s); setPage(1) }}
             />
           </>
         )}
