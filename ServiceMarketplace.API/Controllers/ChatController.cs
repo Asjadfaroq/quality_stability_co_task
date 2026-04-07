@@ -31,7 +31,7 @@ public class ChatController : BaseController
         [FromQuery] int pageSize = 20)
     {
         if (CurrentUserRole == UserRole.Admin)
-            return Forbid();
+            return Forbidden("Admin accounts do not participate in chat conversations.");
 
         page     = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -53,7 +53,7 @@ public class ChatController : BaseController
     {
         // Single DB query for access check.
         if (!await _chatService.CanAccessChatAsync(requestId, CurrentUserId))
-            return Forbid();
+            return Forbidden("You do not have access to this conversation. Only the customer who raised the request and their assigned provider may view it.");
 
         // Access verified — fetch history directly (no second access check inside).
         var messages = await _chatService.GetHistoryAsync(requestId);

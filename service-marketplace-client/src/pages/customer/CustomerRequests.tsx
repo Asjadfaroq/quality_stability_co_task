@@ -100,7 +100,15 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
     },
     onError: (err: any) => {
       if (isRateLimited(err)) return
-      if (err?.response?.status === 403) setFreeLimitHit(true)
+      if (err?.response?.status === 403) {
+        // permission_denied → admin has revoked request.create from this role/user.
+        // Any other 403 (e.g. free-tier limit) falls through to the in-form banner.
+        if (err.response.data?.errorCode === 'permission_denied') {
+          toast.error("You don't have permission to create requests. Contact your administrator.")
+        } else {
+          setFreeLimitHit(true)
+        }
+      }
     },
   })
 

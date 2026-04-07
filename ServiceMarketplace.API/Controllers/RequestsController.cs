@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Requests;
+using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
@@ -142,7 +143,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Customer confirms completion of a request.</summary>
+    /// <summary>Customer confirms completion of a request. Restricted to the Customer role.</summary>
     [HttpPatch("{id:guid}/confirm")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
@@ -151,6 +152,9 @@ public class RequestsController : BaseController
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Confirm(Guid id)
     {
+        if (CurrentUserRole != UserRole.Customer)
+            return Forbidden("Only customers can confirm job completion.");
+
         var result = await _requestService.ConfirmAsync(id, CurrentUserId);
         return Ok(result);
     }

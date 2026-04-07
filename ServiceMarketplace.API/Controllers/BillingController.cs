@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Helpers;
+using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
 
 [Route("api/billing")]
+[Authorize]   // all actions require a valid JWT; the webhook overrides with [AllowAnonymous]
 public class BillingController : BaseController
 {
     private readonly IStripeService _stripeService;
@@ -30,11 +32,14 @@ public class BillingController : BaseController
     /// Customers only — redirects to Stripe-hosted payment page.
     /// </summary>
     [HttpPost("checkout")]
-    [Authorize(Roles = "Customer")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateCheckoutSession()
     {
+        if (CurrentUserRole != UserRole.Customer)
+            return Forbidden("Subscription checkout is available to Customer accounts only.");
+
         var userId = CurrentUserId;
         var email  = User.FindFirstValue(ClaimConstants.Email)
                   ?? User.FindFirstValue(ClaimTypes.Email)
@@ -59,11 +64,14 @@ public class BillingController : BaseController
     /// Opens the Stripe Customer Portal so customers can manage or cancel their subscription.
     /// </summary>
     [HttpPost("portal")]
-    [Authorize(Roles = "Customer")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreatePortalSession()
     {
+        if (CurrentUserRole != UserRole.Customer)
+            return Forbidden("Subscription management is available to Customer accounts only.");
+
         var userId    = CurrentUserId;
         var origin    = Request.Headers.Origin.ToString();
         var returnUrl = $"{origin}/customer/subscription";
@@ -83,10 +91,13 @@ public class BillingController : BaseController
     /// Returns the current subscription status for the authenticated customer.
     /// </summary>
     [HttpGet("status")]
-    [Authorize(Roles = "Customer")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetSubscriptionStatus()
     {
+        if (CurrentUserRole != UserRole.Customer)
+            return Forbidden("Subscription status is available to Customer accounts only.");
+
         var userId = CurrentUserId;
 
         var info = await _db.UserStripeInfos

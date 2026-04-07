@@ -40,7 +40,14 @@ public class RequirePermissionAttribute : Attribute, IAsyncAuthorizationFilter
 
         if (!hasPermission)
         {
-            context.Result = new ObjectResult(new { message = $"Permission '{_permissionName}' required." })
+            context.Result = new ObjectResult(new
+            {
+                // errorCode is a stable machine-readable discriminator so clients can
+                // distinguish a permission denial from other 403s (e.g. subscription limits).
+                errorCode = "permission_denied",
+                message   = $"Access denied. The '{_permissionName}' permission is required to perform " +
+                            "this action. Contact your administrator if you believe this is a mistake.",
+            })
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };
