@@ -49,7 +49,11 @@ export default function ChatPanel({ requestId, requestTitle, onClose }: Props) {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(HUB_URL, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
-      .configureLogging(signalR.LogLevel.Warning)
+      // Suppress SignalR's internal logger. Without this, every intentional
+      // stop() during React StrictMode's double-mount teardown prints a loud
+      // "Failed to start the connection" error. The `cancelled` flag already
+      // prevents the user-facing toast; this silences the console noise.
+      .configureLogging(signalR.LogLevel.None)
       .build()
 
     connection.on('ReceiveMessage', (msg: Message) => {

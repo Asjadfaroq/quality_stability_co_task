@@ -48,6 +48,14 @@ export default function SignalRProvider() {
       queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
     },
 
+    // Fired when a provider accepts the customer's request (Pending → Accepted).
+    // Keeps the customer's tab in sync without a manual refresh.
+    RequestAccepted: (data: { requestId: string }) => {
+      if (!isCustomer) return
+      void data // requestId available for future per-item cache updates
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+
     // ── Customer events ──
     RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
       if (!isCustomer) return
@@ -58,6 +66,15 @@ export default function SignalRProvider() {
         link:  '/customer/requests',
       })
       queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+
+    // Generic status update — fired when the acting user's own OTHER tabs need
+    // to refresh (e.g. provider marks complete in Tab 1, Tab 2 Active Jobs
+    // updates; customer confirms in Tab 1, Tab 2 My Requests updates).
+    RequestStatusUpdated: (data: { requestId: string }) => {
+      void data
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
     },
 
     // ── Both ──

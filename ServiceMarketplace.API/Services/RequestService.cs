@@ -164,6 +164,11 @@ public class RequestService : IRequestService
             .Group("providers")
             .SendAsync("RequestTaken", new { requestId = request.Id });
 
+        // Notify the customer who owns this request so their tab updates immediately
+        await _hub.Clients
+            .Group(request.CustomerId.ToString())
+            .SendAsync("RequestAccepted", new { requestId = request.Id });
+
         return MapToDto(request);
     }
 
@@ -192,9 +197,15 @@ public class RequestService : IRequestService
 
         _logger.LogInformation("Request {RequestId} marked PendingConfirmation by provider {ProviderId}", requestId, providerId);
 
+        // Notify the customer that the job is complete and needs their confirmation
         await _hub.Clients
             .Group(request.CustomerId.ToString())
             .SendAsync("RequestNeedsConfirmation", new { requestId = request.Id, title = request.Title });
+
+        // Also notify the accepting provider so their Active Jobs tab updates immediately
+        await _hub.Clients
+            .Group(providerId.ToString())
+            .SendAsync("RequestStatusUpdated", new { requestId = request.Id });
 
         return MapToDto(request);
     }
@@ -222,6 +233,11 @@ public class RequestService : IRequestService
             await _hub.Clients
                 .Group(request.AcceptedByProviderId.Value.ToString())
                 .SendAsync("RequestConfirmed", new { requestId = request.Id, title = request.Title });
+
+        // Notify the customer's own other tabs/sessions that the status moved to Completed
+        await _hub.Clients
+            .Group(customerId.ToString())
+            .SendAsync("RequestStatusUpdated", new { requestId = request.Id });
 
         return MapToDto(request);
     }
