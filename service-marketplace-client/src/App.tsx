@@ -6,6 +6,7 @@ import { useAuthStore } from './store/authStore'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import CustomerDashboard from './pages/customer/CustomerDashboard'
+import Chats from './pages/Chats'
 import ProviderDashboard from './pages/provider/ProviderDashboard'
 import CompletedJobs from './pages/provider/CompletedJobs'
 import OrgPanel from './pages/provider/OrgPanel'
@@ -102,6 +103,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <AdminPanel />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/chats"
+        element={
+          <ProtectedRoute roles={['Customer', 'ProviderEmployee', 'ProviderAdmin']}>
+            <Chats />
           </ProtectedRoute>
         }
       />

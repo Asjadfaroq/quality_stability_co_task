@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Models.DTOs.Chat;
 using ServiceMarketplace.API.Models.Entities;
+using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Services;
@@ -88,6 +89,75 @@ public class ChatService : IChatService
         if (p.CustomerId == userId) return p.ProviderId;
         if (p.ProviderId == userId) return p.CustomerId;
         return null;
+    }
+
+    public async Task<List<ConversationDto>> GetConversationsAsync(Guid userId, UserRole role)
+    {
+        // 1. Fetch all requests the user participates in, projecting only what we need
+        var requestQuery = _db.ServiceRequests.AsNoTracking();
+
+        var requests = role == UserRole.Customer
+            ? await requestQuery
+                .Where(r => r.CustomerId == userId && r.AcceptedByProviderId.HasValue)
+                .Select(r => new
+                {
+                    r.Id,
+                    r.Title,
+                    Status         = r.Status.ToString(),
+                    OtherPartyEmail= r.AcceptedByProvider!.Email ?? string.Empty,
+                })
+                .ToListAsync()
+            : await requestQuery
+                .Where(r => r.AcceptedByProviderId.HasValue && r.AcceptedByProviderId.Value == userId)
+                .Select(r => new
+                {
+                    r.Id,
+                    r.Title,
+                    Status         = r.Status.ToString(),
+                    OtherPartyEmail= r.Customer!.Email ?? string.Empty,
+                })
+                .ToListAsync();
+
+        if (requests.Count == 0)
+            return [];
+
+        // 2. Fetch the latest message per request in one query
+        var requestIds = requests.Select(r => r.Id).ToList();
+
+        var lastMessages = await _db.ChatMessages
+            .AsNoTracking()
+            .Where(m => requestIds.Contains(m.RequestId))
+            .GroupBy(m => m.RequestId)
+            .Select(g => new
+            {
+                RequestId   = g.Key,
+                Content     = g.OrderByDescending(m => m.SentAt).Select(m => m.Content).First(),
+                SentAt      = g.Max(m => m.SentAt),
+                SenderEmail = g.OrderByDescending(m => m.SentAt).Select(m => m.SenderEmail).First(),
+            })
+            .ToListAsync();
+
+        var lastMsgMap = lastMessages.ToDictionary(x => x.RequestId);
+
+        // 3. Merge — only include conversations that have at least one message
+        return requests
+            .Where(r => lastMsgMap.ContainsKey(r.Id))
+            .Select(r =>
+            {
+                var last = lastMsgMap[r.Id];
+                return new ConversationDto
+                {
+                    RequestId              = r.Id,
+                    RequestTitle           = r.Title,
+                    RequestStatus          = r.Status,
+                    OtherPartyEmail        = r.OtherPartyEmail,
+                    LastMessage            = last.Content,
+                    LastMessageAt          = last.SentAt,
+                    LastMessageSenderEmail = last.SenderEmail,
+                };
+            })
+            .OrderByDescending(c => c.LastMessageAt)
+            .ToList();
     }
 
     // Projects only the two participant IDs rather than the full ServiceRequest row

@@ -2,24 +2,29 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Users, Building2,
-  Menu, X, LogOut, Briefcase, Bell, CheckCircle2,
+  Menu, X, LogOut, Briefcase, Bell, CheckCircle2, MessageSquare,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 
 interface NavItem { label: string; to: string; icon: React.ReactNode }
 
 const NAV_ITEMS: Record<string, NavItem[]> = {
-  Customer:        [{ label: 'Dashboard',      to: '/customer',           icon: <LayoutDashboard size={16} /> }],
+  Customer:        [
+    { label: 'Dashboard',    to: '/customer',           icon: <LayoutDashboard size={16} /> },
+    { label: 'Chats',        to: '/chats',              icon: <MessageSquare   size={16} /> },
+  ],
   ProviderEmployee:[
-    { label: 'Jobs',           to: '/provider',           icon: <Briefcase     size={16} /> },
-    { label: 'Completed Jobs', to: '/provider/completed', icon: <CheckCircle2  size={16} /> },
+    { label: 'Jobs',         to: '/provider',           icon: <Briefcase       size={16} /> },
+    { label: 'Completed Jobs',to: '/provider/completed',icon: <CheckCircle2    size={16} /> },
+    { label: 'Chats',        to: '/chats',              icon: <MessageSquare   size={16} /> },
   ],
   ProviderAdmin:   [
-    { label: 'Jobs',           to: '/provider',           icon: <Briefcase     size={16} /> },
-    { label: 'Completed Jobs', to: '/provider/completed', icon: <CheckCircle2  size={16} /> },
-    { label: 'Organization',   to: '/org',                icon: <Building2     size={16} /> },
+    { label: 'Jobs',         to: '/provider',           icon: <Briefcase       size={16} /> },
+    { label: 'Completed Jobs',to: '/provider/completed',icon: <CheckCircle2    size={16} /> },
+    { label: 'Chats',        to: '/chats',              icon: <MessageSquare   size={16} /> },
+    { label: 'Organization', to: '/org',                icon: <Building2       size={16} /> },
   ],
-  Admin:           [{ label: 'User Management', to: '/admin',   icon: <Users           size={16} /> }],
+  Admin:           [{ label: 'User Management', to: '/admin', icon: <Users     size={16} /> }],
 }
 
 const SIDEBAR_GRADIENT = 'linear-gradient(180deg, #1E3A5F 0%, #0A1628 100%)'

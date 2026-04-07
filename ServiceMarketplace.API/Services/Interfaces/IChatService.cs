@@ -1,4 +1,5 @@
 using ServiceMarketplace.API.Models.DTOs.Chat;
+using ServiceMarketplace.API.Models.Enums;
 
 namespace ServiceMarketplace.API.Services.Interfaces;
 
@@ -15,4 +16,7 @@ public interface IChatService
 
     /// <summary>Returns the other participant's userId in the chat (customer or provider), or null if not found.</summary>
     Task<Guid?> GetOtherPartyIdAsync(Guid requestId, Guid userId);
+
+    /// <summary>Returns all conversations the user participates in, ordered by most recent message.</summary>
+    Task<List<ConversationDto>> GetConversationsAsync(Guid userId, UserRole role);
 }
