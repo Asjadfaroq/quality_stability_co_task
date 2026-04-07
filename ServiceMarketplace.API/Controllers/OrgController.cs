@@ -20,18 +20,18 @@ public class OrgController : BaseController
     }
 
     /// <summary>
-    /// Returns the current ProviderAdmin's organization, or 404 if none exists yet.
+    /// Returns the current ProviderAdmin's organization, or null if none exists yet.
+    /// Always 200 — callers distinguish "no org" by checking for a null body.
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMyOrg()
     {
         if (!IsInRole(UserRole.ProviderAdmin)) return Forbid();
 
         var org = await _orgService.GetOrgByOwnerAsync(CurrentUserId);
-        return org is null ? NotFound(new { message = "You don't have an organization yet." }) : Ok(org);
+        return Ok(org);
     }
 
     /// <summary>

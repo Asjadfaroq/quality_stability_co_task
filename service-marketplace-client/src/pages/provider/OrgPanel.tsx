@@ -37,7 +37,7 @@ interface OrgMember {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
-const getMyOrg    = () => api.get<Org>('/org').then(r => r.data)
+const getMyOrg    = () => api.get<Org | null>('/org').then(r => r.data)
 const createOrg   = (name: string) => api.post<Org>('/org', { name }).then(r => r.data)
 const addMember   = (email: string) => api.post('/org/members', { email })
 const removeMember = (id: string) => api.delete(`/org/members/${id}`)
@@ -53,17 +53,9 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 // ── Root component ────────────────────────────────────────────────────────────
 
 export default function OrgPanel() {
-  const { data: org, isLoading, error } = useQuery<Org>({
+  const { data: org, isLoading } = useQuery<Org | null>({
     queryKey: ['my-org'],
     queryFn: getMyOrg,
-    retry: (failureCount, err: unknown) => {
-      // Don't retry 404 — it just means no org exists yet.
-      if (err && typeof err === 'object' && 'response' in err) {
-        const e = err as { response?: { status?: number } }
-        if (e.response?.status === 404) return false
-      }
-      return failureCount < 2
-    },
   })
 
   if (isLoading) {
@@ -76,14 +68,7 @@ export default function OrgPanel() {
     )
   }
 
-  const is404 =
-    !org &&
-    error &&
-    typeof error === 'object' &&
-    'response' in error &&
-    (error as { response?: { status?: number } }).response?.status === 404
-
-  if (!org || is404) {
+  if (!org) {
     return (
       <AppLayout title="Organization">
         <CreateOrgForm />
