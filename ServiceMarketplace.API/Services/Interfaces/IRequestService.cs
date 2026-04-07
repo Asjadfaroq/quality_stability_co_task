@@ -7,6 +7,7 @@ public interface IRequestService
 {
     Task<ServiceRequestDto> CreateAsync(Guid customerId, CreateRequestDto dto);
     Task<List<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role);
+    Task<List<ServiceRequestDto>> GetCompletedAsync(Guid providerId);
     Task<ServiceRequestDto> GetByIdAsync(Guid requestId, Guid userId, UserRole role);
     Task<List<ServiceRequestDto>> GetNearbyAsync(double lat, double lng, double radiusKm);
     Task<ServiceRequestDto> AcceptAsync(Guid requestId, Guid providerId);

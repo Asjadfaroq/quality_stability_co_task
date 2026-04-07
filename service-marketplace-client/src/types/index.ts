@@ -16,4 +16,5 @@ export interface ServiceRequest {
   longitude: number
   status: 'Pending' | 'Accepted' | 'Completed' | 'PendingConfirmation'
   createdAt: string
+  updatedAt: string
 }

@@ -7,13 +7,20 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import CustomerDashboard from './pages/customer/CustomerDashboard'
 import ProviderDashboard from './pages/provider/ProviderDashboard'
+import CompletedJobs from './pages/provider/CompletedJobs'
 import OrgPanel from './pages/provider/OrgPanel'
 import AdminPanel from './pages/admin/AdminPanel'
 import ProtectedRoute from './components/ProtectedRoute'
 import PublicRoute from './components/PublicRoute'
 import ErrorBoundary from './components/ErrorBoundary'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false, // switching tabs won't trigger redundant API calls
+    },
+  },
+})
 
 function AppRoutes() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -68,6 +75,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
             <ProviderDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/provider/completed"
+        element={
+          <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
+            <CompletedJobs />
           </ProtectedRoute>
         }
       />

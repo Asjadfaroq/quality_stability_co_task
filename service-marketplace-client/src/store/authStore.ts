@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { AuthUser, UserRole } from '../types'
 import { parseTokenExpiry, isTokenExpired } from '../utils/auth'
 
@@ -55,6 +55,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth',
+      // sessionStorage is tab-scoped — each tab has its own isolated session,
+      // so two tabs can be logged in as different accounts simultaneously.
+      storage: createJSONStorage(() => sessionStorage),
       // isInitialized is runtime-only — never persist it so it always starts false
       partialize: (state) => ({
         token:     state.token,

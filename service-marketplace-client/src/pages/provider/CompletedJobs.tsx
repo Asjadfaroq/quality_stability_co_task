@@ -1,0 +1,145 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, MapPin, CalendarDays, AlertCircle, RefreshCw } from 'lucide-react'
+import api from '../../api/axios'
+import AppLayout from '../../components/AppLayout'
+import { Card, StatCard, EmptyState, SkeletonCard } from '../../components/ui'
+import { useSignalR } from '../../hooks/useSignalR'
+import type { ServiceRequest } from '../../types'
+
+export default function CompletedJobs() {
+  const queryClient = useQueryClient()
+
+  // Refresh automatically when a customer confirms a job complete
+  useSignalR({
+    RequestConfirmed: () => {
+      queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
+    },
+  })
+
+  const { data: completed = [], isLoading, isError, refetch } = useQuery<ServiceRequest[]>({
+    queryKey: ['provider-completed'],
+    queryFn: () => api.get('/requests/completed').then((r) => r.data),
+  })
+
+  return (
+    <AppLayout title="Completed Jobs">
+      {/* Page header */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-slate-900">Completed Jobs</h2>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Full history of every job you have successfully completed
+        </p>
+      </div>
+
+      {/* Stat */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard
+          label="Total Completed"
+          value={isLoading ? '—' : completed.length}
+          icon={<CheckCircle2 size={18} />}
+          color="emerald"
+        />
+      </div>
+
+      {/* Jobs list */}
+      <Card padding={false}>
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Job History</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {isLoading ? 'Loading…' : `${completed.length} completed job${completed.length !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+          {completed.length > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{ background: 'rgba(16,185,129,0.1)', color: '#059669' }}
+            >
+              <CheckCircle2 size={11} />
+              All confirmed
+            </span>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="p-4 space-y-3">
+            {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+          </div>
+
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center gap-3">
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ background: 'rgba(239,68,68,0.08)' }}
+            >
+              <AlertCircle size={20} style={{ color: '#ef4444' }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Failed to load completed jobs</p>
+              <p className="text-xs text-slate-400 mt-0.5">Check your connection and try again</p>
+            </div>
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{ background: 'rgba(15,23,42,0.06)', color: '#1e293b' }}
+            >
+              <RefreshCw size={12} />
+              Retry
+            </button>
+          </div>
+
+        ) : completed.length === 0 ? (
+          <EmptyState
+            icon={<CheckCircle2 size={22} />}
+            title="No completed jobs yet"
+            description="Jobs you finish and the customer confirms will appear here."
+          />
+
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {completed.map((req) => (
+              <li key={req.id} className="px-6 py-4 hover:bg-slate-50/60 transition-colors">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3.5 min-w-0">
+                    <div
+                      className="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: 'rgba(16,185,129,0.1)' }}
+                    >
+                      <CheckCircle2 size={15} style={{ color: '#10b981' }} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{req.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{req.description}</p>
+
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                          <MapPin size={10} />
+                          {req.category}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                          <CalendarDays size={10} />
+                          {new Date(req.updatedAt).toLocaleDateString('en-GB', {
+                            day: 'numeric', month: 'short', year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span
+                    className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                    style={{ background: 'rgba(16,185,129,0.1)', color: '#059669' }}
+                  >
+                    <CheckCircle2 size={11} />
+                    Completed
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </AppLayout>
+  )
+}

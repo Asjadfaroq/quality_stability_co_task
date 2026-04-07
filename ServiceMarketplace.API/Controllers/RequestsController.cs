@@ -70,6 +70,19 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
+    /// <summary>Get all completed jobs for the calling provider (ProviderEmployee or ProviderAdmin only).</summary>
+    [HttpGet("completed")]
+    [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetCompleted()
+    {
+        if (CurrentUserRole != UserRole.ProviderEmployee && CurrentUserRole != UserRole.ProviderAdmin)
+            return Forbid();
+
+        var result = await _requestService.GetCompletedAsync(CurrentUserId);
+        return Ok(result);
+    }
+
     /// <summary>Get a single request by ID. Customers can only access their own.</summary>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]

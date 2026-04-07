@@ -73,6 +73,19 @@ public class RequestService : IRequestService
         return requests.Select(MapToDto).ToList();
     }
 
+    public async Task<List<ServiceRequestDto>> GetCompletedAsync(Guid providerId)
+    {
+        var requests = await _db.ServiceRequests
+            .AsNoTracking()
+            .Where(r => r.Status == RequestStatus.Completed
+                     && r.AcceptedByProviderId.HasValue
+                     && r.AcceptedByProviderId.Value == providerId)
+            .OrderByDescending(r => r.UpdatedAt)
+            .ToListAsync();
+
+        return requests.Select(MapToDto).ToList();
+    }
+
     public async Task<ServiceRequestDto> GetByIdAsync(Guid requestId, Guid userId, UserRole role)
     {
         var request = await _db.ServiceRequests
