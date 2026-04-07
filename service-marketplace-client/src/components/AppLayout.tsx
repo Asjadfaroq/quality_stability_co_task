@@ -44,7 +44,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'Active Jobs',      to: '/provider/active',    icon: <Loader2         size={16} />, permission: 'request.complete' },
     { label: 'Completed Jobs',   to: '/provider/completed', icon: <CheckCircle2    size={16} />, permission: 'request.complete' },
     { label: 'Chats',            to: '/chats',              icon: <MessageSquare   size={16} /> },
-    { label: 'Organization',     to: '/org',                icon: <Building2       size={16} />, permission: 'org.manage'        },
+    { label: 'Organization',     to: '/org',                icon: <Building2       size={16} />, permission: 'org.view'          },
   ],
   Admin: [
     { label: 'User Management',     to: '/admin',       icon: <Users       size={16} />, permission: 'admin.manage_users' },

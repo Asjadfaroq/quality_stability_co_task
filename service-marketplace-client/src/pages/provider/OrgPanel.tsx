@@ -7,6 +7,7 @@ import { Users, Building2, UserPlus, UserMinus, ChevronDown, ChevronUp, Minus } 
 import api, { isRateLimited } from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, CardHeader, Badge, Button, Input, EmptyState, Pagination, SkeletonCard } from '../../components/ui'
+import { usePermissions } from '../../hooks/usePermissions'
 import type { PagedResult } from '../../types'
 
 const DEFAULT_PAGE_SIZE = 20
@@ -194,6 +195,9 @@ function MemberPermissionsPanel({ memberId }: { memberId: string }) {
 // ── Root component ────────────────────────────────────────────────────────────
 
 export default function OrgPanel() {
+  const { hasPermission } = usePermissions()
+  const canManage = hasPermission('org.manage')
+
   const { data: org, isLoading } = useQuery<Org | null>({
     queryKey: ['my-org'],
     queryFn:  () => api.get<Org | null>('/org').then(r => r.data),
@@ -209,8 +213,34 @@ export default function OrgPanel() {
 
   return (
     <AppLayout title="Organization">
-      {org ? <OrgDashboard org={org} /> : <CreateOrgForm />}
+      {org
+        ? <OrgDashboard org={org} canManage={canManage} />
+        : canManage
+          ? <CreateOrgForm />
+          : <NoManagePermissionCard />}
     </AppLayout>
+  )
+}
+
+// ── NoManagePermissionCard ────────────────────────────────────────────────────
+
+function NoManagePermissionCard() {
+  return (
+    <Card>
+      <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+          <Building2 size={24} className="text-slate-400" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-700">No organization yet</p>
+          <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+            You can view your organization once one is created, but you need the
+            <span className="font-medium text-slate-600"> Manage Organisation </span>
+            permission to create one.
+          </p>
+        </div>
+      </div>
+    </Card>
   )
 }
 
@@ -268,7 +298,7 @@ function CreateOrgForm() {
 
 // ── OrgDashboard ──────────────────────────────────────────────────────────────
 
-function OrgDashboard({ org }: { org: Org }) {
+function OrgDashboard({ org, canManage }: { org: Org; canManage: boolean }) {
   const queryClient               = useQueryClient()
   const [page, setPage]           = useState(1)
   const [pageSize, setPageSize]   = useState(DEFAULT_PAGE_SIZE)
@@ -329,30 +359,32 @@ function OrgDashboard({ org }: { org: Org }) {
         </div>
       </div>
 
-      {/* Add member */}
-      <Card>
-        <div className="p-5">
-          <CardHeader
-            title="Add Team Member"
-            description="Enter the email address of a registered ProviderEmployee."
-          />
-          <form onSubmit={handleAdd(d => addMutation.mutate(d))} className="flex gap-3 mt-4">
-            <div className="flex-1">
-              <Input
-                placeholder="employee@example.com"
-                error={addErrors.email?.message}
-                {...regAdd('email', {
-                  required: 'Email is required.',
-                  pattern:  { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address.' },
-                })}
-              />
-            </div>
-            <Button type="submit" loading={addMutation.isPending} icon={<UserPlus size={15} />} className="self-start">
-              Add
-            </Button>
-          </form>
-        </div>
-      </Card>
+      {/* Add member — only shown when user can manage the org */}
+      {canManage && (
+        <Card>
+          <div className="p-5">
+            <CardHeader
+              title="Add Team Member"
+              description="Enter the email address of a registered ProviderEmployee."
+            />
+            <form onSubmit={handleAdd(d => addMutation.mutate(d))} className="flex gap-3 mt-4">
+              <div className="flex-1">
+                <Input
+                  placeholder="employee@example.com"
+                  error={addErrors.email?.message}
+                  {...regAdd('email', {
+                    required: 'Email is required.',
+                    pattern:  { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address.' },
+                  })}
+                />
+              </div>
+              <Button type="submit" loading={addMutation.isPending} icon={<UserPlus size={15} />} className="self-start">
+                Add
+              </Button>
+            </form>
+          </div>
+        </Card>
+      )}
 
       {/* Members list */}
       <Card padding={false}>
@@ -369,7 +401,11 @@ function OrgDashboard({ org }: { org: Org }) {
           <EmptyState
             icon={<Users size={22} />}
             title="No team members yet"
-            description="Add a ProviderEmployee above to get started."
+            description={
+              canManage
+                ? 'Add a ProviderEmployee above to get started.'
+                : 'No members have been added to this organization yet.'
+            }
           />
         ) : (
           <>
@@ -402,30 +438,34 @@ function OrgDashboard({ org }: { org: Org }) {
                         </div>
                       </div>
 
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        icon={<UserMinus size={13} />}
-                        loading={removingId === member.id}
-                        disabled={removingId !== null}
-                        onClick={() => { setRemovingId(member.id); removeMutation.mutate(member.id) }}
-                      >
-                        Remove
-                      </Button>
+                      {canManage && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          icon={<UserMinus size={13} />}
+                          loading={removingId === member.id}
+                          disabled={removingId !== null}
+                          onClick={() => { setRemovingId(member.id); removeMutation.mutate(member.id) }}
+                        >
+                          Remove
+                        </Button>
+                      )}
 
-                      {/* Expand toggle */}
-                      <button
-                        type="button"
-                        onClick={() => toggleExpand(member.id)}
-                        title={isExpanded ? 'Hide permissions' : 'Manage permissions'}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
-                      >
-                        {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                      </button>
+                      {/* Expand toggle — only shown when user can manage permissions */}
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(member.id)}
+                          title={isExpanded ? 'Hide permissions' : 'Manage permissions'}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+                        >
+                          {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </button>
+                      )}
                     </div>
 
-                    {/* Permission overrides panel */}
-                    {isExpanded && <MemberPermissionsPanel memberId={member.id} />}
+                    {/* Permission overrides panel — only when user can manage */}
+                    {canManage && isExpanded && <MemberPermissionsPanel memberId={member.id} />}
                   </li>
                 )
               })}

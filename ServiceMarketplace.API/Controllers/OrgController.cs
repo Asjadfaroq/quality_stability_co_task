@@ -35,9 +35,10 @@ public class OrgController : BaseController
     /// <summary>
     /// Returns the calling ProviderAdmin's organization.
     /// Always 200; null body means no org created yet.
+    /// Requires org.view — management operations within the page require org.manage.
     /// </summary>
     [HttpGet]
-    [RequirePermission("org.manage")]
+    [RequirePermission("org.view")]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyOrg()
     {
@@ -107,7 +108,7 @@ public class OrgController : BaseController
     }
 
     [HttpGet("members")]
-    [RequirePermission("org.manage")]
+    [RequirePermission("org.view")]
     [ProducesResponseType(typeof(PagedResult<OrgMemberDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMembers(
         [FromQuery] int page     = 1,
