@@ -28,4 +28,19 @@ public interface IAdminService
     /// Throws <see cref="KeyNotFoundException"/> if the permission name is unknown.
     /// </summary>
     Task UpdateUserPermissionAsync(Guid userId, string permissionName, bool? granted);
+
+    /// <summary>
+    /// Permanently deletes a user account and all associated data in a single transaction.
+    /// Handles all edge cases:
+    ///   • Chat messages belonging to the user's service requests are deleted first.
+    ///   • Service requests where the user is the customer are deleted.
+    ///   • If the user owns an organization the org is deleted; SQL SET NULL propagates
+    ///     to every member's <c>OrganizationId</c> automatically.
+    ///   • ASP.NET Identity satellite rows and custom cascade-configured rows
+    ///     (UserPermission, UserStripeInfo) are removed by the database cascade.
+    ///   • The user's permission cache entry is evicted after the commit.
+    /// Throws <see cref="KeyNotFoundException"/> if the target user does not exist.
+    /// Throws <see cref="UnauthorizedAccessException"/> if an attempt is made to delete an Admin account.
+    /// </summary>
+    Task DeleteUserAsync(Guid targetUserId);
 }

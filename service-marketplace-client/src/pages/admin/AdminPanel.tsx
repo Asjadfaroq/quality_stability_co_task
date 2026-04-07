@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Users, CreditCard, ChevronDown, ChevronUp, ShieldCheck, Minus } from 'lucide-react'
+import { Users, CreditCard, ChevronDown, ChevronUp, ShieldCheck, Minus, Trash2, AlertTriangle } from 'lucide-react'
 
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
@@ -188,6 +188,102 @@ function UserPermissionsPanel({ userId, isSelf }: { userId: string; isSelf: bool
   )
 }
 
+// ── ConfirmDeleteModal ────────────────────────────────────────────────────────
+
+interface ConfirmDeleteModalProps {
+  user: UserDto
+  isDeleting: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+function ConfirmDeleteModal({ user, isDeleting, onConfirm, onCancel }: ConfirmDeleteModalProps) {
+  return (
+    // Backdrop
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(2px)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div
+        className="w-full max-w-md mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden"
+        style={{ border: '1px solid #E2E8F0' }}
+      >
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'rgba(239,68,68,0.1)' }}>
+              <AlertTriangle size={18} style={{ color: '#ef4444' }} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-bold text-slate-900">Delete user account?</h2>
+              <p className="text-[13px] text-slate-500 mt-0.5 break-all">{user.email}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 pb-5">
+          <p className="text-[13px] text-slate-600 leading-relaxed mb-3">
+            This action is <strong>permanent and irreversible</strong>. The following will be deleted:
+          </p>
+          <ul className="space-y-1.5 mb-4">
+            {[
+              'User account and login credentials',
+              'All service requests submitted as customer',
+              'Chat messages on those requests',
+              user.role === 'ProviderAdmin'
+                ? 'Owned organization (members will be detached)'
+                : 'Organization membership',
+              'Permission overrides and billing data',
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2 text-[12px] text-slate-500">
+                <span className="mt-0.5 shrink-0" style={{ color: '#ef4444' }}>•</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-slate-400">
+            Jobs accepted by this user as a provider will remain, with the provider field cleared.
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="px-6 pb-6 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white flex items-center gap-2 transition-colors disabled:opacity-60"
+            style={{ background: isDeleting ? '#fca5a5' : '#ef4444' }}
+          >
+            {isDeleting ? (
+              <>
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                Deleting…
+              </>
+            ) : (
+              <>
+                <Trash2 size={13} />
+                Delete permanently
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── AdminPanel ────────────────────────────────────────────────────────────────
 
 export default function AdminPanel() {
@@ -197,6 +293,7 @@ export default function AdminPanel() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [updatingSubId, setUpdatingSubId]   = useState<string | null>(null)
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<UserDto | null>(null)
 
   const { data, isLoading } = useQuery<PagedResult<UserDto>>({
     queryKey: ['admin-users', page, pageSize],
@@ -214,6 +311,22 @@ export default function AdminPanel() {
     onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); toast.success('Subscription updated.') },
     onError:    () => toast.error('Failed to update subscription.'),
     onSettled:  () => setUpdatingSubId(null),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/users/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      toast.success('User deleted successfully.')
+      setPendingDeleteUser(null)
+      // Collapse the permissions panel for the deleted user if it was open
+      setExpandedUserId(prev => prev === pendingDeleteUser?.id ? null : prev)
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail ?? err?.response?.data?.message ?? 'Failed to delete user.'
+      toast.error(msg)
+      setPendingDeleteUser(null)
+    },
   })
 
   const toggleSub = (user: UserDto) => {
@@ -262,6 +375,8 @@ export default function AdminPanel() {
               <div className="w-36 shrink-0 text-right">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Subscription</span>
               </div>
+              {/* delete column + expand toggle column */}
+              <div className="w-8 shrink-0" />
               <div className="w-8 shrink-0" />
             </div>
 
@@ -306,6 +421,22 @@ export default function AdminPanel() {
                           {user.subTier === 'Paid' ? 'Downgrade' : 'Upgrade'}
                         </Button>
                       </div>
+
+                      {/* Delete button — hidden for self and Admin accounts (both are protected) */}
+                      {!isSelf && user.role !== 'Admin' && (
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteUser(user)}
+                          title="Delete user"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-slate-300 hover:text-red-500 hover:bg-red-50"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      {/* Reserve the column space for protected rows so layout stays stable */}
+                      {(isSelf || user.role === 'Admin') && (
+                        <div className="w-8 h-8 shrink-0" />
+                      )}
 
                       {/* Expand toggle */}
                       <button
@@ -352,6 +483,16 @@ export default function AdminPanel() {
           revoking removes access even if their role has it. Changes take effect immediately.
         </p>
       </div>
+
+      {/* Delete confirmation modal — rendered at layout root so it sits above everything */}
+      {pendingDeleteUser && (
+        <ConfirmDeleteModal
+          user={pendingDeleteUser}
+          isDeleting={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate(pendingDeleteUser.id)}
+          onCancel={() => { if (!deleteMutation.isPending) setPendingDeleteUser(null) }}
+        />
+      )}
     </AppLayout>
   )
 }

@@ -38,6 +38,38 @@ public class AdminController : BaseController
         return Ok(result);
     }
 
+    /// <summary>
+    /// Permanently deletes a user account and all associated data.
+    /// Cascades: service requests (+ chat messages), owned organization (members are detached),
+    /// permission overrides, stripe info, and all ASP.NET Identity satellite rows.
+    /// Guards: an admin cannot delete their own account or another Admin account.
+    /// </summary>
+    [HttpDelete("users/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteUser(Guid id)
+    {
+        // Controller-level guard: self-deletion is caught here before hitting the service,
+        // consistent with how UpdateSubscription handles it.
+        if (id == CurrentUserId)
+            return Forbidden("You cannot delete your own account.");
+
+        try
+        {
+            await _adminService.DeleteUserAsync(id);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbidden(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
     [HttpPatch("users/{id:guid}/subscription")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
