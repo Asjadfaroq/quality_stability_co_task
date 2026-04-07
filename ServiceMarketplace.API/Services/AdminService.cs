@@ -119,8 +119,20 @@ public class AdminService : IAdminService
         await _db.SaveChangesAsync();
 
         // Invalidate role-permission cache so the next permission check reloads from DB.
-        // Per-user caches (5-min TTL) will refresh naturally on expiry.
         await _cache.RemoveAsync($"role_permissions:{role}");
+
+        // Also immediately invalidate every per-user effective-permissions cache for users
+        // in this role.  Without this, a revoked permission remains usable for up to the
+        // per-user TTL (5 min) — a security gap.  This write only happens on admin actions
+        // so the DB scan is acceptable.
+        var affectedUserIds = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Role == role)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        await Task.WhenAll(affectedUserIds.Select(uid =>
+            _cache.RemoveAsync($"permissions:{uid}")));
     }
 
     // ── User-level permission overrides ───────────────────────────────────────

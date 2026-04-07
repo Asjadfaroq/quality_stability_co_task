@@ -28,11 +28,29 @@ public class PermissionService : IPermissionService
         // Admin has unrestricted access — short-circuit before any DB or cache call.
         // This is the single authoritative place for that rule.
         var role = await GetUserRoleAsync(userId);
-        if (role is null)      return false;
+        if (role is null)           return false;
         if (role == UserRole.Admin) return true;
 
         var permissions = await GetRolePermissionsAsync(role.Value, userId);
         return permissions.Contains(permissionName);
+    }
+
+    public async Task<HashSet<string>> GetEffectivePermissionsAsync(Guid userId)
+    {
+        var role = await GetUserRoleAsync(userId);
+        if (role is null) return [];
+
+        if (role == UserRole.Admin)
+        {
+            // Admin always has every defined permission — return the full catalogue.
+            var allNames = await _db.Permissions
+                .AsNoTracking()
+                .Select(p => p.Name)
+                .ToListAsync();
+            return [..allNames];
+        }
+
+        return await GetRolePermissionsAsync(role.Value, userId);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

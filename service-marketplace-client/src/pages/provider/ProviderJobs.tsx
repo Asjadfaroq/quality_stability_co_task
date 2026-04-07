@@ -6,12 +6,16 @@ import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Button, Badge, Card, CardHeader, Input, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
+import { usePermissions } from '../../hooks/usePermissions'
 import type { PagedResult, ServiceRequest } from '../../types'
 
 const DEFAULT_PAGE_SIZE = 20
 
 export default function ProviderJobs() {
   const queryClient = useQueryClient()
+  const { hasPermission } = usePermissions()
+  const canAccept   = hasPermission('request.accept')
+  const canViewAll  = hasPermission('request.view_all')
   const [page, setPage]                   = useState(1)
   const [pageSize, setPageSize]           = useState(DEFAULT_PAGE_SIZE)
   const [showNearby, setShowNearby]       = useState(false)
@@ -78,13 +82,15 @@ export default function ProviderJobs() {
           <h2 className="text-xl font-bold text-slate-900">Available Jobs</h2>
           <p className="text-sm text-slate-500 mt-0.5">Browse and accept pending service requests</p>
         </div>
-        <Button
-          variant={showNearby ? 'secondary' : 'primary'}
-          icon={showNearby ? <X size={15} /> : <SlidersHorizontal size={15} />}
-          onClick={() => { setShowNearby(!showNearby); setNearbyResults(null) }}
-        >
-          {showNearby ? 'Hide filter' : 'Find Nearby'}
-        </Button>
+        {canViewAll && (
+          <Button
+            variant={showNearby ? 'secondary' : 'primary'}
+            icon={showNearby ? <X size={15} /> : <SlidersHorizontal size={15} />}
+            onClick={() => { setShowNearby(!showNearby); setNearbyResults(null) }}
+          >
+            {showNearby ? 'Hide filter' : 'Find Nearby'}
+          </Button>
+        )}
       </div>
 
       {/* Nearby filter */}
@@ -153,15 +159,17 @@ export default function ProviderJobs() {
                       </p>
                       <p className="text-xs text-slate-400 line-clamp-2">{req.description}</p>
                     </div>
-                    <Button
-                      size="sm"
-                      loading={acceptingId === req.id}
-                      disabled={acceptingId !== null}
-                      onClick={() => { setAcceptingId(req.id); acceptMutation.mutate(req.id) }}
-                      className="shrink-0"
-                    >
-                      Accept
-                    </Button>
+                    {canAccept && (
+                      <Button
+                        size="sm"
+                        loading={acceptingId === req.id}
+                        disabled={acceptingId !== null}
+                        onClick={() => { setAcceptingId(req.id); acceptMutation.mutate(req.id) }}
+                        className="shrink-0"
+                      >
+                        Accept
+                      </Button>
+                    )}
                   </div>
                 </li>
               ))}

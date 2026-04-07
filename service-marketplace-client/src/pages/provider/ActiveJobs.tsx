@@ -8,6 +8,7 @@ import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import { Button, Badge, Card, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import { useUnreadStore } from '../../store/unreadStore'
+import { usePermissions } from '../../hooks/usePermissions'
 import type { PagedResult, ServiceRequest } from '../../types'
 
 function statusBadge(status: ServiceRequest['status']) {
@@ -25,6 +26,8 @@ const DEFAULT_PAGE_SIZE = 10
 
 export default function ActiveJobs() {
   const queryClient = useQueryClient()
+  const { hasPermission } = usePermissions()
+  const canComplete = hasPermission('request.complete')
   const [page, setPage]             = useState(1)
   const [pageSize, setPageSize]     = useState(DEFAULT_PAGE_SIZE)
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
@@ -144,7 +147,7 @@ export default function ActiveJobs() {
                           )}
                         </Button>
 
-                        {req.status === 'Accepted' && (
+                        {req.status === 'Accepted' && canComplete && (
                           <Button
                             variant="success" size="sm"
                             loading={completeMutation.isPending}

@@ -8,36 +8,47 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
+import { usePermissions } from '../hooks/usePermissions'
 import AiAssistant from './AiAssistant'
 
-interface NavItem { label: string; to: string; icon: React.ReactNode }
+interface NavItem {
+  label:       string
+  to:          string
+  icon:        React.ReactNode
+  /** If set, the item is only shown when the user holds this permission. */
+  permission?: string
+}
 
+// Each item optionally declares the permission that gates its visibility.
+// Items without a permission are always visible for users of that role.
+// The sidebar filters this list at runtime using the live permission set.
 const NAV_ITEMS: Record<string, NavItem[]> = {
   Customer: [
-    { label: 'Dashboard',    to: '/customer',                  icon: <LayoutDashboard size={16} /> },
-    { label: 'My Requests',  to: '/customer/requests',         icon: <Briefcase       size={16} /> },
-    { label: 'Chats',        to: '/chats',                     icon: <MessageSquare   size={16} /> },
-    { label: 'Subscription', to: '/customer/subscription',     icon: <CreditCard      size={16} /> },
+    { label: 'Dashboard',        to: '/customer',              icon: <LayoutDashboard size={16} /> },
+    { label: 'My Requests',      to: '/customer/requests',     icon: <Briefcase       size={16} /> },
+    { label: 'Chats',            to: '/chats',                 icon: <MessageSquare   size={16} /> },
+    { label: 'Subscription',     to: '/customer/subscription', icon: <CreditCard      size={16} /> },
+    { label: 'My Organization',  to: '/customer/org',          icon: <Building2       size={16} />, permission: 'org.view' },
   ],
   ProviderEmployee: [
-    { label: 'Dashboard',     to: '/provider',           icon: <LayoutDashboard size={16} /> },
-    { label: 'Available Jobs',to: '/provider/jobs',      icon: <Briefcase       size={16} /> },
-    { label: 'Active Jobs',   to: '/provider/active',    icon: <Loader2         size={16} /> },
-    { label: 'Completed Jobs',to: '/provider/completed', icon: <CheckCircle2    size={16} /> },
-    { label: 'Chats',         to: '/chats',              icon: <MessageSquare   size={16} /> },
-    { label: 'My Organization',to: '/provider/org',      icon: <Building2       size={16} /> },
+    { label: 'Dashboard',        to: '/provider',           icon: <LayoutDashboard size={16} /> },
+    { label: 'Available Jobs',   to: '/provider/jobs',      icon: <Briefcase       size={16} />, permission: 'request.accept'   },
+    { label: 'Active Jobs',      to: '/provider/active',    icon: <Loader2         size={16} />, permission: 'request.complete' },
+    { label: 'Completed Jobs',   to: '/provider/completed', icon: <CheckCircle2    size={16} />, permission: 'request.complete' },
+    { label: 'Chats',            to: '/chats',              icon: <MessageSquare   size={16} /> },
+    { label: 'My Organization',  to: '/provider/org',       icon: <Building2       size={16} />, permission: 'org.view'         },
   ],
   ProviderAdmin: [
-    { label: 'Dashboard',     to: '/provider',           icon: <LayoutDashboard size={16} /> },
-    { label: 'Available Jobs',to: '/provider/jobs',      icon: <Briefcase       size={16} /> },
-    { label: 'Active Jobs',   to: '/provider/active',    icon: <Loader2         size={16} /> },
-    { label: 'Completed Jobs',to: '/provider/completed', icon: <CheckCircle2    size={16} /> },
-    { label: 'Chats',         to: '/chats',              icon: <MessageSquare   size={16} /> },
-    { label: 'Organization',  to: '/org',                icon: <Building2       size={16} /> },
+    { label: 'Dashboard',        to: '/provider',           icon: <LayoutDashboard size={16} /> },
+    { label: 'Available Jobs',   to: '/provider/jobs',      icon: <Briefcase       size={16} />, permission: 'request.accept'   },
+    { label: 'Active Jobs',      to: '/provider/active',    icon: <Loader2         size={16} />, permission: 'request.complete' },
+    { label: 'Completed Jobs',   to: '/provider/completed', icon: <CheckCircle2    size={16} />, permission: 'request.complete' },
+    { label: 'Chats',            to: '/chats',              icon: <MessageSquare   size={16} /> },
+    { label: 'Organization',     to: '/org',                icon: <Building2       size={16} />, permission: 'org.manage'        },
   ],
   Admin: [
-    { label: 'User Management',     to: '/admin',       icon: <Users       size={16} /> },
-    { label: 'Roles & Permissions', to: '/admin/roles', icon: <ShieldCheck size={16} /> },
+    { label: 'User Management',     to: '/admin',       icon: <Users       size={16} />, permission: 'admin.manage_users' },
+    { label: 'Roles & Permissions', to: '/admin/roles', icon: <ShieldCheck size={16} />, permission: 'admin.manage_users' },
   ],
 }
 
@@ -74,7 +85,15 @@ function timeAgo(date: Date): string {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { email, role, logout } = useAuthStore()
   const navigate = useNavigate()
-  const items    = (role && NAV_ITEMS[role]) ?? []
+  const { hasPermission } = usePermissions()
+
+  // Keep only items whose permission is either absent (always visible)
+  // or currently held by the user. hasPermission() short-circuits to true
+  // for Admin and to false while the permissions fetch is in-flight.
+  const items = (role ? NAV_ITEMS[role] ?? [] : []).filter(
+    (item) => !item.permission || hasPermission(item.permission),
+  )
+
   const initials = (email ?? 'U').slice(0, 2).toUpperCase()
 
   return (
