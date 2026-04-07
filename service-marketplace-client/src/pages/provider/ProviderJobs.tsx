@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Briefcase, Search, X, SlidersHorizontal } from 'lucide-react'
-import { useSignalR } from '../../hooks/useSignalR'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
@@ -17,22 +16,6 @@ export default function ProviderJobs() {
   const [radius, setRadius]               = useState(10)
   const [nearbyResults, setNearbyResults] = useState<ServiceRequest[] | null>(null)
   const [searching, setSearching]         = useState(false)
-
-  useSignalR({
-    // A customer just posted a new job — refresh the list and show a notification
-    NewRequestAvailable: (data: { requestId: string; title: string; category: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-      toast(`New job: "${data.title}" (${data.category})`, { icon: '🔔', duration: 6000 })
-    },
-    // Another provider accepted a job — remove it from available list silently
-    RequestTaken: () => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-    },
-    RequestConfirmed: (data: { requestId: string; title: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-      toast.success(`"${data.title}" confirmed complete!`)
-    },
-  })
 
   const { data: allRequests = [], isLoading } = useQuery<ServiceRequest[]>({
     queryKey: ['requests'],

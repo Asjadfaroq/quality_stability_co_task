@@ -2,7 +2,6 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Loader2, MessageSquare, AlertCircle } from 'lucide-react'
-import { useSignalR } from '../../hooks/useSignalR'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
@@ -28,16 +27,13 @@ export default function ActiveJobs() {
   const activeChatRef = useRef<string | null>(null)
   activeChatRef.current = activeChat?.id ?? null
 
+  // Only handle unread badge state here — query invalidation and notifications
+  // are managed centrally in AppLayout via its single SignalR connection.
   useSignalR({
-    RequestConfirmed: (data: { requestId: string; title: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-      toast.success(`"${data.title}" confirmed complete!`)
-    },
     NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
       const rid = String(data.requestId)
       if (activeChatRef.current === rid) return
       setUnread((p) => ({ ...p, [rid]: (p[rid] ?? 0) + 1 }))
-      toast(`${data.senderEmail} sent you a message`, { icon: '💬', duration: 4000 })
     },
   })
 

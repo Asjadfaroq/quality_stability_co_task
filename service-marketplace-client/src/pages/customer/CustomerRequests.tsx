@@ -275,11 +275,9 @@ export default function CustomerRequests() {
     },
   })
 
+  // Only manage local unread badge state — query invalidation and notifications
+  // are handled centrally in AppLayout.
   useSignalR({
-    RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
-      toast(`"${data.title}" marked complete — please confirm!`, { icon: '🔔', duration: 8000 })
-    },
     NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
       const rid = String(data.requestId)
       if (activeChatRef.current === rid) return

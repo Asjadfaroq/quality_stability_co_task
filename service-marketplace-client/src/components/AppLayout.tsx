@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard, MapPin, Users, Building2,
-  Menu, X, LogOut, Briefcase, Bell, CheckCircle2, MessageSquare, Loader2,
+  Menu, X, LogOut, Briefcase, Bell, CheckCircle2,
+  MessageSquare, Loader2, BriefcaseBusiness, Clock, Trash2,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
+import { useSignalR } from '../hooks/useSignalR'
+import { useNotificationStore, type AppNotification } from '../store/notificationStore'
 
 interface NavItem { label: string; to: string; icon: React.ReactNode }
 
@@ -41,6 +45,27 @@ const ACTIVE_BG         = 'rgba(59,130,246,0.18)'
 const ACTIVE_COLOR      = '#93C5FD'
 const AVATAR_BG         = 'rgba(147,197,253,0.15)'
 
+// ── Notification helpers ──────────────────────────────────────────────────────
+
+const NOTIF_ICON: Record<AppNotification['type'], { icon: React.ReactNode; bg: string; color: string }> = {
+  new_job:          { icon: <BriefcaseBusiness size={14} />, bg: 'rgba(99,102,241,0.1)',  color: '#6366f1' },
+  job_confirmed:    { icon: <CheckCircle2      size={14} />, bg: 'rgba(16,185,129,0.1)',  color: '#10b981' },
+  message:          { icon: <MessageSquare     size={14} />, bg: 'rgba(59,130,246,0.1)',  color: '#3b82f6' },
+  confirm_needed:   { icon: <Clock             size={14} />, bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' },
+}
+
+function timeAgo(date: Date): string {
+  const diff = Date.now() - date.getTime()
+  const mins  = Math.floor(diff / 60_000)
+  const hours = Math.floor(diff / 3_600_000)
+  if (mins  < 1)  return 'Just now'
+  if (mins  < 60) return `${mins}m ago`
+  if (hours < 24) return `${hours}h ago`
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { email, role, logout } = useAuthStore()
   const navigate = useNavigate()
@@ -48,85 +73,51 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const initials = (email ?? 'U').slice(0, 2).toUpperCase()
 
   return (
-    <div
-      className="flex flex-col h-full w-full"
-      style={{ background: SIDEBAR_GRADIENT }}
-    >
-      {/* ── Logo ─────────────────────────────────────── */}
-      <div
-        className="flex items-center gap-3 px-5 py-5 shrink-0"
-        style={{ borderBottom: DIVIDER }}
-      >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: AVATAR_BG }}
-        >
+    <div className="flex flex-col h-full w-full" style={{ background: SIDEBAR_GRADIENT }}>
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-5 py-5 shrink-0" style={{ borderBottom: DIVIDER }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: AVATAR_BG }}>
           <MapPin size={15} style={{ color: ACTIVE_COLOR }} />
         </div>
-        <span className="font-bold text-[13px] tracking-tight text-white select-none">
-          ServiceMarket
-        </span>
+        <span className="font-bold text-[13px] tracking-tight text-white select-none">ServiceMarket</span>
       </div>
 
-      {/* ── Section label ────────────────────────────── */}
-      <p
-        className="px-5 pt-6 pb-2 text-[10px] font-semibold uppercase tracking-widest select-none"
-        style={{ color: 'rgba(255,255,255,0.28)' }}
-      >
+      {/* Section label */}
+      <p className="px-5 pt-6 pb-2 text-[10px] font-semibold uppercase tracking-widest select-none"
+        style={{ color: 'rgba(255,255,255,0.28)' }}>
         Main Menu
       </p>
 
-      {/* ── Navigation ───────────────────────────────── */}
+      {/* Navigation */}
       <nav className="flex-1 px-3 space-y-[3px]">
         {items.map((item) => (
           <NavLink
-            key={item.to}
-            to={item.to}
-            end
-            onClick={onNavigate}
+            key={item.to} to={item.to} end onClick={onNavigate}
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 sidebar-nav-item"
             style={({ isActive }) =>
-              isActive
-                ? { background: ACTIVE_BG, color: ACTIVE_COLOR }
-                : { color: INACTIVE_COLOR }
+              isActive ? { background: ACTIVE_BG, color: ACTIVE_COLOR } : { color: INACTIVE_COLOR }
             }
           >
-            {item.icon}
-            {item.label}
+            {item.icon}{item.label}
           </NavLink>
         ))}
       </nav>
 
-      {/* ── Footer / Profile ─────────────────────────── */}
-      <div
-        className="px-4 py-4 shrink-0"
-        style={{ borderTop: DIVIDER }}
-      >
+      {/* Footer / Profile */}
+      <div className="px-4 py-4 shrink-0" style={{ borderTop: DIVIDER }}>
         <div className="flex items-center gap-3">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 select-none"
-            style={{ background: AVATAR_BG, color: ACTIVE_COLOR }}
-          >
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 select-none"
+            style={{ background: AVATAR_BG, color: ACTIVE_COLOR }}>
             {initials}
           </div>
-
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-semibold text-white truncate leading-tight">
-              {email}
-            </p>
-            <p
-              className="text-[10px] mt-0.5 truncate leading-tight"
-              style={{ color: 'rgba(255,255,255,0.38)' }}
-            >
-              {role}
-            </p>
+            <p className="text-[12px] font-semibold text-white truncate leading-tight">{email}</p>
+            <p className="text-[10px] mt-0.5 truncate leading-tight" style={{ color: 'rgba(255,255,255,0.38)' }}>{role}</p>
           </div>
-
           <button
             onClick={() => { logout(); navigate('/login', { replace: true }) }}
             className="p-1.5 rounded-md shrink-0 transition-colors sidebar-logout-btn"
-            style={{ color: 'rgba(255,255,255,0.38)' }}
-            title="Sign out"
+            style={{ color: 'rgba(255,255,255,0.38)' }} title="Sign out"
           >
             <LogOut size={14} />
           </button>
@@ -136,62 +127,255 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
+// ── Notification panel ────────────────────────────────────────────────────────
+
+function NotificationPanel({ onClose }: { onClose: () => void }) {
+  const { items, markAllRead, clear } = useNotificationStore()
+  const unread = items.filter((n) => !n.read).length
+
+  return (
+    <div
+      className="absolute right-0 top-11 z-50 w-[340px] bg-white rounded-2xl shadow-2xl overflow-hidden"
+      style={{
+        border: '1px solid #E2E8F0',
+        animation: 'notifSlideIn 0.18s cubic-bezier(0.16,1,0.3,1)',
+      }}
+    >
+      <style>{`
+        @keyframes notifSlideIn {
+          from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0)   scale(1);     }
+        }
+      `}</style>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '1px solid #F1F5F9' }}>
+        <div className="flex items-center gap-2">
+          <Bell size={15} className="text-slate-500" />
+          <span className="text-sm font-semibold text-slate-900">Notifications</span>
+          {unread > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"
+              style={{ background: '#6366f1' }}>
+              {unread}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {unread > 0 && (
+            <button onClick={markAllRead}
+              className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
+              Mark all read
+            </button>
+          )}
+          {items.length > 0 && (
+            <button onClick={clear}
+              className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="Clear all">
+              <Trash2 size={13} />
+            </button>
+          )}
+          <button onClick={onClose}
+            className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="overflow-y-auto" style={{ maxHeight: 400 }}>
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 gap-3 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center">
+              <Bell size={20} className="text-slate-300" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">All caught up</p>
+              <p className="text-xs text-slate-400 mt-0.5">No notifications yet</p>
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-50">
+            {items.map((n) => {
+              const meta = NOTIF_ICON[n.type]
+              return (
+                <li
+                  key={n.id}
+                  className="flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50/80"
+                  style={{ background: n.read ? 'transparent' : 'rgba(99,102,241,0.025)' }}
+                >
+                  {/* Type icon */}
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ background: meta.bg, color: meta.color }}>
+                    {meta.icon}
+                  </div>
+
+                  {/* Content */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-xs font-semibold leading-tight ${n.read ? 'text-slate-600' : 'text-slate-900'}`}>
+                        {n.title}
+                      </p>
+                      <span className="text-[10px] text-slate-400 shrink-0 mt-0.5">{timeAgo(n.at)}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{n.body}</p>
+                  </div>
+
+                  {/* Unread dot */}
+                  {!n.read && (
+                    <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0" style={{ background: '#6366f1' }} />
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* Footer */}
+      {items.length > 0 && (
+        <div className="px-4 py-2.5 text-center" style={{ borderTop: '1px solid #F1F5F9' }}>
+          <p className="text-[11px] text-slate-400">
+            {items.length} notification{items.length !== 1 ? 's' : ''}
+            {unread > 0 ? ` · ${unread} unread` : ' · all read'}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── AppLayout ─────────────────────────────────────────────────────────────────
+
 interface Props {
   children: React.ReactNode
   title?: string
 }
 
 export default function AppLayout({ children, title }: Props) {
-  const [open, setOpen] = useState(false)
-  const { email } = useAuthStore()
-  const initials = (email ?? 'U').slice(0, 2).toUpperCase()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [notifOpen, setNotifOpen]     = useState(false)
+  const notifRef  = useRef<HTMLDivElement>(null)
+
+  const { email, role } = useAuthStore()
+  const queryClient     = useQueryClient()
+  const { add, markAllRead, items } = useNotificationStore()
+  const unreadCount = items.filter((n) => !n.read).length
+  const initials    = (email ?? 'U').slice(0, 2).toUpperCase()
+
+  const isProvider = role === 'ProviderEmployee' || role === 'ProviderAdmin'
+  const isCustomer = role === 'Customer'
+
+  // ── SignalR: push notifications + invalidate queries ──────────────────────
+  useSignalR({
+    // ── Provider events ──
+    NewRequestAvailable: (data: { requestId: string; title: string; category: string }) => {
+      if (!isProvider) return
+      add({
+        type:  'new_job',
+        title: 'New Job Available',
+        body:  `"${data.title}" · ${data.category}`,
+        link:  '/provider/jobs',
+      })
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+
+    RequestTaken: () => {
+      if (!isProvider) return
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+
+    RequestConfirmed: (data: { requestId: string; title: string }) => {
+      if (!isProvider) return
+      add({
+        type:  'job_confirmed',
+        title: 'Job Confirmed Complete',
+        body:  `"${data.title}" was confirmed by the customer`,
+        link:  '/provider/completed',
+      })
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
+    },
+
+    // ── Customer events ──
+    RequestNeedsConfirmation: (data: { requestId: string; title: string }) => {
+      if (!isCustomer) return
+      add({
+        type:  'confirm_needed',
+        title: 'Awaiting Your Confirmation',
+        body:  `"${data.title}" has been marked complete by the provider`,
+        link:  '/customer/requests',
+      })
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+
+    // ── Both ──
+    NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
+      add({
+        type:  'message',
+        title: 'New Message',
+        body:  `${data.senderEmail} sent you a message`,
+        link:  '/chats',
+      })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    },
+  })
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!notifOpen) return
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node))
+        setNotifOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [notifOpen])
+
+  // Mark all read when opening the panel
+  const handleBellClick = () => {
+    setNotifOpen((prev) => {
+      if (!prev) markAllRead()   // mark read as soon as panel opens
+      return !prev
+    })
+  }
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#F0F4F8' }}>
 
       {/* Desktop sidebar */}
-      <aside
-        className="hidden lg:flex lg:flex-col shrink-0"
-        style={{ width: 215 }}
-      >
+      <aside className="hidden lg:flex lg:flex-col shrink-0" style={{ width: 215 }}>
         <SidebarContent />
       </aside>
 
       {/* Mobile overlay */}
-      {open && (
+      {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
           <aside className="relative z-50 flex flex-col shadow-2xl" style={{ width: 215 }}>
             <button
-              onClick={() => setOpen(false)}
+              onClick={() => setSidebarOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg z-10 transition-colors"
               style={{ color: 'rgba(255,255,255,0.5)' }}
             >
               <X size={16} />
             </button>
-            <SidebarContent onNavigate={() => setOpen(false)} />
+            <SidebarContent onNavigate={() => setSidebarOpen(false)} />
           </aside>
         </div>
       )}
 
-      {/* Main content area */}
+      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Top bar */}
         <header
           className="flex items-center justify-between px-6 shrink-0"
-          style={{
-            height: 56,
-            background: '#ffffff',
-            borderBottom: '1px solid #E8EDF3',
-          }}
+          style={{ height: 56, background: '#ffffff', borderBottom: '1px solid #E8EDF3' }}
         >
           {/* Mobile hamburger */}
-          <button
-            onClick={() => setOpen(true)}
+          <button onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg transition-colors"
-            style={{ color: '#64748B' }}
-          >
+            style={{ color: '#64748B' }}>
             <Menu size={20} />
           </button>
 
@@ -205,12 +389,35 @@ export default function AppLayout({ children, title }: Props) {
 
           {/* Right actions */}
           <div className="flex items-center gap-2.5">
-            <button
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-              style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#64748B' }}
-            >
-              <Bell size={15} />
-            </button>
+
+            {/* Bell with badge + dropdown */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={handleBellClick}
+                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors relative"
+                style={{
+                  background: notifOpen ? '#EEF2FF' : '#F8FAFC',
+                  border: `1px solid ${notifOpen ? '#C7D2FE' : '#E2E8F0'}`,
+                  color: notifOpen ? '#6366f1' : '#64748B',
+                }}
+              >
+                <Bell size={15} />
+                {unreadCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-white font-bold"
+                    style={{ fontSize: 9, background: '#ef4444', boxShadow: '0 0 0 2px #fff' }}
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <NotificationPanel onClose={() => setNotifOpen(false)} />
+              )}
+            </div>
+
+            {/* Avatar */}
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white select-none"
               style={{ background: 'linear-gradient(135deg,#1E3A5F,#3B82F6)' }}
