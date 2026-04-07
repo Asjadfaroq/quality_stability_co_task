@@ -6,6 +6,7 @@ import { Users, ChevronDown, ChevronUp, ShieldCheck, CreditCard } from 'lucide-r
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, CardHeader, Badge, Button, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
+import { useAuthStore } from '../../store/authStore'
 import type { PagedResult } from '../../types'
 
 const PERMISSIONS = [
@@ -26,10 +27,13 @@ interface UserDto {
 }
 
 export default function AdminPanel() {
-  const queryClient = useQueryClient()
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [page, setPage]         = useState(1)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const queryClient   = useQueryClient()
+  const { userId }    = useAuthStore()
+  const [expanded, setExpanded]       = useState<string | null>(null)
+  const [page, setPage]               = useState(1)
+  const [pageSize, setPageSize]       = useState(DEFAULT_PAGE_SIZE)
+  const [updatingSubId, setUpdatingSubId]   = useState<string | null>(null)
+  const [updatingPermKey, setUpdatingPermKey] = useState<string | null>(null) // "userId:permKey"
 
   const { data, isLoading } = useQuery<PagedResult<UserDto>>({
     queryKey: ['admin-users', page, pageSize],
@@ -50,6 +54,7 @@ export default function AdminPanel() {
       toast.success('Subscription updated.')
     },
     onError: () => toast.error('Failed to update subscription.'),
+    onSettled: () => setUpdatingSubId(null),
   })
 
   const permMutation = useMutation({
@@ -62,13 +67,18 @@ export default function AdminPanel() {
       toast.success('Permission updated.')
     },
     onError: () => toast.error('Failed to update permission.'),
+    onSettled: () => setUpdatingPermKey(null),
   })
 
-  const toggleSub  = (user: UserDto) =>
+  const toggleSub = (user: UserDto) => {
+    setUpdatingSubId(user.id)
     subMutation.mutate({ id: user.id, subTier: user.subTier === 'Free' ? 'Paid' : 'Free' })
+  }
 
-  const togglePerm = (user: UserDto, permission: string) =>
+  const togglePerm = (user: UserDto, permission: string) => {
+    setUpdatingPermKey(`${user.id}:${permission}`)
     permMutation.mutate({ id: user.id, permission, granted: !user.permissions.includes(permission) })
+  }
 
   return (
     <AppLayout title="User Management">
@@ -111,21 +121,31 @@ export default function AdminPanel() {
 
             <ul className="divide-y divide-gray-100">
               {users.map((user) => {
-                const isOpen = expanded === user.id
+                const isOpen   = expanded === user.id
+                const isSelf   = user.id === userId   // admin's own row
                 return (
-                  <li key={user.id}>
+                  <li key={user.id} className={isSelf ? 'opacity-60' : ''}>
                     <div className="px-6 py-3.5 flex items-center gap-4">
                       <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold shrink-0">
                         {user.email.slice(0, 2).toUpperCase()}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800 truncate">{user.email}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-slate-800 truncate">{user.email}</p>
+                          {isSelf && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 uppercase tracking-wide">
+                              You
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <Badge label={user.role}    variant={user.role.toLowerCase() as any} />
-                          <span className="text-xs text-slate-400">
-                            {user.permissions.length} permission{user.permissions.length !== 1 ? 's' : ''}
-                          </span>
+                          <Badge label={user.role} variant={user.role.toLowerCase() as any} />
+                          {!isSelf && (
+                            <span className="text-xs text-slate-400">
+                              {user.permissions.length} permission{user.permissions.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -134,22 +154,26 @@ export default function AdminPanel() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          loading={subMutation.isPending}
+                          loading={updatingSubId === user.id}
+                          disabled={isSelf || updatingSubId !== null}
                           icon={<CreditCard size={13} />}
                           onClick={() => toggleSub(user)}
+                          title={isSelf ? 'Cannot modify your own subscription' : undefined}
                         >
                           {user.subTier === 'Paid' ? 'Downgrade' : 'Upgrade'}
                         </Button>
                         <button
-                          onClick={() => setExpanded(isOpen ? null : user.id)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                          onClick={() => !isSelf && setExpanded(isOpen ? null : user.id)}
+                          disabled={isSelf}
+                          className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:pointer-events-none disabled:opacity-40"
+                          title={isSelf ? 'Cannot modify your own permissions' : undefined}
                         >
                           {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
                       </div>
                     </div>
 
-                    {isOpen && (
+                    {isOpen && !isSelf && (
                       <div className="px-6 pb-5 bg-gray-50/50 border-t border-gray-100">
                         <div className="pt-4">
                           <div className="flex items-center gap-2 mb-3">
@@ -160,11 +184,16 @@ export default function AdminPanel() {
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {PERMISSIONS.map(({ key, label }) => {
-                              const granted = user.permissions.includes(key)
+                              const granted    = user.permissions.includes(key)
+                              const isUpdating = updatingPermKey === `${user.id}:${key}`
                               return (
                                 <label
                                   key={key}
-                                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+                                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
+                                    isUpdating
+                                      ? 'opacity-60 cursor-wait'
+                                      : 'cursor-pointer'
+                                  } ${
                                     granted
                                       ? 'bg-indigo-50 border-indigo-200'
                                       : 'bg-white border-slate-200 hover:border-slate-300'
@@ -174,7 +203,7 @@ export default function AdminPanel() {
                                     type="checkbox"
                                     checked={granted}
                                     onChange={() => togglePerm(user, key)}
-                                    disabled={permMutation.isPending}
+                                    disabled={updatingPermKey !== null}
                                     className="w-3.5 h-3.5 accent-indigo-600 shrink-0"
                                   />
                                   <div>
