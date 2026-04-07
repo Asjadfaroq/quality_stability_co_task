@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, ShieldCheck } from 'lucide-react'
 import api from '../api/axios'
 import { useAuthStore } from '../store/authStore'
 import { getDashboardPath, AUTH_REDIRECT_KEY } from '../utils/auth'
@@ -235,6 +235,33 @@ export default function Login() {
                   Create one
                 </Link>
               </p>
+
+              {/* Admin credentials notice */}
+              <div
+                className="mt-6 rounded-xl px-4 py-3 flex gap-3"
+                style={{ background: '#f8faff', border: '1px solid #dce8fb' }}
+              >
+                <ShieldCheck size={15} className="shrink-0 mt-0.5" style={{ color: '#3b6fd4' }} />
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#3b6fd4' }}>
+                    Admin Access
+                  </p>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-400 w-14">Email</span>
+                      <span className="text-[11px] font-medium text-slate-700 font-mono select-all">
+                        admin@qualitco.com
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-400 w-14">Password</span>
+                      <span className="text-[11px] font-medium text-slate-700 font-mono select-all">
+                        Quality123!
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
