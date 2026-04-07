@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { AuthUser, UserRole } from '../types'
-import { parseTokenExpiry, isTokenExpired } from '../utils/auth'
+import { parseTokenExpiry, parseTokenEmail, isTokenExpired } from '../utils/auth'
 
 interface AuthState {
   token:         string   | null
@@ -28,7 +28,10 @@ export const useAuthStore = create<AuthState>()(
 
       login: (user) => {
         const expiresAt = parseTokenExpiry(user.token)
-        set({ token: user.token, userId: user.userId, email: user.email, role: user.role, expiresAt })
+        // Prefer the email field from the API response; fall back to decoding it
+        // from the JWT payload in case the backend omits it from the response body.
+        const email = user.email || parseTokenEmail(user.token)
+        set({ token: user.token, userId: user.userId, email, role: user.role, expiresAt })
       },
 
       logout: () =>
@@ -49,7 +52,11 @@ export const useAuthStore = create<AuthState>()(
           // Token expired while the user was away — clear silently
           set({ token: null, userId: null, email: null, role: null, expiresAt: null, isInitialized: true })
         } else {
-          set({ expiresAt: parsedExpiry, isInitialized: true })
+          // If email was never stored (e.g. session persisted before this field was
+          // added), recover it from the token payload so the UI always has it.
+          const { email } = get()
+          const resolvedEmail = email || parseTokenEmail(token)
+          set({ email: resolvedEmail, expiresAt: parsedExpiry, isInitialized: true })
         }
       },
     }),
