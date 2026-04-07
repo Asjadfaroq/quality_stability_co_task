@@ -32,6 +32,8 @@ export default function ProviderJobs() {
   const totalCount  = data?.totalCount ?? 0
   const totalPages  = data?.totalPages ?? 1
 
+  const [acceptingId, setAcceptingId] = useState<string | null>(null)
+
   const acceptMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/requests/${id}/accept`),
     onSuccess: () => {
@@ -44,6 +46,7 @@ export default function ProviderJobs() {
         ? 'This request was already accepted by someone else.'
         : 'Failed to accept request.')
     },
+    onSettled: () => setAcceptingId(null),
   })
 
   const handleNearbySearch = async () => {
@@ -150,7 +153,13 @@ export default function ProviderJobs() {
                       </p>
                       <p className="text-xs text-slate-400 line-clamp-2">{req.description}</p>
                     </div>
-                    <Button size="sm" loading={acceptMutation.isPending} onClick={() => acceptMutation.mutate(req.id)} className="shrink-0">
+                    <Button
+                      size="sm"
+                      loading={acceptingId === req.id}
+                      disabled={acceptingId !== null}
+                      onClick={() => { setAcceptingId(req.id); acceptMutation.mutate(req.id) }}
+                      className="shrink-0"
+                    >
                       Accept
                     </Button>
                   </div>
