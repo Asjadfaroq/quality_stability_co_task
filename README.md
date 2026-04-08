@@ -1,148 +1,118 @@
-# Service Marketplace Platform (Senior Fullstack Take-Home)
+<div align="center">
 
-This repository contains my implementation of the **Service Marketplace Platform (MVP)** from `Recruitment_Task.md`.
+# Service Marketplace Platform
 
-The platform allows:
-- Customers to create service requests
-- Providers to discover and accept nearby requests
-- API-level RBAC with dynamic permissions
-- Subscription-based feature gating
-- AI-powered request assistance
+**Senior Fullstack Engineer Take-Home (MVP) — API-level RBAC, geolocation requests, subscription gating, AI assistance, and real-time updates.**
 
-## Live URL
+[![Live App](https://img.shields.io/badge/Live_App-Azure_Static_Web_Apps-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=fff)](https://yellow-sand-0fab52c03.4.azurestaticapps.net/)
+[![API](https://img.shields.io/badge/API-ASP.NET_Core_10-512BD4?style=for-the-badge&logo=dotnet&logoColor=fff)](./ServiceMarketplace.API)
+[![Frontend](https://img.shields.io/badge/Frontend-React_%2B_TS-61DAFB?style=for-the-badge&logo=react&logoColor=000)](./ServiceMarketplace.Client)
 
-- Frontend: [https://yellow-sand-0fab52c03.4.azurestaticapps.net/](https://yellow-sand-0fab52c03.4.azurestaticapps.net/)
+</div>
+
+---
+
+## Overview
+
+This repository is my implementation of the HR assignment in `Recruitment_Task.md`.
+
+The platform allows customers to create service requests and providers to discover, accept, and complete nearby work, with permission-based access control enforced at the API layer.
+
+**Stack:** ASP.NET Core 10, Entity Framework Core, SQL Server, React + TypeScript (Vite), SignalR, Redis, Stripe, Serilog, Azure Application Insights.
 
 ---
 
 ## Requirement Coverage (From Recruitment Task)
 
 ### 1) Authentication & RBAC
-- JWT authentication implemented with ASP.NET Core Identity.
+- JWT auth with ASP.NET Core Identity.
 - Roles implemented: `Admin`, `ProviderAdmin`, `ProviderEmployee`, `Customer`.
-- Access control is enforced at API level via `[Authorize]` + custom `[RequirePermission("...")]`.
-- UI role separation exists (Customer/Provider/Admin flows), but API remains source of truth.
+- API-level enforcement via `[Authorize]` + `[RequirePermission("...")]`.
+- Role-specific frontend flows, but authorization is enforced server-side.
 
 ### 2) Core Functionality
-- **Customer**
-  - Create request (`title`, `description`, `location`)
-  - View own requests and statuses
-- **Provider**
-  - View available requests
-  - Retrieve nearby requests by radius
-  - Accept request
-  - Update status to complete
-- **Lifecycle**
-  - Implemented flow: `Pending -> Accepted -> PendingConfirmation -> Completed`
-  - Includes auto-confirm background worker for stale confirmation cases
+- **Customer:** create requests (`title`, `description`, `location`), view own requests and statuses.
+- **Provider:** view available requests, retrieve nearby requests, accept requests, mark complete.
+- **Lifecycle:** implemented as `Pending -> Accepted -> PendingConfirmation -> Completed`.
 
 ### 3) Geolocation
-- Latitude/longitude stored per request.
-- Nearby search implemented with radius filtering (bounding-box + Haversine).
-- Map UI added as a bonus (React Leaflet).
+- Stores latitude/longitude per request.
+- Nearby filter by radius (bounding-box query + Haversine calculation).
+- Map UI implemented as bonus via React Leaflet.
 
 ### 4) Subscription / Feature Gating
-- Free tier request cap enforced (default: 3 requests).
-- Paid tier has no request limit.
-- Real Stripe integration implemented (beyond assignment's "simulate if needed" baseline).
+- Free users are limited to a configurable request cap (default 3).
+- Paid users have no request limit.
+- Real Stripe integration is implemented (stronger than minimum requirement).
 
 ### 5) AI Feature
-- AI request description enhancement + category suggestion implemented.
-- AI help chat assistant implemented as additional AI feature.
-- Graceful fallback is included if external AI call fails.
+- AI description enhancement and category suggestion.
+- AI help chat assistant as an additional AI feature.
+- External AI failures fall back to safe behavior so user flow remains functional.
 
 ### 6) Frontend
-- Functional frontend with role-aware pages/flows.
-- Supports core actions: create, list, accept, complete, confirm, manage.
-- Clear role-specific views for customer/provider/admin capabilities.
+- Functional UI with role-aware screens and flows.
+- Supports required actions (create/accept/complete and related request management).
+- Clear separation by role behavior.
 
 ### 7) API & Backend Design
-- Clean, layered architecture with clear responsibility separation.
-- SQL schema managed via EF Core migrations.
-- Maintainable service-based design with interfaces and DI.
+- Clean layered architecture with maintainable service boundaries.
+- Database schema managed via EF Core migrations.
+- DI + interfaces used across services.
 
 ### 8) Advanced RBAC (Bonus)
-- Permission model is dynamic, not hardcoded strictly by role.
-- Permission keys include examples from task:
+- Dynamic permission system (not only hardcoded role checks).
+- Includes task-specified permissions such as:
   - `request.create`
   - `request.accept`
   - `request.complete`
   - `request.view_all`
-- Admin can grant/revoke role and user-level permissions.
-- ProviderAdmin can manage scoped employee permissions inside own organization.
-- ProviderEmployee receives limited permissions.
+- Admin can assign/revoke permissions at role and user level.
+- ProviderAdmin can manage employee permissions within organization scope.
 
 ---
 
 ## Deliverables Checklist
 
-### 1) Source Code
-- This GitHub repository contains full source for backend + frontend.
-
-### 2) README Includes
-- Setup instructions (local + Docker)
-- Architecture overview
-- Key design decisions and trade-offs
-- RBAC design explanation (storage + enforcement)
-- Improvements with more time
-
-### 3) API Documentation
-- Swagger is enabled and available at `/swagger` when API is running.
-
-### 4) Run Instructions
-- Docker-based run path is included below.
-- Local run path is also included.
+- **Source code:** included in this GitHub repo.
+- **README includes:** setup, architecture, design decisions/trade-offs, RBAC design, improvements.
+- **API docs:** Swagger/OpenAPI available when API runs.
+- **Run instructions:** Docker and local instructions provided below.
 
 ---
 
-## Architecture Overview
+## Features
 
-### High-Level Layers
-- **Presentation**: Controllers, SignalR hubs, middleware, rate limiting
-- **Application**: Business services, validators, background jobs
-- **Infrastructure**: EF Core, Redis, Stripe, AI provider, logging
-- **Domain**: Entities, enums, constants, contracts
+- API-level RBAC with dynamic role/user permission overrides
+- Request lifecycle management with optimistic concurrency protections
+- Real-time notifications and chat via SignalR
+- Geolocation-based nearby request discovery
+- Stripe billing integration with webhook processing
+- Background jobs for auto-confirmation, stale cleanup, and chat retention
+- Redis-backed caching and rate limiting (with fallback behavior)
+- Structured logging with Serilog + Azure Application Insights
 
-### Project Structure
+---
+
+## Architecture
+
+### Layered Design
+- **Presentation:** Controllers, Hubs, Middleware
+- **Application:** Services, Validators, Background Jobs
+- **Infrastructure:** EF Core, Redis, Stripe, AI clients, logging
+- **Domain:** Entities, enums, constants, contracts
+
+### Repository Structure
 
 ```text
 .
-├── ServiceMarketplace.API/      # ASP.NET Core API
+├── ServiceMarketplace.API/      # ASP.NET Core backend
 ├── ServiceMarketplace.Client/   # React + TypeScript frontend
-├── Documentation.md             # Detailed technical walkthrough
-├── Recruitment_Task.md          # Assignment brief
+├── Documentation.md             # Full technical documentation
+├── Recruitment_Task.md          # Assignment brief from HR
 ├── docker-compose.yml
 └── run.sh
 ```
-
----
-
-## Tech Stack
-
-### Backend
-- ASP.NET Core 10 Web API
-- Entity Framework Core + SQL Server
-- ASP.NET Core Identity + JWT
-- FluentValidation
-- Redis (cache + distributed limiter support)
-- SignalR
-- Serilog + Azure Application Insights
-- Stripe
-- Swagger / OpenAPI
-
-### Frontend
-- React + TypeScript + Vite
-- Zustand
-- Axios
-- SignalR client
-- React Leaflet
-
-### Platform / Ops
-- Azure App Service (API)
-- Azure Static Web Apps (Frontend)
-- Azure SQL Server
-- Upstash Redis
-- GitHub Actions CI/CD
 
 ---
 
@@ -166,7 +136,7 @@ Run:
 docker compose up --build
 ```
 
-Expected endpoints:
+Endpoints:
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:8080`
 - Swagger: `http://localhost:8080/swagger`
@@ -210,7 +180,7 @@ Create `ServiceMarketplace.API/appsettings.Development.json`:
 }
 ```
 
-Run backend:
+Backend:
 
 ```bash
 cd ServiceMarketplace.API
@@ -219,7 +189,7 @@ dotnet ef database update
 dotnet run
 ```
 
-Run frontend:
+Frontend:
 
 ```bash
 cd ServiceMarketplace.Client
@@ -229,48 +199,43 @@ npm run dev
 
 ---
 
-## RBAC Design (How Permissions Are Stored and Enforced)
+## RBAC Design (Storage + Enforcement)
 
-### Storage Model
-- `RolePermissions`: default permission set for each role
+### Storage
+- `RolePermissions`: default permission matrix per role
 - `UserPermissions`: per-user overrides (`Granted=true` add, `Granted=false` revoke)
-- Effective permissions = role defaults +/- user overrides
+- Effective permissions are computed from role defaults plus user overrides
 
-### Enforcement Model
-- Endpoints use `[RequirePermission("permission.name")]`.
-- Middleware/filter extracts `userId` from JWT and checks effective permissions.
-- Denied access returns `403 Forbidden` with a consistent permission-denied response.
-- Admin role short-circuits permission checks by design.
+### Enforcement
+- Protected endpoints use `[RequirePermission("permission.name")]`.
+- User identity is read from JWT claims.
+- Permission check runs at API layer before controller action logic.
+- Unauthorized permission returns `403 Forbidden`.
 
-### Dynamic Permission Management
-- Admin can:
-  - Change user roles
-  - Change role-permission matrix
-  - Set per-user permission overrides
-- ProviderAdmin can manage employee permissions within own organization scope.
+### Dynamic Management
+- Admin can update role permissions and user-level overrides.
+- ProviderAdmin can manage employees in own organization scope.
 
 ---
 
 ## Key Design Decisions & Trade-Offs
 
-- **Permission-first authorization** over role-string-only checks for flexibility.
-- **Two-tier caching (memory + Redis)** for hot-path permission checks; trade-off is explicit cache invalidation complexity.
-- **EF Core code-first** for schema/version control; trade-off is migration discipline.
-- **Real Stripe integration** (richer than assignment baseline); trade-off is extra external dependency complexity.
-- **SignalR for real-time UX**; trade-off is additional connection/state handling.
-- **Resilience + fallbacks** (Redis, AI) to keep user flows available under partial failures.
+- Permission-first model for flexibility over static role checks.
+- Two-tier cache (L1 memory + L2 Redis) for high-frequency authorization checks.
+- Real Stripe implementation to show production-grade billing paths.
+- SignalR for instant UX, with added connection/state complexity.
+- Resilience/fallback paths to keep core user flows working under transient failures.
 
 ---
 
 ## Bonus Items Implemented
 
-Beyond baseline requirements:
 - Dockerized setup
 - CI/CD pipeline
 - Background jobs
-- Caching strategy
-- Logging + error handling strategy
-- Real-time updates with WebSockets (SignalR)
+- Caching
+- Logging and error handling strategy
+- Real-time updates (SignalR/WebSockets)
 
 ---
 
@@ -282,15 +247,19 @@ Beyond baseline requirements:
 
 ## What I Would Improve With More Time
 
-- Add end-to-end integration tests for full request lifecycle and RBAC edge cases.
-- Add prebuilt Application Insights/Kusto dashboards for audit/incident workflows.
-- Add stronger outbox/event-driven patterns for high-scale consistency paths.
-- Add attachment/file proof flow for request completion.
-- Expand operational runbooks and alerting thresholds.
+- Add comprehensive integration/E2E coverage for lifecycle + RBAC edge cases.
+- Add saved Kusto dashboards/alerts for audit, auth failures, and webhook anomalies.
+- Introduce outbox/event-driven patterns for high-scale consistency paths.
+- Expand operational runbooks and SLO-driven monitoring.
 
 ---
 
-## Additional Notes
+<div align="center">
 
-- Full deep-dive technical documentation is available in `Documentation.md`.
-- This README is aligned directly to the requirements and deliverables in `Recruitment_Task.md`.
+**Developed by [Asjad Farooq](https://www.linkedin.com/in/asjadfarooqconnect)**
+
+[![GitHub](https://img.shields.io/badge/GitHub-Asjadfaroq-181717?style=flat-square&logo=github)](https://github.com/Asjadfaroq/quality_stability_co_task)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Asjad_Farooq-0A66C2?style=flat-square&logo=linkedin&logoColor=fff)](https://www.linkedin.com/in/asjadfarooqconnect)
+[![Live App](https://img.shields.io/badge/Live_App-Service_Marketplace-0078D4?style=flat-square&logo=microsoftazure&logoColor=fff)](https://yellow-sand-0fab52c03.4.azurestaticapps.net/)
+
+</div>
