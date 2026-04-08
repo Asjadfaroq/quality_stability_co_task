@@ -111,39 +111,7 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
 
       if (code === 'free_tier_limit' || isLegacyFreeTierLimitError(err)) {
         setFreeLimitHit(true)
-        toast.custom(
-          (t) => (
-            <div
-              style={{ boxShadow: '0 12px 40px rgba(15,23,42,0.14)' }}
-              className="flex max-w-sm items-start gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3.5"
-            >
-              <Clock size={16} className="mt-0.5 shrink-0 text-amber-500" />
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold text-slate-900">Free plan limit reached</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                  You've used all 3 free requests. Upgrade to Pro for unlimited service requests.
-                </p>
-                <div className="mt-3 flex items-center gap-2">
-                  <a
-                    href={ROUTES.CUSTOMER_SUBSCRIPTION}
-                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
-                    onClick={() => toast.dismiss(t.id)}
-                  >
-                    Upgrade to Pro
-                  </a>
-                  <button
-                    type="button"
-                    className="text-xs text-slate-400 hover:text-slate-600"
-                    onClick={() => toast.dismiss(t.id)}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
-          ),
-          { duration: 8000, position: 'top-center' },
-        )
+        toast.error('Free plan limit reached. Upgrade to Pro for unlimited service requests.', { duration: 6000 })
         return
       }
 
