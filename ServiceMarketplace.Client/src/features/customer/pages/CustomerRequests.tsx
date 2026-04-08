@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
-  Plus, MessageSquare, ClipboardList,
+  Plus, ClipboardList,
   Zap, CheckCircle2, ArrowRight, Map, List,
 } from 'lucide-react'
 import { useAuthStore } from '../../../shared/store/authStore'
@@ -11,10 +11,12 @@ import { useUnreadStore } from '../../../shared/store/unreadStore'
 import { isRateLimited } from '../../../shared/api/axios'
 import api from '../../../shared/api/axios'
 import { formatDate } from '../../../shared/utils/format'
+import { isRequestChatOpen } from '../../../shared/utils/requestChat'
 import { StatusBadge } from '../../../shared/utils/status'
 import { ROUTES } from '../../../shared/constants/routes'
 import AppLayout from '../../../shared/components/AppLayout'
 import ChatPanel from '../../../shared/components/ChatPanel'
+import { RequestChatButton } from '../../../shared/components/RequestChatButton'
 import JobsMap from '../../../shared/components/JobsMap'
 import { NewRequestModal } from './components/NewRequestModal'
 import {
@@ -197,28 +199,22 @@ export default function CustomerRequests() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2.5 flex-wrap">
                         <p className="text-sm font-medium text-slate-800 truncate">{req.title}</p>
-                        <StatusBadge status={req.status} />
                       </div>
                       <p className="text-xs text-slate-400 mt-1">
                         {req.category} · {formatDate(req.createdAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                      {(req.status === 'Accepted' || req.status === 'PendingConfirmation') && (
-                        <button
-                          type="button"
-                          onClick={() => { setActiveChat({ id: req.id, title: req.title }); clearUnread(req.id) }}
-                          className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
-                        >
-                          <MessageSquare size={13} />
-                          Chat
-                          {(unreadCounts[req.id] ?? 0) > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                              {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
-                            </span>
-                          )}
-                        </button>
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap sm:justify-end">
+                      {isRequestChatOpen(req.status) && (
+                        <RequestChatButton
+                          unreadCount={unreadCounts[req.id] ?? 0}
+                          onClick={() => {
+                            setActiveChat({ id: req.id, title: req.title })
+                            clearUnread(req.id)
+                          }}
+                        />
                       )}
+                      <StatusBadge status={req.status} />
                     </div>
                   </div>
 

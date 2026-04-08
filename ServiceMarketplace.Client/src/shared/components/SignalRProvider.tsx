@@ -29,6 +29,7 @@ export default function SignalRProvider() {
         link:  '/provider/jobs',
       })
       queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-dashboard'] })
     },
 
     RequestTaken: () => {
@@ -36,6 +37,7 @@ export default function SignalRProvider() {
       // Remove the taken job from other providers' pending list in real time
       queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
       queryClient.invalidateQueries({ queryKey: ['requests-active'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-dashboard'] })
     },
 
     RequestConfirmed: (data: { requestId: string; title: string }) => {
@@ -48,6 +50,7 @@ export default function SignalRProvider() {
       })
       queryClient.invalidateQueries({ queryKey: ['requests-active'] })
       queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-dashboard'] })
     },
 
     // Fired when a provider accepts the customer's request (Pending → Accepted).
@@ -83,6 +86,7 @@ export default function SignalRProvider() {
       queryClient.invalidateQueries({ queryKey: ['requests-active'] })
       queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
       queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-dashboard'] })
     },
 
     // ── Org membership events (ProviderEmployee) ──

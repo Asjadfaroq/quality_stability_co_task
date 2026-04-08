@@ -106,8 +106,19 @@ public class RequestService : IRequestService
 
         query = role switch
         {
-            UserRole.Customer => query.Where(r => r.CustomerId == userId),
-            UserRole.Admin    => query,
+            UserRole.Customer => statusFilter switch
+            {
+                "Pending" => query.Where(r =>
+                    r.CustomerId == userId && r.Status == RequestStatus.Pending),
+                "Active" => query.Where(r =>
+                    r.CustomerId == userId &&
+                    (r.Status == RequestStatus.Accepted ||
+                     r.Status == RequestStatus.PendingConfirmation)),
+                "Completed" => query.Where(r =>
+                    r.CustomerId == userId && r.Status == RequestStatus.Completed),
+                _ => query.Where(r => r.CustomerId == userId),
+            },
+            UserRole.Admin => query,
             // Provider: narrow by statusFilter when supplied, otherwise show
             // all Pending requests plus those the provider has personally accepted.
             _ => statusFilter switch
@@ -136,8 +147,16 @@ public class RequestService : IRequestService
 
         var totalCount = await query.CountAsync();
 
-        var items = await query
-            .OrderByDescending(r => r.CreatedAt)
+        // Active jobs change UpdatedAt on status transitions; sort by recency there so
+        // dashboards and the Active tab match "most recently touched" work.
+        var sortByUpdatedAt = string.Equals(statusFilter, "Active", StringComparison.OrdinalIgnoreCase)
+                              && role is UserRole.Customer
+                                 or UserRole.ProviderAdmin
+                                 or UserRole.ProviderEmployee;
+
+        var items = await (sortByUpdatedAt
+                ? query.OrderByDescending(r => r.UpdatedAt)
+                : query.OrderByDescending(r => r.CreatedAt))
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(DtoSelector)

@@ -12,9 +12,9 @@ public interface IRequestService
     /// <param name="page">1-based page number.</param>
     /// <param name="pageSize">Requested page size.</param>
     /// <param name="statusFilter">
-    /// Optional provider-only view filter: "Pending" = available jobs only,
-    /// "Active" = provider's own accepted/in-progress jobs only, null = both combined.
-    /// Ignored for Customer and Admin roles.
+    /// Optional status scoping: Provider — "Pending" (available), "Active" (accepted / pending confirmation),
+    /// or null (pending pool plus own active jobs). Customer — "Pending", "Active", "Completed", or null (all own requests).
+    /// Ignored for Admin (full list).
     /// </param>
     /// <param name="search">Optional free-text search query.</param>
     Task<PagedResult<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null, string? search = null);

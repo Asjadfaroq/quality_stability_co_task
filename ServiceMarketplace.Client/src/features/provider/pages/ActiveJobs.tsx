@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Loader2, MessageSquare, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
 import { isRateLimited } from '../../../shared/api/axios'
 import api from '../../../shared/api/axios'
 import { formatDate } from '../../../shared/utils/format'
@@ -10,6 +10,7 @@ import { PERMISSIONS } from '../../../shared/constants/permissions'
 import { usePagination } from '../../../shared/hooks/usePagination'
 import AppLayout from '../../../shared/components/AppLayout'
 import ChatPanel from '../../../shared/components/ChatPanel'
+import { RequestChatButton } from '../../../shared/components/RequestChatButton'
 import { Button, Card, EmptyState, SkeletonCard, Pagination } from '../../../shared/components/ui'
 import { useUnreadStore } from '../../../shared/store/unreadStore'
 import { usePermissions } from '../../../shared/hooks/usePermissions'
@@ -41,6 +42,7 @@ export default function ActiveJobs() {
     mutationFn: (id: string) => api.patch(`/requests/${id}/complete`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-dashboard'] })
       toast.success('Marked as complete — awaiting customer confirmation.')
     },
     onError: (err: unknown) => {
@@ -105,7 +107,6 @@ export default function ActiveJobs() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <p className="text-sm font-medium text-slate-800">{req.title}</p>
-                          <StatusBadge status={req.status} perspective="provider" />
                         </div>
                         <p className="text-xs text-slate-400 mb-1">
                           {req.category} · {formatDate(req.createdAt)}
@@ -113,24 +114,15 @@ export default function ActiveJobs() {
                         <p className="text-xs text-slate-400 line-clamp-1">{req.description}</p>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap sm:justify-end">
+                        <RequestChatButton
+                          unreadCount={unreadCounts[req.id] ?? 0}
                           onClick={() => {
                             setActiveChat({ id: req.id, title: req.title })
                             clearUnread(req.id)
                           }}
-                          className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
-                        >
-                          <MessageSquare size={13} />
-                          Chat
-                          {(unreadCounts[req.id] ?? 0) > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                              {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
-                            </span>
-                          )}
-                        </button>
-
+                        />
+                        <StatusBadge status={req.status} perspective="provider" />
                         {req.status === 'Accepted' && canComplete && (
                           <Button
                             variant="success" size="sm"

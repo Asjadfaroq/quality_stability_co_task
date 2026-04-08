@@ -2,18 +2,20 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
-  Briefcase, Loader2, CheckCircle2, MessageSquare,
+  Briefcase, Loader2, CheckCircle2,
   AlertCircle, RefreshCw, X,
   MapPin, CalendarDays, Search,
 } from 'lucide-react'
 import axios from 'axios'
 import api, { isRateLimited } from '../../../shared/api/axios'
 import { formatDate } from '../../../shared/utils/format'
+import { isRequestChatOpen } from '../../../shared/utils/requestChat'
 import { StatusBadge } from '../../../shared/utils/status'
 import { PERMISSIONS } from '../../../shared/constants/permissions'
 import { usePagination } from '../../../shared/hooks/usePagination'
 import AppLayout from '../../../shared/components/AppLayout'
 import ChatPanel from '../../../shared/components/ChatPanel'
+import { RequestChatButton } from '../../../shared/components/RequestChatButton'
 import {
   Button, Card, EmptyState, SkeletonCard, Pagination,
 } from '../../../shared/components/ui'
@@ -142,6 +144,7 @@ export default function ProviderJobs() {
     onSuccess: (_data, acceptedId) => {
       queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
       queryClient.invalidateQueries({ queryKey: ['requests-active'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-dashboard'] })
       setNearbyResults((prev) => prev ? prev.filter((r) => r.id !== acceptedId) : null)
       toast.success('Request accepted!')
     },
@@ -158,6 +161,7 @@ export default function ProviderJobs() {
     mutationFn: (id: string) => api.patch(`/requests/${id}/complete`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requests-active'] })
+      queryClient.invalidateQueries({ queryKey: ['provider-dashboard'] })
       toast.success('Marked as complete — awaiting customer confirmation.')
     },
     onError: (err: unknown) => {
@@ -370,7 +374,6 @@ export default function ProviderJobs() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
                               <p className="text-sm font-medium text-slate-800">{req.title}</p>
-                              <StatusBadge status={req.status} />
                             </div>
                             <p className="text-xs text-slate-400 mb-1">
                               {req.category} · {formatDate(req.createdAt)}
@@ -378,33 +381,26 @@ export default function ProviderJobs() {
                             <p className="text-xs text-slate-400 line-clamp-1">{req.description}</p>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                            {activeTab === 'active' && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => { setActiveChat({ id: req.id, title: req.title }); clearUnread(req.id) }}
-                                  className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
-                                >
-                                  <MessageSquare size={13} />
-                                  Chat
-                                  {(unreadCounts[req.id] ?? 0) > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                      {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
-                                    </span>
-                                  )}
-                                </button>
-                                {req.status === 'Accepted' && canComplete && (
-                                  <Button
-                                    variant="success" size="sm"
-                                    loading={completingId === req.id}
-                                    disabled={completingId !== null}
-                                    onClick={() => { setCompletingId(req.id); completeMutation.mutate(req.id) }}
-                                  >
-                                    Mark Complete
-                                  </Button>
-                                )}
-                              </>
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:justify-end">
+                            {activeTab === 'active' && isRequestChatOpen(req.status) && (
+                              <RequestChatButton
+                                unreadCount={unreadCounts[req.id] ?? 0}
+                                onClick={() => {
+                                  setActiveChat({ id: req.id, title: req.title })
+                                  clearUnread(req.id)
+                                }}
+                              />
+                            )}
+                            <StatusBadge status={req.status} />
+                            {activeTab === 'active' && req.status === 'Accepted' && canComplete && (
+                              <Button
+                                variant="success" size="sm"
+                                loading={completingId === req.id}
+                                disabled={completingId !== null}
+                                onClick={() => { setCompletingId(req.id); completeMutation.mutate(req.id) }}
+                              >
+                                Mark Complete
+                              </Button>
                             )}
 
                             {activeTab === 'available' && canAccept && (
