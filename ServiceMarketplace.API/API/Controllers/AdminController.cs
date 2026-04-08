@@ -172,7 +172,7 @@ public class AdminController : BaseController
         }
     }
 
-    // ── User permission overrides ───────────────────────────────────────────── 
+    // ── User permission overrides ─────────────────────────────────────────────
 
     /// <summary>
     /// Returns all explicit per-user permission overrides for the given user.
