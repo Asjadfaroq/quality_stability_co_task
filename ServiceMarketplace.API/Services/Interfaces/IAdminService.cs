@@ -7,62 +7,40 @@ namespace ServiceMarketplace.API.Services.Interfaces;
 public interface IAdminService
 {
     /// <summary>
-    /// Returns a paginated list of users.
-    /// Optional <paramref name="role"/> narrows by UserRole name (case-insensitive).
-    /// Optional <paramref name="search"/> applies a case-insensitive substring match against email.
+    /// Returns paginated users with optional role/email filters.
     /// </summary>
     Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize, string? role, string? search);
     Task UpdateUserRoleAsync(Guid userId, UserRole role);
     Task UpdateSubscriptionAsync(Guid userId, SubscriptionTier subTier);
 
     /// <summary>
-    /// Returns a paginated list of every service request on the platform.
-    /// Optional <paramref name="status"/> narrows by RequestStatus name (case-insensitive).
-    /// Optional <paramref name="search"/> applies a case-insensitive substring match against
-    /// the request title, category, and customer email.
+    /// Returns paginated jobs with optional status/search filters.
     /// </summary>
     Task<PagedResult<AdminJobDto>> GetAllJobsAsync(int page, int pageSize, string? status, string? search);
 
     /// <summary>
-    /// Returns a paginated list of every organization on the platform.
-    /// Each row carries only the owner's email and a SQL COUNT of members —
-    /// no member rows or full user objects are loaded.
-    /// Optional <paramref name="search"/> matches against organization name or owner email.
+    /// Returns paginated organizations with optional search.
     /// </summary>
     Task<PagedResult<AdminOrgDto>> GetAllOrgsAsync(int page, int pageSize, string? search);
 
-    /// <summary>Returns all platform permissions and the current role → permission matrix.</summary>
+    /// <summary>Returns platform permissions and role assignments.</summary>
     Task<RolePermissionsDto> GetRolePermissionsAsync();
 
     /// <summary>
-    /// Grants or revokes a permission for a role and invalidates the role-permission cache.
-    /// Throws <see cref="KeyNotFoundException"/> if the permission name is unknown.
+    /// Grants or revokes a role permission.
     /// </summary>
     Task UpdateRolePermissionAsync(UserRole role, string permissionName, bool granted);
 
-    /// <summary>Returns all explicit per-user permission overrides for a given user.</summary>
+    /// <summary>Returns explicit per-user permission overrides.</summary>
     Task<List<UserPermissionOverrideDto>> GetUserPermissionsAsync(Guid userId);
 
     /// <summary>
-    /// Sets or removes an explicit permission override for a user.
-    /// <paramref name="granted"/> = true → force-grant; false → force-revoke; null → remove override (inherit from role).
-    /// Invalidates the per-user permission cache immediately.
-    /// Throws <see cref="KeyNotFoundException"/> if the permission name is unknown.
+    /// Sets or removes a user-level permission override.
     /// </summary>
     Task UpdateUserPermissionAsync(Guid userId, string permissionName, bool? granted);
 
     /// <summary>
-    /// Permanently deletes a user account and all associated data in a single transaction.
-    /// Handles all edge cases:
-    ///   • Chat messages belonging to the user's service requests are deleted first.
-    ///   • Service requests where the user is the customer are deleted.
-    ///   • If the user owns an organization the org is deleted; SQL SET NULL propagates
-    ///     to every member's <c>OrganizationId</c> automatically.
-    ///   • ASP.NET Identity satellite rows and custom cascade-configured rows
-    ///     (UserPermission, UserStripeInfo) are removed by the database cascade.
-    ///   • The user's permission cache entry is evicted after the commit.
-    /// Throws <see cref="KeyNotFoundException"/> if the target user does not exist.
-    /// Throws <see cref="UnauthorizedAccessException"/> if an attempt is made to delete an Admin account.
+    /// Deletes a user and related data in one transaction.
     /// </summary>
     Task DeleteUserAsync(Guid targetUserId);
 }

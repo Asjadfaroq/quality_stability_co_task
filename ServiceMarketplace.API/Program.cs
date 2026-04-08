@@ -29,8 +29,7 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Typed configuration — bind before any service that reads settings so that
-//    IOptions<T> is available everywhere via the DI container.
+// Typed configuration
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<HuggingFaceSettings>(builder.Configuration.GetSection("HuggingFace"));
 var stripeOptionsBuilder = builder.Services
@@ -49,8 +48,7 @@ if (!builder.Environment.IsDevelopment())
         .ValidateOnStart();
 }
 
-// 1b. DbContext — SQL Server execution strategy retries transient failures (deadlocks,
-//     connection drops, timeouts) automatically before surfacing an exception.
+// DbContext with transient retry
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -71,7 +69,7 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
-// 3. JWT Authentication — reads from the already-bound JwtSettings options.
+// JWT authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
     ?? throw new InvalidOperationException("JWT settings are not configured.");
 
@@ -112,19 +110,16 @@ builder.Services.AddAuthentication(options =>
 // 4. Authorization
 builder.Services.AddAuthorization();
 
-// In-process L1 cache — sits in front of Redis to avoid a network round-trip for
-// hot keys (user roles, effective permissions) that are read on every authenticated
-// request. Redis remains the L2 source-of-truth shared across instances.
+// In-process L1 cache (fronts Redis).
 builder.Services.AddMemoryCache();
 
-// 4a. Response compression — shrinks JSON payloads over HTTPS (gzip + brotli)
+// Response compression
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
 });
 
-// 4b. Health checks — registered here; Redis probe is added conditionally after
-//     Redis is initialised below (requires redisAvailable, declared in section 10).
+// Health checks (Redis check added later if enabled).
 builder.Services.AddHealthChecks()
     .AddSqlServer(
         connectionString: builder.Configuration.GetConnectionString("DefaultConnection")!,
@@ -138,7 +133,7 @@ builder.Services.AddControllers()
         o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddScoped<IValidator<CreateRequestDto>, CreateRequestValidator>();
 
-// 6. Swagger with JWT Bearer button
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -179,7 +174,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// 7. CORS — must allow credentials for SignalR WebSocket
+// CORS
 var allowedOrigins = builder.Configuration
     .GetSection("AllowedOrigins")
     .Get<string[]>()
@@ -198,10 +193,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, UserIdProvider>();
 
-// 9. Named HttpClient for HuggingFace AI with a resilience pipeline:
-//    - Retries up to 3 times on 5xx / network failures with exponential backoff + jitter.
-//    - 429 (HuggingFace rate limit) is NOT retried — the service falls back to mock instead.
-//    - Per-attempt timeout: 20 s.  Overall timeout across all attempts: 45 s.
+// HuggingFace HttpClient + resilience pipeline.
 builder.Services.AddHttpClient(ResilienceKeys.HuggingFace)
     .AddResilienceHandler(ResilienceKeys.HuggingFace, pipeline =>
     {
@@ -221,9 +213,7 @@ builder.Services.AddHttpClient(ResilienceKeys.HuggingFace)
         pipeline.AddTimeout(TimeSpan.FromSeconds(20));
     });
 
-// 10. Redis — one shared IConnectionMultiplexer for both distributed cache and rate limiting.
-//     AbortOnConnectFail=false lets the app start even when Redis is temporarily unavailable;
-//     the multiplexer retries in the background.
+// Redis connection shared by cache and rate limiting.
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
 var redisAvailable  = !string.IsNullOrEmpty(redisConnection);
 
@@ -235,7 +225,7 @@ if (redisAvailable)
 
     builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
 
-    // Share the same connection for distributed cache (used by CacheService / PermissionService)
+    // Reuse same connection for distributed cache.
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.ConnectionMultiplexerFactory = () => Task.FromResult((IConnectionMultiplexer)multiplexer);
@@ -258,13 +248,7 @@ if (redisAvailable)
             tags:                  ["ready"]);
 }
 
-// 11. Redis resilience pipeline used by CacheService:
-//     - Retries up to 2 times on transient Redis connection/timeout errors with
-//       exponential backoff + jitter (100 ms → 200 ms).
-//     - Circuit breaker opens after 50 % failures over 30 s (min 5 calls) and
-//       stays open for 15 s, preventing a Redis outage from hammering every request.
-//     - After all retries fail the existing CacheService try/catch treats it as a
-//       cache miss — the app keeps running without cache.
+// Redis resilience pipeline for cache operations.
 builder.Services.AddResiliencePipeline(ResilienceKeys.Redis, pipeline =>
 {
     pipeline.AddRetry(new RetryStrategyOptions
@@ -291,9 +275,7 @@ builder.Services.AddResiliencePipeline(ResilienceKeys.Redis, pipeline =>
     });
 });
 
-// 13. Rate limiting
-//     Redis policies use keys prefixed "sm:rl:{policy}:{partitionKey}" — kept separate from cache keys.
-//     In-memory policies are the fallback when Redis is not configured.
+// Rate limiting (Redis preferred, in-memory fallback).
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -352,9 +334,7 @@ builder.Services.AddRateLimiter(options =>
                 });
         });
 
-        // AI chat assistant — fixed window per user, 5 requests per 20 minutes.
-        // Keyed by userId so each account has its own independent budget:
-        // two different accounts logged into the same browser each get 5 prompts.
+        // AI chat assistant: fixed window per user.
         options.AddPolicy(RateLimitPolicies.AiChat, httpContext =>
         {
             var mux = httpContext.RequestServices.GetRequiredService<IConnectionMultiplexer>();
@@ -500,9 +480,7 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// Enable request body buffering for the Stripe webhook endpoint.
-// Stripe signature verification requires the raw unmodified body, which ASP.NET Core
-// normally consumes before it reaches the controller. EnableBuffering() allows re-reading.
+// Stripe webhook needs raw request body for signature checks.
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/billing/webhook"))
@@ -533,15 +511,13 @@ app.MapControllers();
 
 app.MapHub<NotificationHub>("/hubs/notifications");
 
-// Liveness probe — returns 200 immediately if the process is running.
-// Azure App Service and container orchestrators poll this to restart unhealthy instances.
+// Liveness probe.
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
-    Predicate = _ => false  // skip all dependency checks — just confirm the app is alive
+    Predicate = _ => false
 });
 
-// Readiness probe — checks SQL Server and Redis.
-// Azure deployment slots use this to confirm the app is ready to receive traffic.
+// Readiness probe.
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate            = check => check.Tags.Contains("ready"),

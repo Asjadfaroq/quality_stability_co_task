@@ -27,7 +27,7 @@ public class RequestsController : BaseController
         _validator = validator;
     }
 
-    /// <summary>Create a new service request. Requires request.create permission. Free tier limited to 3 requests.</summary>
+    /// <summary>Create a service request.</summary>
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission(PermissionNames.RequestCreate)]
@@ -45,8 +45,7 @@ public class RequestsController : BaseController
     }
 
     /// <summary>
-    /// Get requests filtered by role: Customer=own, Provider=all pending + their accepted, Admin=all.
-    /// Results are paginated — use <c>page</c> and <c>pageSize</c> query params (max 200 per page).
+    /// Returns paginated requests scoped by caller role.
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
@@ -63,7 +62,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Find pending requests within a radius using Haversine. Requires request.view_all permission.</summary>
+    /// <summary>Find pending requests within a radius.</summary>
     [HttpGet("nearby")]
     [EnableRateLimiting(RateLimitPolicies.Nearby)]
     [RequirePermission(PermissionNames.RequestViewAll)]
@@ -108,10 +107,7 @@ public class RequestsController : BaseController
     }
 
     /// <summary>
-    /// Returns a flat list of map-ready jobs scoped to the caller's role.
-    /// Admin = all jobs; Customer = own jobs; Provider = jobs accepted by the
-    /// provider or any member of their organisation (accepted / in-progress /
-    /// completed).  No pagination — intended for map rendering.
+    /// Returns map-ready jobs scoped to caller role.
     /// </summary>
     [HttpGet("map")]
     [ProducesResponseType(typeof(List<MapJobDto>), StatusCodes.Status200OK)]

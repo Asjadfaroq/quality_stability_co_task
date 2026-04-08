@@ -28,11 +28,7 @@ public class ChatService : IChatService
     }
 
     /// <summary>
-    /// Combines the participant check and sender-email lookup into a single SQL query
-    /// (correlated subquery), then returns the saved message with OtherPartyId so
-    /// callers (NotificationHub) don't need a second round-trip to find who to notify.
-    ///
-    /// DB round-trips: 1 (down from 3 in the previous implementation).
+    /// Saves a chat message and returns recipient context.
     /// </summary>
     public async Task<SaveMessageResult> SaveMessageAsync(Guid requestId, Guid senderId, string content)
     {
@@ -42,8 +38,7 @@ public class ChatService : IChatService
         if (content.Length > MaxMessageLength)
             throw new ArgumentException($"Message exceeds maximum length of {MaxMessageLength} characters.");
 
-        // Single query: fetch participant IDs + sender email via a correlated subquery.
-        // EF Core translates the nested Select/FirstOrDefault into a SQL scalar subquery.
+        // Fetch participants and sender email in one query.
         var info = await _db.ServiceRequests
             .AsNoTracking()
             .Where(r => r.Id == requestId)
@@ -82,7 +77,7 @@ public class ChatService : IChatService
             "Chat message {MessageId} saved for request {RequestId} by user {SenderId}",
             message.Id, requestId, senderId);
 
-        // Derive OtherPartyId from the info already in memory — no extra query.
+        // Derive recipient from loaded participant info.
         var otherPartyId = senderId == info.CustomerId
             ? info.AcceptedByProviderId
             : (Guid?)info.CustomerId;
@@ -92,8 +87,7 @@ public class ChatService : IChatService
 
     /// <summary>
     /// Returns ordered message history.
-    /// Access MUST be verified by the caller before invoking this method
-    /// (see <see cref="CanAccessChatAsync"/>).
+    /// Caller must verify access first.
     /// </summary>
     public async Task<List<ChatMessageDto>> GetHistoryAsync(Guid requestId)
     {
@@ -115,15 +109,10 @@ public class ChatService : IChatService
 
     /// <summary>
     /// Returns paginated conversations ordered by most-recent message.
-    ///
-    /// DB round-trips: 3
-    ///   1. COUNT DISTINCT — total conversations with at least one message
-    ///   2. Paginated GroupBy aggregate — last message per request, sorted newest-first (SQL OFFSET/FETCH)
-    ///   3. Request details (title, status, other-party email) for the current page's IDs
     /// </summary>
     public async Task<PagedResult<ConversationDto>> GetConversationsAsync(Guid userId, UserRole role, int page, int pageSize)
     {
-        // IQueryable — translated to a subquery by EF Core (no in-memory materialization).
+        // User request IDs subquery.
         IQueryable<Guid> userRequestIds = role == UserRole.Customer
             ? _db.ServiceRequests.AsNoTracking()
                 .Where(r => r.CustomerId == userId && r.AcceptedByProviderId.HasValue)
@@ -132,7 +121,7 @@ public class ChatService : IChatService
                 .Where(r => r.AcceptedByProviderId.HasValue && r.AcceptedByProviderId.Value == userId)
                 .Select(r => r.Id);
 
-        // Query 1: count distinct conversations (requests with at least one message).
+        // Count distinct conversations.
         var totalCount = await _db.ChatMessages
             .AsNoTracking()
             .Where(m => userRequestIds.Contains(m.RequestId))
@@ -143,7 +132,7 @@ public class ChatService : IChatService
         if (totalCount == 0)
             return PagedResult<ConversationDto>.Empty(page, pageSize);
 
-        // Query 2: paginated last-message aggregate, sorted newest-first at SQL level.
+        // Fetch paginated last-message aggregate.
         var lastMessages = await _db.ChatMessages
             .AsNoTracking()
             .Where(m => userRequestIds.Contains(m.RequestId))
@@ -165,7 +154,7 @@ public class ChatService : IChatService
 
         var pageIds = lastMessages.Select(lm => lm.RequestId).ToList();
 
-        // Query 3: request details (title, status, other-party email) for this page only.
+        // Fetch request details for current page.
         var requestDetails = role == UserRole.Customer
             ? await _db.ServiceRequests.AsNoTracking()
                 .Where(r => pageIds.Contains(r.Id))
@@ -179,7 +168,7 @@ public class ChatService : IChatService
         var reqMap = requestDetails.ToDictionary(r => r.Id);
         var msgMap = lastMessages.ToDictionary(lm => lm.RequestId);
 
-        // Preserve the ordering from Query 2 (sorted by last message time).
+        // Preserve last-message ordering.
         var items = pageIds
             .Where(id => reqMap.ContainsKey(id))
             .Select(id =>
@@ -208,7 +197,7 @@ public class ChatService : IChatService
         };
     }
 
-    // Shared helper: projects only the two participant IDs — no full entity load.
+    // Fetch participant IDs only.
     private async Task<RequestParticipants?> GetParticipantsAsync(Guid requestId) =>
         await _db.ServiceRequests
             .AsNoTracking()

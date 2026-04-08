@@ -25,17 +25,13 @@ public class AdminService : IAdminService
         _memory = memory;
     }
 
-    // ── Admin jobs view ───────────────────────────────────────────────────────
-
     public async Task<PagedResult<AdminJobDto>> GetAllJobsAsync(
         int     page,
         int     pageSize,
         string? status,
         string? search)
     {
-        // Build a composable query that joins Customer (required) and Provider (optional).
-        // The left join on AcceptedByProviderId is expressed with DefaultIfEmpty() so that
-        // requests without a provider still appear in the result set.
+        // Join customer and optional provider.
         var query =
             from r  in _db.ServiceRequests.AsNoTracking()
             join cu in _db.Users.AsNoTracking() on r.CustomerId equals cu.Id
@@ -56,17 +52,14 @@ public class AdminService : IAdminService
                 r.UpdatedAt,
             };
 
-        // ── Status filter ─────────────────────────────────────────────────────
-        // Parse leniently so the API accepts "pending", "Pending", "PENDING" alike.
+        // Status filter.
         if (!string.IsNullOrWhiteSpace(status) &&
             Enum.TryParse<RequestStatus>(status, ignoreCase: true, out var parsedStatus))
         {
             query = query.Where(x => x.Status == parsedStatus);
         }
 
-        // ── Text search ───────────────────────────────────────────────────────
-        // SQL Server's default collation is case-insensitive, so Contains() generates
-        // a LIKE '%term%' that is fast and case-insensitive without EF.Functions.Like.
+        // Text search.
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
@@ -109,13 +102,9 @@ public class AdminService : IAdminService
         };
     }
 
-    // ── Admin organisations view ──────────────────────────────────────────────
-
     public async Task<PagedResult<AdminOrgDto>> GetAllOrgsAsync(int page, int pageSize, string? search)
     {
-        // Join Organizations → Owner (User) and compute member count via a
-        // correlated subquery — no member rows are loaded into memory.
-        // The index on User.OrganizationId makes the COUNT efficient.
+        // Join organization owner and compute member count.
         var query =
             from org   in _db.Organizations.AsNoTracking()
             join owner in _db.Users.AsNoTracking() on org.OwnerId equals owner.Id
@@ -129,7 +118,7 @@ public class AdminService : IAdminService
                 org.CreatedAt,
             };
 
-        // ── Optional text search ──────────────────────────────────────────────
+        // Optional text search.
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
@@ -167,30 +156,25 @@ public class AdminService : IAdminService
         };
     }
 
-    // ── User list ─────────────────────────────────────────────────────────────
-
     public async Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize, string? role, string? search)
     {
         var query = _db.Users.AsNoTracking();
 
-        // ── Role filter ───────────────────────────────────────────────────────
-        // Parsed once here so both the COUNT and the SELECT share the same filter
-        // without re-parsing inside each lambda.
+        // Role filter.
         if (!string.IsNullOrWhiteSpace(role) &&
             Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsedRole))
         {
             query = query.Where(u => u.Role == parsedRole);
         }
 
-        // ── Text search (email) ───────────────────────────────────────────────
+        // Email search.
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
             query = query.Where(u => u.Email != null && u.Email.Contains(term));
         }
 
-        // EF Core's DbContext is not thread-safe — two async operations cannot run
-        // concurrently on the same instance. Run COUNT first, then the page fetch.
+        // DbContext is not thread-safe; run sequentially.
         var totalCount = await query.CountAsync();
 
         if (totalCount == 0)
@@ -231,8 +215,7 @@ public class AdminService : IAdminService
         user.Role = role;
         await _db.SaveChangesAsync();
 
-        // Invalidate cached role and effective-permission snapshots so the update
-        // takes effect on the target user's very next request.
+        // Invalidate role and permission caches.
         await _cache.RemoveAsync($"user_role:{userId}");
         await _cache.RemoveAsync($"permissions:{userId}");
         _memory.Remove($"l1:user_role:{userId}");
@@ -256,7 +239,7 @@ public class AdminService : IAdminService
             .Select(p => new PermissionDto { Id = p.Id, Name = p.Name })
             .ToListAsync();
 
-        // Admin is always unrestricted — no DB rows exist for it and none are shown.
+        // Admin has no role-permission rows.
         var rows = await _db.RolePermissions
             .AsNoTracking()
             .Where(rp => rp.Role != UserRole.Admin)
@@ -267,7 +250,7 @@ public class AdminService : IAdminService
             .GroupBy(r => r.Role)
             .ToDictionary(g => g.Key, g => g.Select(x => x.Name).ToList());
 
-        // Ensure every editable role appears as a key even when it has no permissions.
+        // Ensure all non-admin roles are present.
         foreach (var role in Enum.GetValues<UserRole>().Where(r => r != UserRole.Admin))
             assignments.TryAdd(role.ToString(), []);
 
@@ -298,19 +281,16 @@ public class AdminService : IAdminService
         }
         else
         {
-            // State already matches — nothing to do (idempotent).
+            // Already in desired state.
             return;
         }
 
         await _db.SaveChangesAsync();
 
-        // Invalidate role-permission cache so the next permission check reloads from DB.
+        // Invalidate role-permission cache.
         await _cache.RemoveAsync($"role_permissions:{role}");
 
-        // Also immediately invalidate every per-user effective-permissions cache for users
-        // in this role.  Without this, a revoked permission remains usable for up to the
-        // per-user TTL (5 min) — a security gap.  This write only happens on admin actions
-        // so the DB scan is acceptable.
+        // Invalidate per-user permissions for users in this role.
         var affectedUserIds = await _db.Users
             .AsNoTracking()
             .Where(u => u.Role == role)
@@ -320,42 +300,28 @@ public class AdminService : IAdminService
         await Task.WhenAll(affectedUserIds.Select(uid =>
             _cache.RemoveAsync($"permissions:{uid}")));
 
-        // Evict L1 (in-process) entries for all affected users so the change takes
-        // effect on the very next request, not after the 60 s L1 TTL expires.
+        // Evict L1 permission cache for affected users.
         foreach (var uid in affectedUserIds)
             _memory.Remove($"l1:permissions:{uid}");
     }
-
-    // ── User deletion ─────────────────────────────────────────────────────────
 
     public async Task DeleteUserAsync(Guid targetUserId)
     {
         var target = await _db.Users.FindAsync(targetUserId)
             ?? throw new KeyNotFoundException("User not found.");
 
-        // Admin accounts are protected — deleting one could lock the platform out.
+        // Admin accounts are protected.
         if (target.Role == UserRole.Admin)
             throw new UnauthorizedAccessException("Admin accounts cannot be deleted.");
 
-        // SqlServerRetryingExecutionStrategy does not support user-initiated transactions
-        // directly.  The correct pattern is to hand the transaction body to the strategy
-        // so it can retry the entire unit — including the BEGIN/COMMIT — on transient
-        // failures (network blips, deadlocks, etc.).
+        // Run transaction under execution strategy for transient retries.
         var strategy = _db.Database.CreateExecutionStrategy();
 
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync();
 
-            // ── Step 1: Service requests where this user is the customer ──────
-            //
-            // ServiceRequest.CustomerId has DeleteBehavior.Restrict, so the DB will
-            // refuse to delete the user row while any request still references them.
-            // We must remove these rows explicitly.
-            //
-            // ChatMessage.RequestId has no EF-configured cascade (AppDbContext only
-            // adds a composite index).  Delete messages first to avoid an FK violation
-            // when the request rows are removed.
+            // Step 1: remove customer requests and related messages.
             var customerRequestIds = await _db.ServiceRequests
                 .Where(r => r.CustomerId == targetUserId)
                 .Select(r => r.Id)
@@ -363,8 +329,7 @@ public class AdminService : IAdminService
 
             if (customerRequestIds.Count > 0)
             {
-                // ExecuteDeleteAsync issues a single DELETE … WHERE … IN (…) without
-                // loading entities into memory — efficient for potentially large sets.
+                // Bulk delete without loading entities.
                 await _db.ChatMessages
                     .Where(m => customerRequestIds.Contains(m.RequestId))
                     .ExecuteDeleteAsync();
@@ -374,15 +339,7 @@ public class AdminService : IAdminService
                     .ExecuteDeleteAsync();
             }
 
-            // ── Step 2: Organization owned by this user ───────────────────────
-            //
-            // Organization.OwnerId has DeleteBehavior.Restrict, so the org row must
-            // be deleted before the user row.
-            //
-            // Deleting the org triggers the SQL CASCADE configured by
-            // DeleteBehavior.SetNull on User.OrganizationId: every member's
-            // OrganizationId column is automatically set to NULL by the database
-            // engine — no need to iterate members manually.
+            // Step 2: remove organization owned by this user.
             var ownedOrg = await _db.Organizations
                 .FirstOrDefaultAsync(o => o.OwnerId == targetUserId);
 
@@ -392,36 +349,18 @@ public class AdminService : IAdminService
                 await _db.SaveChangesAsync();
             }
 
-            // ── Step 3: Delete the user row ───────────────────────────────────
-            //
-            // The following are cleaned up automatically via database cascades:
-            //   • UserPermission rows           (DeleteBehavior.Cascade)
-            //   • UserStripeInfo row            (DeleteBehavior.Cascade)
-            //   • AspNetUserClaims              (Identity Cascade)
-            //   • AspNetUserLogins              (Identity Cascade)
-            //   • AspNetUserTokens              (Identity Cascade)
-            //   • AspNetUserRoles               (Identity Cascade)
-            //   • ServiceRequest.AcceptedByProviderId (DeleteBehavior.SetNull — nulled)
-            //
-            // Note: if the user is merely a *member* (not owner) of an org, no extra
-            // work is needed.  User.OrganizationId is an FK on the user's own row and
-            // is simply removed when the user row is deleted.
+            // Step 3: remove user row (remaining dependencies are cascaded).
             _db.Users.Remove(target);
             await _db.SaveChangesAsync();
 
             await tx.CommitAsync();
         });
 
-        // ── Step 4: Evict permission cache ────────────────────────────────────
-        //
-        // Done after the commit so we never evict a valid cache entry for a user
-        // that still exists (edge case: commit fails after eviction).
+        // Step 4: evict permission cache after commit.
         await _cache.RemoveAsync($"permissions:{targetUserId}");
         _memory.Remove($"l1:permissions:{targetUserId}");
         _memory.Remove($"l1:user_role:{targetUserId}");
     }
-
-    // ── User-level permission overrides ───────────────────────────────────────
 
     public async Task<List<UserPermissionOverrideDto>> GetUserPermissionsAsync(Guid userId)
     {
@@ -448,8 +387,8 @@ public class AdminService : IAdminService
 
         if (granted is null)
         {
-            // Remove override — user falls back to role default.
-            if (existing is null) return; // Already no override — idempotent.
+            // Remove override (fallback to role default).
+            if (existing is null) return;
             _db.UserPermissions.Remove(existing);
         }
         else if (existing is null)
@@ -467,13 +406,12 @@ public class AdminService : IAdminService
         }
         else
         {
-            return; // Idempotent.
+            return;
         }
 
         await _db.SaveChangesAsync();
 
-        // Invalidate the per-user effective-permissions cache immediately so the
-        // change takes effect on the very next API call from this user.
+        // Invalidate per-user effective permission cache.
         await _cache.RemoveAsync($"permissions:{userId}");
         _memory.Remove($"l1:permissions:{userId}");
     }
