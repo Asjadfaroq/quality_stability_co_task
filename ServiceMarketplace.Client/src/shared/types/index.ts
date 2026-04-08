@@ -46,3 +46,29 @@ export interface PagedResult<T> {
   hasNext: boolean
   hasPrev: boolean
 }
+
+// ── Logs / Activity ───────────────────────────────────────────────────────────
+
+export type LogCategory = 'System' | 'Audit'
+
+/**
+ * A single structured log entry received from the backend via SignalR
+ * or the REST fallback endpoint GET /api/admin/logs.
+ */
+export interface LogEntry {
+  /** Serilog level: Verbose | Debug | Information | Warning | Error | Fatal */
+  level: string
+  message: string
+  exception: string | null
+  /** Class that emitted the log, e.g. "RequestService". */
+  sourceContext: string | null
+  /** UTC ISO timestamp. */
+  timestamp: string
+  /** ASP.NET Core trace correlation ID. */
+  traceId: string | null
+  category: LogCategory
+  /** ID of the user who performed the action — Audit entries only. */
+  actorUserId: string | null
+  /** Machine-readable action key, e.g. "RequestCreated" — Audit entries only. */
+  action: string | null
+}

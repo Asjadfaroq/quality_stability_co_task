@@ -30,7 +30,9 @@ export const ROUTES = {
   ADMIN_JOBS: '/admin/jobs',
   ADMIN_ORGS: '/admin/orgs',
   ADMIN_ROLES:'/admin/roles',
+  ADMIN_LOGS: '/admin/logs',
 
-  // Shared
-  CHATS: '/chats',
+  // Shared (all authenticated users)
+  CHATS:    '/chats',
+  ACTIVITY: '/activity',
 } as const

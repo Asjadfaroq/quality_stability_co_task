@@ -22,6 +22,8 @@ import AdminPanel from '../features/admin/pages/AdminPanel'
 import AdminRoles from '../features/admin/pages/AdminRoles'
 import AdminJobs from '../features/admin/pages/AdminJobs'
 import AdminOrgs from '../features/admin/pages/AdminOrgs'
+import AdminLogs from '../features/admin/pages/AdminLogs'
+import ActivityLog from '../features/activity/pages/ActivityLog'
 import ProtectedRoute from '../shared/components/ProtectedRoute'
 import PublicRoute from '../shared/components/PublicRoute'
 import ErrorBoundary from '../shared/components/ErrorBoundary'
@@ -74,13 +76,15 @@ function AppRoutes() {
         <Route path={ROUTES.PROVIDER_ORG} element={<ProtectedRoute roles={['ProviderEmployee']}><ProviderOrgStatus /></ProtectedRoute>} />
 
         {/* Admin */}
-        <Route path={ROUTES.ADMIN} element={<ProtectedRoute roles={['Admin']}><AdminPanel /></ProtectedRoute>} />
-        <Route path={ROUTES.ADMIN_JOBS} element={<ProtectedRoute roles={['Admin']}><AdminJobs /></ProtectedRoute>} />
-        <Route path={ROUTES.ADMIN_ORGS} element={<ProtectedRoute roles={['Admin']}><AdminOrgs /></ProtectedRoute>} />
+        <Route path={ROUTES.ADMIN}       element={<ProtectedRoute roles={['Admin']}><AdminPanel /></ProtectedRoute>} />
+        <Route path={ROUTES.ADMIN_JOBS}  element={<ProtectedRoute roles={['Admin']}><AdminJobs  /></ProtectedRoute>} />
+        <Route path={ROUTES.ADMIN_ORGS}  element={<ProtectedRoute roles={['Admin']}><AdminOrgs  /></ProtectedRoute>} />
         <Route path={ROUTES.ADMIN_ROLES} element={<ProtectedRoute roles={['Admin']}><AdminRoles /></ProtectedRoute>} />
+        <Route path={ROUTES.ADMIN_LOGS}  element={<ProtectedRoute roles={['Admin']}><AdminLogs  /></ProtectedRoute>} />
 
-        {/* Shared */}
-        <Route path={ROUTES.CHATS} element={<ProtectedRoute roles={['Customer', 'ProviderEmployee', 'ProviderAdmin']}><Chats /></ProtectedRoute>} />
+        {/* Shared — all authenticated roles */}
+        <Route path={ROUTES.CHATS}    element={<ProtectedRoute roles={['Customer', 'ProviderEmployee', 'ProviderAdmin']}><Chats /></ProtectedRoute>} />
+        <Route path={ROUTES.ACTIVITY} element={<ProtectedRoute roles={['Customer', 'ProviderEmployee', 'ProviderAdmin', 'Admin']}><ActivityLog /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to={ROUTES.LOGIN} replace />} />
         <Route path="*" element={<Navigate to={ROUTES.LOGIN} replace />} />

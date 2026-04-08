@@ -242,7 +242,10 @@ builder.Services.AddCors(options =>
 });
 
 // 8. SignalR
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+        options.PayloadSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddSingleton<IUserIdProvider, UserIdProvider>();
 
 // HuggingFace HttpClient + resilience pipeline.

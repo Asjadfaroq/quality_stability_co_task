@@ -5,6 +5,7 @@ import {
   Menu, X, Briefcase, Bell, CheckCircle2,
   MessageSquare, BriefcaseBusiness, Clock, Trash2,
   UserPlus, UserMinus, CreditCard, ShieldCheck,
+  Activity, ScrollText,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
@@ -31,26 +32,30 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'Chats',           to: ROUTES.CHATS,                 icon: <MessageSquare   size={16} /> },
     { label: 'Subscription',    to: ROUTES.CUSTOMER_SUBSCRIPTION, icon: <CreditCard      size={16} /> },
     { label: 'My Organization', to: ROUTES.CUSTOMER_ORG,          icon: <Building2       size={16} />, permission: PERMISSIONS.ORG_VIEW },
+    { label: 'My Activity',     to: ROUTES.ACTIVITY,              icon: <Activity        size={16} /> },
   ],
   ProviderEmployee: [
-    { label: 'Dashboard',       to: ROUTES.PROVIDER,     icon: <LayoutDashboard size={16} /> },
+    { label: 'Dashboard',       to: ROUTES.PROVIDER,      icon: <LayoutDashboard size={16} /> },
     { label: 'My Jobs',         to: ROUTES.PROVIDER_JOBS, icon: <Briefcase       size={16} /> },
     { label: 'Jobs Map',        to: ROUTES.PROVIDER_MAP,  icon: <MapPin          size={16} /> },
     { label: 'Chats',           to: ROUTES.CHATS,         icon: <MessageSquare   size={16} /> },
     { label: 'My Organization', to: ROUTES.PROVIDER_ORG,  icon: <Building2       size={16} />, permission: PERMISSIONS.ORG_VIEW },
+    { label: 'My Activity',     to: ROUTES.ACTIVITY,      icon: <Activity        size={16} /> },
   ],
   ProviderAdmin: [
-    { label: 'Dashboard',    to: ROUTES.PROVIDER,     icon: <LayoutDashboard size={16} /> },
+    { label: 'Dashboard',    to: ROUTES.PROVIDER,      icon: <LayoutDashboard size={16} /> },
     { label: 'My Jobs',      to: ROUTES.PROVIDER_JOBS, icon: <Briefcase       size={16} /> },
     { label: 'Jobs Map',     to: ROUTES.PROVIDER_MAP,  icon: <MapPin          size={16} /> },
     { label: 'Chats',        to: ROUTES.CHATS,         icon: <MessageSquare   size={16} /> },
     { label: 'Organization', to: ROUTES.ORG,           icon: <Building2       size={16} />, permission: PERMISSIONS.ORG_VIEW },
+    { label: 'My Activity',  to: ROUTES.ACTIVITY,      icon: <Activity        size={16} /> },
   ],
   Admin: [
     { label: 'User Management',     to: ROUTES.ADMIN,       icon: <Users       size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
     { label: 'All Jobs',            to: ROUTES.ADMIN_JOBS,  icon: <Briefcase   size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
     { label: 'Organisations',       to: ROUTES.ADMIN_ORGS,  icon: <Building2   size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
     { label: 'Roles & Permissions', to: ROUTES.ADMIN_ROLES, icon: <ShieldCheck size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
+    { label: 'System Logs',         to: ROUTES.ADMIN_LOGS,  icon: <ScrollText  size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
   ],
 }
 
