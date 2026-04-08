@@ -16,6 +16,7 @@ import {
 } from '../../components/PermissionToggleGrid'
 import { apiErrorMessage } from '../../utils/format'
 import { usePermissions } from '../../hooks/usePermissions'
+import { PERMISSIONS } from '../../constants/permissions'
 import type { PagedResult } from '../../types'
 
 const DEFAULT_PAGE_SIZE = 20
@@ -95,7 +96,7 @@ function MemberPermissionsPanel({ memberId }: { memberId: string }) {
 
 export default function OrgPanel() {
   const { hasPermission } = usePermissions()
-  const canManage = hasPermission('org.manage')
+  const canManage = hasPermission(PERMISSIONS.ORG_MANAGE)
 
   const { data: org, isLoading } = useQuery<Org | null>({
     queryKey: ['my-org'],

@@ -3,20 +3,12 @@ import { Link } from 'react-router-dom'
 import { Briefcase, CheckCircle2, Loader2, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import api from '../../api/axios'
+import { formatDate } from '../../utils/format'
+import { StatusBadge } from '../../utils/status'
+import { ROUTES } from '../../constants/routes'
 import AppLayout from '../../components/AppLayout'
-import { Badge, StatsBar, SkeletonCard } from '../../components/ui'
+import { Button, StatsBar, SkeletonCard } from '../../components/ui'
 import type { PagedResult, ServiceRequest, StatItem } from '../../types'
-
-function statusBadge(status: ServiceRequest['status']) {
-  const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
-    Pending:            { label: 'Pending',    variant: 'pending' },
-    Accepted:           { label: 'Accepted',   variant: 'accepted' },
-    PendingConfirmation:{ label: 'Confirming', variant: 'pendingconfirmation' },
-    Completed:          { label: 'Completed',  variant: 'completed' },
-  }
-  const { label, variant } = map[status]
-  return <Badge label={label} variant={variant as any} />
-}
 
 export default function ProviderDashboard() {
   const { email, role } = useAuthStore()
@@ -28,14 +20,14 @@ export default function ProviderDashboard() {
 
   const allRequests = data?.items ?? []
 
-  const available = allRequests.filter((r) => r.status === 'Pending')
-  const active    = allRequests.filter((r) => r.status === 'Accepted' || r.status === 'PendingConfirmation')
-  const completed = allRequests.filter((r) => r.status === 'Completed')
+  const available    = allRequests.filter((r) => r.status === 'Pending')
+  const active       = allRequests.filter((r) => r.status === 'Accepted' || r.status === 'PendingConfirmation')
+  const completed    = allRequests.filter((r) => r.status === 'Completed')
   const recentActive = [...active].slice(0, 5)
 
   const stats: StatItem[] = [
-    { label: 'Available Jobs', value: available.length, icon: <Briefcase size={16} />,    color: 'indigo'  },
-    { label: 'Active Jobs',    value: active.length,    icon: <Loader2 size={16} />,      color: 'amber'   },
+    { label: 'Available Jobs', value: available.length, icon: <Briefcase    size={16} />, color: 'indigo'  },
+    { label: 'Active Jobs',    value: active.length,    icon: <Loader2      size={16} />, color: 'amber'   },
     { label: 'Completed',      value: completed.length, icon: <CheckCircle2 size={16} />, color: 'emerald' },
   ]
 
@@ -48,17 +40,12 @@ export default function ProviderDashboard() {
           </h2>
           <p className="text-sm text-slate-500 mt-0.5">{role} account</p>
         </div>
-        <Link to="/provider/jobs">
-          <button
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
-            style={{ background: 'linear-gradient(135deg,#4f46e5,#6366f1)' }}
-          >
-            <Briefcase size={15} /> Browse Jobs
-          </button>
+        <Link to={ROUTES.PROVIDER_JOBS}>
+          <Button icon={<Briefcase size={15} />}>Browse Jobs</Button>
         </Link>
       </div>
 
-      {/* Compact stats */}
+      {/* Stats */}
       {isLoading
         ? <div className="h-[72px] bg-white rounded-xl border border-slate-200 animate-pulse mb-6" />
         : <StatsBar items={stats} />
@@ -69,7 +56,7 @@ export default function ProviderDashboard() {
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900">Active Jobs</h3>
           <Link
-            to="/provider/active"
+            to={ROUTES.PROVIDER_JOBS}
             className="text-xs font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
           >
             View all <ArrowRight size={12} />
@@ -91,10 +78,10 @@ export default function ProviderDashboard() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-800 truncate">{req.title}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {req.category} · {formatDate(req.createdAt)}
                   </p>
                 </div>
-                {statusBadge(req.status)}
+                <StatusBadge status={req.status} perspective="provider" />
               </li>
             ))}
           </ul>

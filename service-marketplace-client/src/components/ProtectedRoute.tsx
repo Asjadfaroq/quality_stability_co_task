@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { getDashboardPath, isTokenExpired } from '../utils/auth'
+import { ROUTES } from '../constants/routes'
 import type { UserRole } from '../types'
 
 interface Props {
@@ -23,7 +24,7 @@ export default function ProtectedRoute({ children, roles }: Props) {
 
   // No token or token expired client-side → send to login, preserving intended destination
   if (!token || isTokenExpired(expiresAt)) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    return <Navigate to={ROUTES.LOGIN} state={{ from: location.pathname }} replace />
   }
 
   // Authenticated but wrong role → redirect to their own dashboard, not to /login

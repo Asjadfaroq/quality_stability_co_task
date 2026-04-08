@@ -7,10 +7,14 @@ import {
   MapPin, CalendarDays, Search,
 } from 'lucide-react'
 import api, { isRateLimited } from '../../api/axios'
+import { formatDate } from '../../utils/format'
+import { StatusBadge } from '../../utils/status'
+import { PERMISSIONS } from '../../constants/permissions'
+import { usePagination } from '../../hooks/usePagination'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import {
-  Button, Badge, Card, EmptyState, SkeletonCard, Pagination,
+  Button, Card, EmptyState, SkeletonCard, Pagination,
 } from '../../components/ui'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useGeolocation } from '../../hooks/useGeolocation'
@@ -21,23 +25,7 @@ import type { PagedResult, ServiceRequest } from '../../types'
 
 type FilterTab = 'available' | 'active' | 'completed'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const STATUS_BADGE: Record<ServiceRequest['status'], { label: string; variant: string }> = {
-  Pending:             { label: 'Pending',    variant: 'pending'             },
-  Accepted:            { label: 'Accepted',   variant: 'accepted'            },
-  PendingConfirmation: { label: 'Confirming', variant: 'pendingconfirmation' },
-  Completed:           { label: 'Completed',  variant: 'completed'           },
-}
-
-function StatusBadge({ status }: { status: ServiceRequest['status'] }) {
-  const { label, variant } = STATUS_BADGE[status]
-  return <Badge label={label} variant={variant as any} />
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-}
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -57,15 +45,14 @@ const TABS: TabOption[] = [
 export default function ProviderJobs() {
   const queryClient       = useQueryClient()
   const { hasPermission } = usePermissions()
-  const canAccept         = hasPermission('request.accept')
-  const canComplete       = hasPermission('request.complete')
-  const canViewAll        = hasPermission('request.view_all')
+  const canAccept         = hasPermission(PERMISSIONS.REQUEST_ACCEPT)
+  const canComplete       = hasPermission(PERMISSIONS.REQUEST_COMPLETE)
+  const canViewAll        = hasPermission(PERMISSIONS.REQUEST_VIEW_ALL)
   const unreadCounts      = useUnreadStore((s) => s.counts)
   const clearUnread       = useUnreadStore((s) => s.clear)
 
   const [activeTab, setActiveTab]       = useState<FilterTab>('available')
-  const [page, setPage]                 = useState(1)
-  const [pageSize, setPageSize]         = useState(DEFAULT_PAGE_SIZE)
+  const { page, pageSize, setPage, setPageSize } = usePagination(DEFAULT_PAGE_SIZE)
   const [acceptingId, setAcceptingId]   = useState<string | null>(null)
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [activeChat, setActiveChat]     = useState<{ id: string; title: string } | null>(null)
@@ -630,7 +617,7 @@ export default function ProviderJobs() {
                   pageSize={pageSize}
                   onPageChange={setPage}
                   pageSizeOptions={[5, 10, 20, 50]}
-                  onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+                  onPageSizeChange={setPageSize}
                 />
               )}
             </>

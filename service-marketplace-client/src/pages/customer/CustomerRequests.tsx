@@ -16,11 +16,15 @@ import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import { useAiEnhance } from '../../hooks/useAiEnhance'
 import { useGeolocation } from '../../hooks/useGeolocation'
+import { formatDate } from '../../utils/format'
+import { StatusBadge } from '../../utils/status'
+import { SERVICE_CATEGORIES } from '../../constants/categories'
+import { ROUTES } from '../../constants/routes'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import JobsMap from '../../components/JobsMap'
 import {
-  Button, Badge, Card,
+  Button, Card,
   Input, Textarea, Select, EmptyState, SkeletonCard, Pagination,
 } from '../../components/ui'
 import type { PagedResult, ServiceRequest, MapJobDto } from '../../types'
@@ -34,22 +38,6 @@ const schema = z.object({
 })
 
 type FormData = z.infer<typeof schema>
-
-const CATEGORIES = [
-  'Plumbing','Electrical','Cleaning','Carpentry',
-  'Painting','Moving','Gardening','IT Support','Other',
-]
-
-function statusBadge(status: ServiceRequest['status']) {
-  const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
-    Pending:            { label: 'Pending',               variant: 'pending' },
-    Accepted:           { label: 'Accepted',              variant: 'accepted' },
-    PendingConfirmation:{ label: 'Awaiting Confirmation',  variant: 'pendingconfirmation' },
-    Completed:          { label: 'Completed',             variant: 'completed' },
-  }
-  const { label, variant } = map[status]
-  return <Badge label={label} variant={variant as any} />
-}
 
 // ── New Request Modal ─────────────────────────────────────────────────────────
 
@@ -230,7 +218,7 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
 
               <Select label="Category" error={errors.category?.message} {...register('category')}>
                 <option value="">Select a category</option>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                {SERVICE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </Select>
 
               {/* Location section */}
@@ -425,7 +413,7 @@ export default function CustomerRequests() {
 
           {/* CTA */}
           <Link
-            to="/customer/subscription"
+            to={ROUTES.CUSTOMER_SUBSCRIPTION}
             className="flex items-center gap-1.5 shrink-0 rounded-xl px-4 py-2 text-[12.5px] font-semibold transition-opacity hover:opacity-90"
             style={{
               background: 'rgba(255,255,255,0.15)',
@@ -476,10 +464,10 @@ export default function CustomerRequests() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2.5 flex-wrap">
                         <p className="text-sm font-medium text-slate-800 truncate">{req.title}</p>
-                        {statusBadge(req.status)}
+                        <StatusBadge status={req.status} />
                       </div>
                       <p className="text-xs text-slate-400 mt-1">
-                        {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {req.category} · {formatDate(req.createdAt)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

@@ -1,4 +1,5 @@
 import type { UserRole } from '../types'
+import { ROUTES } from '../constants/routes'
 
 /** Decode and return the raw JWT payload object, or null on failure. */
 function decodeTokenPayload(token: string): Record<string, unknown> | null {
@@ -54,11 +55,11 @@ export function isTokenExpired(expiresAt: number | null): boolean {
 /** Maps a user role to its primary dashboard route. */
 export function getDashboardPath(role: UserRole | null): string {
   switch (role) {
-    case 'Customer':         return '/customer'
-    case 'Admin':            return '/admin'
+    case 'Customer':         return ROUTES.CUSTOMER
+    case 'Admin':            return ROUTES.ADMIN
     case 'ProviderAdmin':
-    case 'ProviderEmployee': return '/provider'
-    default:                 return '/login'
+    case 'ProviderEmployee': return ROUTES.PROVIDER
+    default:                 return ROUTES.LOGIN
   }
 }
 

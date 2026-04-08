@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 
 import api from '../../api/axios'
+import { usePagination } from '../../hooks/usePagination'
 import AppLayout from '../../components/AppLayout'
 import { Card, Badge, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import {
@@ -218,8 +219,7 @@ function ConfirmDeleteModal({ user, isDeleting, onConfirm, onCancel }: ConfirmDe
 export default function AdminPanel() {
   const queryClient             = useQueryClient()
   const { userId }              = useAuthStore()
-  const [page, setPage]         = useState(1)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const { page, pageSize, setPage, setPageSize } = usePagination(DEFAULT_PAGE_SIZE)
   const [roleFilter, setRoleFilter]               = useState('')
   const [searchInput, setSearchInput]             = useState('')
   const [search, setSearch]                       = useState('')
@@ -508,7 +508,7 @@ export default function AdminPanel() {
               pageSize={pageSize}
               onPageChange={(p) => setPage(p)}
               pageSizeOptions={[10, 25, 50, 100]}
-              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              onPageSizeChange={setPageSize}
             />
           </>
         )}

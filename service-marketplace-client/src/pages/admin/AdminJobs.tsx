@@ -3,12 +3,15 @@ import { useQuery } from '@tanstack/react-query'
 import { Briefcase, Search, X, Map, List } from 'lucide-react'
 
 import api from '../../api/axios'
+import { formatDate } from '../../utils/format'
+import { StatusBadge } from '../../utils/status'
+import { usePagination } from '../../hooks/usePagination'
 import AppLayout from '../../components/AppLayout'
 import JobsMap from '../../components/JobsMap'
 import {
-  Card, Badge, EmptyState, Skeleton, Pagination,
+  Card, EmptyState, Skeleton, Pagination,
 } from '../../components/ui'
-import type { PagedResult, MapJobDto } from '../../types'
+import type { PagedResult, MapJobDto, ServiceRequest } from '../../types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,16 +32,8 @@ interface AdminJobDto {
 
 const DEFAULT_PAGE_SIZE = 25
 
-/** Maps each API status value to a display label and Badge variant. */
-const STATUS_META: Record<string, { label: string; variant: string }> = {
-  Pending:             { label: 'Pending',     variant: 'pending'             },
-  Accepted:            { label: 'Accepted',    variant: 'accepted'            },
-  PendingConfirmation: { label: 'In Progress', variant: 'pendingconfirmation' },
-  Completed:           { label: 'Completed',   variant: 'completed'           },
-}
-
 interface StatusOption {
-  value: string   // '' means "All"
+  value: string
   label: string
 }
 
@@ -49,16 +44,6 @@ const STATUS_FILTERS: StatusOption[] = [
   { value: 'PendingConfirmation', label: 'In Progress' },
   { value: 'Completed',           label: 'Completed'   },
 ]
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day:   '2-digit',
-    month: 'short',
-    year:  'numeric',
-  })
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -84,15 +69,11 @@ function TableSkeleton() {
 type ViewMode = 'table' | 'map'
 
 export default function AdminJobs() {
-  const [page, setPage]         = useState(1)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const { page, pageSize, setPage, setPageSize } = usePagination(DEFAULT_PAGE_SIZE)
   const [statusFilter, setStatusFilter] = useState('')
-  const [viewMode, setViewMode] = useState<ViewMode>('table')
-
-  // Two-state debounce: `searchInput` is the raw controlled value of the text
-  // field; `search` is the debounced value that actually drives the query.
-  const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch]           = useState('')
+  const [viewMode,     setViewMode]     = useState<ViewMode>('table')
+  const [searchInput,  setSearchInput]  = useState('')
+  const [search,       setSearch]       = useState('')
 
   // Debounce: wait 350 ms after the user stops typing before firing the query.
   useEffect(() => {
@@ -100,7 +81,7 @@ export default function AdminJobs() {
     return () => clearTimeout(id)
   }, [searchInput])
 
-  // Reset to page 1 whenever filters change so we don't show an empty page.
+  // Reset to page 1 whenever filters change.
   useEffect(() => { setPage(1) }, [statusFilter, search])
 
   const { data, isLoading, isPlaceholderData } = useQuery<PagedResult<AdminJobDto>>({
@@ -114,13 +95,10 @@ export default function AdminJobs() {
           ...(search       ? { search }              : {}),
         },
       }).then(r => r.data),
-    // Keep the previous page's data visible while the next page loads
-    // so the table doesn't flash empty on every page turn.
     placeholderData: prev => prev,
     enabled: viewMode === 'table',
   })
 
-  // Map data — fetched only when map view is active
   const { data: mapJobs, isLoading: mapLoading } = useQuery<MapJobDto[]>({
     queryKey: ['admin-jobs-map'],
     queryFn: () => api.get('/requests/map').then(r => r.data),
@@ -131,7 +109,6 @@ export default function AdminJobs() {
   const jobs       = data?.items      ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = data?.totalPages ?? 1
-
   const isFiltered = !!statusFilter || !!search
 
   return (
@@ -143,7 +120,6 @@ export default function AdminJobs() {
             Platform-wide view of every service request across all statuses.
           </p>
         </div>
-        {/* View mode toggle */}
         <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
           <button
             type="button"
@@ -179,7 +155,6 @@ export default function AdminJobs() {
       {/* ── Table view ────────────────────────────────────────────────────── */}
       {viewMode === 'table' && (
       <Card padding={false}>
-        {/* ── Toolbar ───────────────────────────────────────────────────── */}
         <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
 
           {/* Status filter pills */}
@@ -200,7 +175,6 @@ export default function AdminJobs() {
             ))}
           </div>
 
-          {/* Spacer */}
           <div className="flex-1" />
 
           {/* Search input */}
@@ -232,7 +206,6 @@ export default function AdminJobs() {
           </div>
         </div>
 
-        {/* ── Result count line ──────────────────────────────────────────── */}
         {!isLoading && (
           <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-100">
             <span className="text-[11px] text-slate-500">
@@ -244,29 +217,16 @@ export default function AdminJobs() {
           </div>
         )}
 
-        {/* ── Table ─────────────────────────────────────────────────────── */}
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-100 bg-white">
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[28%]">
-                  Job
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[10%]">
-                  Category
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[13%]">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[18%]">
-                  Customer
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[18%]">
-                  Provider
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[13%]">
-                  Created
-                </th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[28%]">Job</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[10%]">Category</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[13%]">Status</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[18%]">Customer</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[18%]">Provider</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 w-[13%]">Created</th>
               </tr>
             </thead>
             <tbody className={isPlaceholderData ? 'opacity-60' : ''}>
@@ -287,71 +247,51 @@ export default function AdminJobs() {
                   </td>
                 </tr>
               ) : (
-                jobs.map(job => {
-                  const meta = STATUS_META[job.status] ?? { label: job.status, variant: 'default' }
-                  return (
-                    <tr
-                      key={job.id}
-                      className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
-                    >
-                      {/* Title */}
-                      <td className="px-4 py-3.5 max-w-0">
-                        <p className="font-medium text-slate-800 truncate" title={job.title}>
-                          {job.title}
-                        </p>
-                      </td>
+                jobs.map(job => (
+                  <tr
+                    key={job.id}
+                    className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
+                  >
+                    <td className="px-4 py-3.5 max-w-0">
+                      <p className="font-medium text-slate-800 truncate" title={job.title}>
+                        {job.title}
+                      </p>
+                    </td>
 
-                      {/* Category */}
-                      <td className="px-4 py-3.5">
-                        {job.category
-                          ? <span className="text-slate-500 truncate block max-w-[100px]" title={job.category}>{job.category}</span>
-                          : <span className="text-slate-300">—</span>
-                        }
-                      </td>
+                    <td className="px-4 py-3.5">
+                      {job.category
+                        ? <span className="text-slate-500 truncate block max-w-[100px]" title={job.category}>{job.category}</span>
+                        : <span className="text-slate-300">—</span>
+                      }
+                    </td>
 
-                      {/* Status */}
-                      <td className="px-4 py-3.5">
-                        <Badge label={meta.label} variant={meta.variant as any} />
-                      </td>
+                    <td className="px-4 py-3.5">
+                      <StatusBadge status={job.status as ServiceRequest['status']} perspective="admin" />
+                    </td>
 
-                      {/* Customer */}
-                      <td className="px-4 py-3.5 max-w-0">
-                        <span
-                          className="text-slate-600 truncate block max-w-[160px]"
-                          title={job.customerEmail}
-                        >
-                          {job.customerEmail}
-                        </span>
-                      </td>
+                    <td className="px-4 py-3.5 max-w-0">
+                      <span className="text-slate-600 truncate block max-w-[160px]" title={job.customerEmail}>
+                        {job.customerEmail}
+                      </span>
+                    </td>
 
-                      {/* Provider */}
-                      <td className="px-4 py-3.5 max-w-0">
-                        {job.providerEmail
-                          ? (
-                            <span
-                              className="text-slate-600 truncate block max-w-[160px]"
-                              title={job.providerEmail}
-                            >
-                              {job.providerEmail}
-                            </span>
-                          )
-                          : <span className="text-slate-300">—</span>
-                        }
-                      </td>
+                    <td className="px-4 py-3.5 max-w-0">
+                      {job.providerEmail
+                        ? <span className="text-slate-600 truncate block max-w-[160px]" title={job.providerEmail}>{job.providerEmail}</span>
+                        : <span className="text-slate-300">—</span>
+                      }
+                    </td>
 
-                      {/* Created date */}
-                      <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
-                        {formatDate(job.createdAt)}
-                      </td>
-                    </tr>
-                  )
-                })
+                    <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
+                      {formatDate(job.createdAt)}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
 
-        {/* ── Pagination ─────────────────────────────────────────────────── */}
         <Pagination
           page={page}
           totalPages={totalPages}
@@ -359,7 +299,7 @@ export default function AdminJobs() {
           pageSize={pageSize}
           onPageChange={setPage}
           pageSizeOptions={[10, 25, 50, 100]}
-          onPageSizeChange={s => { setPageSize(s); setPage(1) }}
+          onPageSizeChange={setPageSize}
         />
       </Card>
       )}

@@ -10,6 +10,8 @@ import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
 import { usePermissions } from '../hooks/usePermissions'
 import { timeAgo } from '../utils/format'
+import { ROUTES } from '../constants/routes'
+import { PERMISSIONS } from '../constants/permissions'
 import AiAssistant from './AiAssistant'
 import UserProfileDropdown from './UserProfileDropdown'
 import SidebarUserProfile from './SidebarUserProfile'
@@ -22,36 +24,33 @@ interface NavItem {
   permission?: string
 }
 
-// Each item optionally declares the permission that gates its visibility.
-// Items without a permission are always visible for users of that role.
-// The sidebar filters this list at runtime using the live permission set.
 const NAV_ITEMS: Record<string, NavItem[]> = {
   Customer: [
-    { label: 'Dashboard',        to: '/customer',              icon: <LayoutDashboard size={16} /> },
-    { label: 'My Requests',      to: '/customer/requests',     icon: <Briefcase       size={16} /> },
-    { label: 'Chats',            to: '/chats',                 icon: <MessageSquare   size={16} /> },
-    { label: 'Subscription',     to: '/customer/subscription', icon: <CreditCard      size={16} /> },
-    { label: 'My Organization',  to: '/customer/org',          icon: <Building2       size={16} />, permission: 'org.view' },
+    { label: 'Dashboard',       to: ROUTES.CUSTOMER,              icon: <LayoutDashboard size={16} /> },
+    { label: 'My Requests',     to: ROUTES.CUSTOMER_REQUESTS,     icon: <Briefcase       size={16} /> },
+    { label: 'Chats',           to: ROUTES.CHATS,                 icon: <MessageSquare   size={16} /> },
+    { label: 'Subscription',    to: ROUTES.CUSTOMER_SUBSCRIPTION, icon: <CreditCard      size={16} /> },
+    { label: 'My Organization', to: ROUTES.CUSTOMER_ORG,          icon: <Building2       size={16} />, permission: PERMISSIONS.ORG_VIEW },
   ],
   ProviderEmployee: [
-    { label: 'Dashboard',       to: '/provider',      icon: <LayoutDashboard size={16} /> },
-    { label: 'My Jobs',         to: '/provider/jobs', icon: <Briefcase       size={16} /> },
-    { label: 'Jobs Map',        to: '/provider/map',  icon: <MapPin          size={16} /> },
-    { label: 'Chats',           to: '/chats',         icon: <MessageSquare   size={16} /> },
-    { label: 'My Organization', to: '/provider/org',  icon: <Building2       size={16} />, permission: 'org.view' },
+    { label: 'Dashboard',       to: ROUTES.PROVIDER,     icon: <LayoutDashboard size={16} /> },
+    { label: 'My Jobs',         to: ROUTES.PROVIDER_JOBS, icon: <Briefcase       size={16} /> },
+    { label: 'Jobs Map',        to: ROUTES.PROVIDER_MAP,  icon: <MapPin          size={16} /> },
+    { label: 'Chats',           to: ROUTES.CHATS,         icon: <MessageSquare   size={16} /> },
+    { label: 'My Organization', to: ROUTES.PROVIDER_ORG,  icon: <Building2       size={16} />, permission: PERMISSIONS.ORG_VIEW },
   ],
   ProviderAdmin: [
-    { label: 'Dashboard',    to: '/provider',      icon: <LayoutDashboard size={16} /> },
-    { label: 'My Jobs',      to: '/provider/jobs', icon: <Briefcase       size={16} /> },
-    { label: 'Jobs Map',     to: '/provider/map',  icon: <MapPin          size={16} /> },
-    { label: 'Chats',        to: '/chats',         icon: <MessageSquare   size={16} /> },
-    { label: 'Organization', to: '/org',           icon: <Building2       size={16} />, permission: 'org.view' },
+    { label: 'Dashboard',    to: ROUTES.PROVIDER,     icon: <LayoutDashboard size={16} /> },
+    { label: 'My Jobs',      to: ROUTES.PROVIDER_JOBS, icon: <Briefcase       size={16} /> },
+    { label: 'Jobs Map',     to: ROUTES.PROVIDER_MAP,  icon: <MapPin          size={16} /> },
+    { label: 'Chats',        to: ROUTES.CHATS,         icon: <MessageSquare   size={16} /> },
+    { label: 'Organization', to: ROUTES.ORG,           icon: <Building2       size={16} />, permission: PERMISSIONS.ORG_VIEW },
   ],
   Admin: [
-    { label: 'User Management',     to: '/admin',       icon: <Users       size={16} />, permission: 'admin.manage_users' },
-    { label: 'All Jobs',            to: '/admin/jobs',  icon: <Briefcase   size={16} />, permission: 'admin.manage_users' },
-    { label: 'Organisations',       to: '/admin/orgs',  icon: <Building2   size={16} />, permission: 'admin.manage_users' },
-    { label: 'Roles & Permissions', to: '/admin/roles', icon: <ShieldCheck size={16} />, permission: 'admin.manage_users' },
+    { label: 'User Management',     to: ROUTES.ADMIN,       icon: <Users       size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
+    { label: 'All Jobs',            to: ROUTES.ADMIN_JOBS,  icon: <Briefcase   size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
+    { label: 'Organisations',       to: ROUTES.ADMIN_ORGS,  icon: <Building2   size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
+    { label: 'Roles & Permissions', to: ROUTES.ADMIN_ROLES, icon: <ShieldCheck size={16} />, permission: PERMISSIONS.ADMIN_MANAGE_USERS },
   ],
 }
 

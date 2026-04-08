@@ -1,7 +1,8 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, MapPin, CalendarDays, AlertCircle, RefreshCw } from 'lucide-react'
 import api from '../../api/axios'
+import { formatDate } from '../../utils/format'
+import { usePagination } from '../../hooks/usePagination'
 import AppLayout from '../../components/AppLayout'
 import { Card, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import type { PagedResult, ServiceRequest } from '../../types'
@@ -9,8 +10,7 @@ import type { PagedResult, ServiceRequest } from '../../types'
 const DEFAULT_PAGE_SIZE = 10
 
 export default function CompletedJobs() {
-  const [page, setPage]         = useState(1)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const { page, pageSize, setPage, setPageSize } = usePagination(DEFAULT_PAGE_SIZE)
 
   const { data, isLoading, isError, refetch } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['provider-completed', page, pageSize],
@@ -25,7 +25,6 @@ export default function CompletedJobs() {
 
   return (
     <AppLayout title="Completed Jobs">
-      {/* Page header */}
       <div className="mb-6">
         <h2 className="text-xl font-bold text-slate-900">Completed Jobs</h2>
         <p className="text-sm text-slate-500 mt-0.5">
@@ -33,7 +32,6 @@ export default function CompletedJobs() {
         </p>
       </div>
 
-      {/* Jobs list */}
       <Card padding={false}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
           <div>
@@ -89,7 +87,6 @@ export default function CompletedJobs() {
 
         ) : (
           <>
-            {/* Column headers */}
             <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Job / Description</span>
               <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Completed On</span>
@@ -127,9 +124,7 @@ export default function CompletedJobs() {
                       </span>
                       <p className="text-[11px] text-slate-400 flex items-center justify-end gap-1 mt-1">
                         <CalendarDays size={10} />
-                        {new Date(req.updatedAt).toLocaleDateString('en-GB', {
-                          day: 'numeric', month: 'short', year: 'numeric',
-                        })}
+                        {formatDate(req.updatedAt)}
                       </p>
                     </div>
                   </div>
@@ -143,7 +138,7 @@ export default function CompletedJobs() {
               pageSize={pageSize}
               onPageChange={setPage}
               pageSizeOptions={[5, 10, 20, 50]}
-              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              onPageSizeChange={setPageSize}
             />
           </>
         )}

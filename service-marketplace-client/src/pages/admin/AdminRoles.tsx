@@ -4,18 +4,19 @@ import toast from 'react-hot-toast'
 import { ShieldCheck, Lock, Loader2 } from 'lucide-react'
 
 import api from '../../api/axios'
+import { PERMISSIONS } from '../../constants/permissions'
 import AppLayout from '../../components/AppLayout'
 
 // ── Static display metadata ───────────────────────────────────────────────────
 
 const PERMISSION_META: Record<string, { label: string; description: string }> = {
-  'request.create':     { label: 'Create Requests',      description: 'Submit new service requests' },
-  'request.accept':     { label: 'Accept Requests',      description: 'Accept pending requests from customers' },
-  'request.complete':   { label: 'Complete Requests',    description: 'Mark requests as done and view history' },
-  'request.view_all':   { label: 'View All Requests',    description: 'Browse every request on the platform' },
-  'admin.manage_users': { label: 'Manage Users',         description: 'Access admin panel and update subscriptions' },
-  'org.manage':         { label: 'Manage Organisation',  description: 'Create org, add/remove members' },
-  'org.view':           { label: 'View Organisation',    description: 'View the organisation they belong to' },
+  [PERMISSIONS.REQUEST_CREATE]:     { label: 'Create Requests',     description: 'Submit new service requests' },
+  [PERMISSIONS.REQUEST_ACCEPT]:     { label: 'Accept Requests',     description: 'Accept pending requests from customers' },
+  [PERMISSIONS.REQUEST_COMPLETE]:   { label: 'Complete Requests',   description: 'Mark requests as done and view history' },
+  [PERMISSIONS.REQUEST_VIEW_ALL]:   { label: 'View All Requests',   description: 'Browse every request on the platform' },
+  [PERMISSIONS.ADMIN_MANAGE_USERS]: { label: 'Manage Users',        description: 'Access admin panel and update subscriptions' },
+  [PERMISSIONS.ORG_MANAGE]:         { label: 'Manage Organisation', description: 'Create org, add/remove members' },
+  [PERMISSIONS.ORG_VIEW]:           { label: 'View Organisation',   description: 'View the organisation they belong to' },
 }
 
 const ROLE_META: Record<string, { label: string; accent: string; bg: string; border: string; track: string }> = {

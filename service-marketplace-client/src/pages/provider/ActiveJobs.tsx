@@ -4,32 +4,24 @@ import toast from 'react-hot-toast'
 import { Loader2, MessageSquare, AlertCircle } from 'lucide-react'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
+import { formatDate } from '../../utils/format'
+import { StatusBadge } from '../../utils/status'
+import { PERMISSIONS } from '../../constants/permissions'
+import { usePagination } from '../../hooks/usePagination'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
-import { Button, Badge, Card, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
+import { Button, Card, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import { useUnreadStore } from '../../store/unreadStore'
 import { usePermissions } from '../../hooks/usePermissions'
 import type { PagedResult, ServiceRequest } from '../../types'
-
-function statusBadge(status: ServiceRequest['status']) {
-  const map: Record<ServiceRequest['status'], { label: string; variant: string }> = {
-    Pending:            { label: 'Pending',    variant: 'pending' },
-    Accepted:           { label: 'Accepted',   variant: 'accepted' },
-    PendingConfirmation:{ label: 'Confirming', variant: 'pendingconfirmation' },
-    Completed:          { label: 'Completed',  variant: 'completed' },
-  }
-  const { label, variant } = map[status]
-  return <Badge label={label} variant={variant as any} />
-}
 
 const DEFAULT_PAGE_SIZE = 10
 
 export default function ActiveJobs() {
   const queryClient = useQueryClient()
   const { hasPermission } = usePermissions()
-  const canComplete = hasPermission('request.complete')
-  const [page, setPage]             = useState(1)
-  const [pageSize, setPageSize]     = useState(DEFAULT_PAGE_SIZE)
+  const canComplete = hasPermission(PERMISSIONS.REQUEST_COMPLETE)
+  const { page, pageSize, setPage, setPageSize } = usePagination(DEFAULT_PAGE_SIZE)
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null)
   const unreadCounts = useUnreadStore((s) => s.counts)
   const clearUnread  = useUnreadStore((s) => s.clear)
@@ -56,9 +48,6 @@ export default function ActiveJobs() {
       toast.error('Failed to mark as complete.')
     },
   })
-
-  // Server already filters to Accepted + PendingConfirmation only — no client-side filter needed.
-  const active = allRequests
 
   return (
     <>
@@ -91,7 +80,7 @@ export default function ActiveJobs() {
             <div className="p-4 space-y-3">
               {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
             </div>
-          ) : active.length === 0 ? (
+          ) : allRequests.length === 0 ? (
             <EmptyState
               icon={<Loader2 size={22} />}
               title="No active jobs"
@@ -99,14 +88,13 @@ export default function ActiveJobs() {
             />
           ) : (
             <>
-              {/* Column headers */}
               <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Job / Details</span>
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Actions</span>
               </div>
 
               <ul className="divide-y divide-slate-100">
-                {active.map((req) => (
+                {allRequests.map((req) => (
                   <li
                     key={req.id}
                     className={`px-6 py-4 transition-colors ${
@@ -114,21 +102,17 @@ export default function ActiveJobs() {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      {/* Info */}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <p className="text-sm font-medium text-slate-800">{req.title}</p>
-                          {statusBadge(req.status)}
+                          <StatusBadge status={req.status} perspective="provider" />
                         </div>
                         <p className="text-xs text-slate-400 mb-1">
-                          {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', {
-                            day: 'numeric', month: 'short', year: 'numeric',
-                          })}
+                          {req.category} · {formatDate(req.createdAt)}
                         </p>
                         <p className="text-xs text-slate-400 line-clamp-1">{req.description}</p>
                       </div>
 
-                      {/* Actions */}
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
@@ -159,7 +143,6 @@ export default function ActiveJobs() {
                       </div>
                     </div>
 
-                    {/* Awaiting confirmation banner */}
                     {req.status === 'PendingConfirmation' && (
                       <div className="mt-3 flex items-center gap-2.5 bg-white border border-orange-200 rounded-lg px-4 py-2.5">
                         <AlertCircle size={14} className="text-orange-400 shrink-0" />
@@ -178,7 +161,7 @@ export default function ActiveJobs() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 pageSizeOptions={[5, 10, 20, 50]}
-                onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+                onPageSizeChange={setPageSize}
               />
             </>
           )}

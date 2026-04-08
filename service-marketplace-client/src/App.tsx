@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './store/authStore'
+import { ROUTES } from './constants/routes'
 import SignalRProvider from './components/SignalRProvider'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -28,22 +29,19 @@ import ErrorBoundary from './components/ErrorBoundary'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false, // switching tabs won't trigger redundant API calls
+      refetchOnWindowFocus: false,
     },
   },
 })
 
 function AppRoutes() {
-  const initialize = useAuthStore((s) => s.initialize)
+  const initialize    = useAuthStore((s) => s.initialize)
   const isInitialized = useAuthStore((s) => s.isInitialized)
 
   useEffect(() => {
     initialize()
   }, [initialize])
 
-  // Hold all rendering until the stored token has been validated.
-  // This prevents a single-frame flash where ProtectedRoute redirects to /login
-  // before the store hydration + expiry check is complete.
   if (!isInitialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -58,162 +56,35 @@ function AppRoutes() {
           AppLayout, which remounts on every navigation. */}
       <SignalRProvider />
       <Routes>
-      <Route
-        path="/login"
-        element={
-          <PublicRoute>
-            <Login />
-          </PublicRoute>
-        }
-      />
+        <Route path={ROUTES.LOGIN} element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path={ROUTES.REGISTER} element={<PublicRoute><Register /></PublicRoute>} />
 
-      <Route
-        path="/register"
-        element={
-          <PublicRoute>
-            <Register />
-          </PublicRoute>
-        }
-      />
+        {/* Customer */}
+        <Route path={ROUTES.CUSTOMER} element={<ProtectedRoute roles={['Customer']}><CustomerDashboard /></ProtectedRoute>} />
+        <Route path={ROUTES.CUSTOMER_REQUESTS} element={<ProtectedRoute roles={['Customer']}><CustomerRequests /></ProtectedRoute>} />
+        <Route path={ROUTES.CUSTOMER_SUBSCRIPTION} element={<ProtectedRoute roles={['Customer']}><SubscriptionPage /></ProtectedRoute>} />
+        <Route path={ROUTES.CUSTOMER_SUBSCRIPTION_SUCCESS} element={<ProtectedRoute roles={['Customer']}><SubscriptionSuccess /></ProtectedRoute>} />
+        <Route path={ROUTES.CUSTOMER_ORG} element={<ProtectedRoute roles={['Customer']}><CustomerOrgView /></ProtectedRoute>} />
 
-      <Route
-        path="/customer"
-        element={
-          <ProtectedRoute roles={['Customer']}>
-            <CustomerDashboard />
-          </ProtectedRoute>
-        }
-      />
+        {/* Provider */}
+        <Route path={ROUTES.PROVIDER} element={<ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}><ProviderDashboard /></ProtectedRoute>} />
+        <Route path={ROUTES.PROVIDER_JOBS} element={<ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}><ProviderJobs /></ProtectedRoute>} />
+        <Route path={ROUTES.PROVIDER_MAP} element={<ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}><ProviderMapPage /></ProtectedRoute>} />
+        <Route path={ROUTES.ORG} element={<ProtectedRoute roles={['ProviderAdmin']}><OrgPanel /></ProtectedRoute>} />
+        <Route path={ROUTES.PROVIDER_ORG} element={<ProtectedRoute roles={['ProviderEmployee']}><ProviderOrgStatus /></ProtectedRoute>} />
 
-      <Route
-        path="/customer/requests"
-        element={
-          <ProtectedRoute roles={['Customer']}>
-            <CustomerRequests />
-          </ProtectedRoute>
-        }
-      />
+        {/* Admin */}
+        <Route path={ROUTES.ADMIN} element={<ProtectedRoute roles={['Admin']}><AdminPanel /></ProtectedRoute>} />
+        <Route path={ROUTES.ADMIN_JOBS} element={<ProtectedRoute roles={['Admin']}><AdminJobs /></ProtectedRoute>} />
+        <Route path={ROUTES.ADMIN_ORGS} element={<ProtectedRoute roles={['Admin']}><AdminOrgs /></ProtectedRoute>} />
+        <Route path={ROUTES.ADMIN_ROLES} element={<ProtectedRoute roles={['Admin']}><AdminRoles /></ProtectedRoute>} />
 
-      <Route
-        path="/customer/subscription"
-        element={
-          <ProtectedRoute roles={['Customer']}>
-            <SubscriptionPage />
-          </ProtectedRoute>
-        }
-      />
+        {/* Shared */}
+        <Route path={ROUTES.CHATS} element={<ProtectedRoute roles={['Customer', 'ProviderEmployee', 'ProviderAdmin']}><Chats /></ProtectedRoute>} />
 
-      <Route
-        path="/customer/subscription/success"
-        element={
-          <ProtectedRoute roles={['Customer']}>
-            <SubscriptionSuccess />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/customer/org"
-        element={
-          <ProtectedRoute roles={['Customer']}>
-            <CustomerOrgView />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/provider"
-        element={
-          <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
-            <ProviderDashboard />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/provider/jobs"
-        element={
-          <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
-            <ProviderJobs />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/provider/map"
-        element={
-          <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
-            <ProviderMapPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/org"
-        element={
-          <ProtectedRoute roles={['ProviderAdmin']}>
-            <OrgPanel />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/provider/org"
-        element={
-          <ProtectedRoute roles={['ProviderEmployee']}>
-            <ProviderOrgStatus />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <AdminPanel />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/admin/jobs"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <AdminJobs />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/admin/orgs"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <AdminOrgs />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/admin/roles"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <AdminRoles />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/chats"
-        element={
-          <ProtectedRoute roles={['Customer', 'ProviderEmployee', 'ProviderAdmin']}>
-            <Chats />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+        <Route path="/" element={<Navigate to={ROUTES.LOGIN} replace />} />
+        <Route path="*" element={<Navigate to={ROUTES.LOGIN} replace />} />
+      </Routes>
     </>
   )
 }
@@ -242,21 +113,15 @@ export default function App() {
             },
             success: {
               iconTheme: { primary: '#16a34a', secondary: '#dcfce7' },
-              style: {
-                borderLeft: '3.5px solid #16a34a',
-              },
+              style: { borderLeft: '3.5px solid #16a34a' },
             },
             error: {
               iconTheme: { primary: '#dc2626', secondary: '#fee2e2' },
-              style: {
-                borderLeft: '3.5px solid #dc2626',
-              },
+              style: { borderLeft: '3.5px solid #dc2626' },
             },
             loading: {
               iconTheme: { primary: '#6366f1', secondary: '#e0e7ff' },
-              style: {
-                borderLeft: '3.5px solid #6366f1',
-              },
+              style: { borderLeft: '3.5px solid #6366f1' },
             },
           }}
         />

@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Building2, Search, X, Users } from 'lucide-react'
 
 import api from '../../api/axios'
+import { formatDate } from '../../utils/format'
+import { usePagination } from '../../hooks/usePagination'
 import AppLayout from '../../components/AppLayout'
 import { Card, EmptyState, Skeleton, Pagination } from '../../components/ui'
 import type { PagedResult } from '../../types'
@@ -21,14 +23,6 @@ interface AdminOrgDto {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_PAGE_SIZE = 25
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  })
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -50,8 +44,7 @@ function TableSkeleton() {
 // ── AdminOrgs ─────────────────────────────────────────────────────────────────
 
 export default function AdminOrgs() {
-  const [page, setPage]         = useState(1)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const { page, pageSize, setPage, setPageSize } = usePagination(DEFAULT_PAGE_SIZE)
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch]           = useState('')
@@ -232,7 +225,7 @@ export default function AdminOrgs() {
           pageSize={pageSize}
           onPageChange={setPage}
           pageSizeOptions={[10, 25, 50, 100]}
-          onPageSizeChange={s => { setPageSize(s); setPage(1) }}
+          onPageSizeChange={setPageSize}
         />
       </Card>
     </AppLayout>

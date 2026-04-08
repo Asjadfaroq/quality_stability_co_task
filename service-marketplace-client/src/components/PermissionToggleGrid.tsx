@@ -10,6 +10,7 @@
  */
 
 import { Minus } from 'lucide-react'
+import { PERMISSIONS } from '../constants/permissions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,13 +37,13 @@ export function nextOverrideState(current: OverrideState): OverrideState {
 }
 
 export const PERMISSION_LABELS: Record<string, string> = {
-  'request.create':     'Create Requests',
-  'request.accept':     'Accept Requests',
-  'request.complete':   'Complete Requests',
-  'request.view_all':   'View All Requests',
-  'admin.manage_users': 'Manage Users',
-  'org.manage':         'Manage Organisation',
-  'org.view':           'View Organisation',
+  [PERMISSIONS.REQUEST_CREATE]:     'Create Requests',
+  [PERMISSIONS.REQUEST_ACCEPT]:     'Accept Requests',
+  [PERMISSIONS.REQUEST_COMPLETE]:   'Complete Requests',
+  [PERMISSIONS.REQUEST_VIEW_ALL]:   'View All Requests',
+  [PERMISSIONS.ADMIN_MANAGE_USERS]: 'Manage Users',
+  [PERMISSIONS.ORG_MANAGE]:         'Manage Organisation',
+  [PERMISSIONS.ORG_VIEW]:           'View Organisation',
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
