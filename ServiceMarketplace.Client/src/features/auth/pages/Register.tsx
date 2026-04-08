@@ -88,6 +88,7 @@ export default function Register() {
         <Input
           label="Email"
           type="email"
+          autoComplete="email"
           placeholder="Enter your email"
           error={errors.email?.message}
           {...register('email')}
@@ -96,6 +97,7 @@ export default function Register() {
         <Input
           label="Password"
           type="password"
+          autoComplete="new-password"
           placeholder="Min. 6 characters"
           error={errors.password?.message}
           {...register('password')}
