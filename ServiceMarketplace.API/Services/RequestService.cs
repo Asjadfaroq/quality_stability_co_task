@@ -95,7 +95,7 @@ public class RequestService : IRequestService
     }
 
     public async Task<PagedResult<ServiceRequestDto>> GetAllAsync(
-        Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null)
+        Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null, string? search = null)
     {
         var query = _db.ServiceRequests.AsNoTracking();
 
@@ -120,6 +120,15 @@ public class RequestService : IRequestService
             }
         };
 
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(r =>
+                r.Title.Contains(term) ||
+                (r.Category != null && r.Category.Contains(term)) ||
+                r.Description.Contains(term));
+        }
+
         var totalCount = await query.CountAsync();
 
         var items = await query
@@ -139,13 +148,22 @@ public class RequestService : IRequestService
     }
 
     public async Task<PagedResult<ServiceRequestDto>> GetCompletedAsync(
-        Guid providerId, int page, int pageSize)
+        Guid providerId, int page, int pageSize, string? search = null)
     {
         var query = _db.ServiceRequests
             .AsNoTracking()
             .Where(r => r.Status == RequestStatus.Completed
                      && r.AcceptedByProviderId.HasValue
                      && r.AcceptedByProviderId.Value == providerId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(r =>
+                r.Title.Contains(term) ||
+                (r.Category != null && r.Category.Contains(term)) ||
+                r.Description.Contains(term));
+        }
 
         var totalCount = await query.CountAsync();
 

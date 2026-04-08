@@ -12,8 +12,8 @@ public interface IRequestService
     /// "Active" = provider's own accepted/in-progress jobs only, null = both combined.
     /// Ignored for Customer and Admin roles.
     /// </param>
-    Task<PagedResult<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null);
-    Task<PagedResult<ServiceRequestDto>> GetCompletedAsync(Guid providerId, int page, int pageSize);
+    Task<PagedResult<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null, string? search = null);
+    Task<PagedResult<ServiceRequestDto>> GetCompletedAsync(Guid providerId, int page, int pageSize, string? search = null);
     Task<ServiceRequestDto>              GetByIdAsync(Guid requestId, Guid userId, UserRole role);
     Task<List<ServiceRequestDto>>        GetNearbyAsync(double lat, double lng, double radiusKm);
     /// <summary>

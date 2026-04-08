@@ -3,14 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Briefcase, Loader2, CheckCircle2, MessageSquare,
-  AlertCircle, RefreshCw, Search, X, SlidersHorizontal,
-  MapPin, CalendarDays,
+  AlertCircle, RefreshCw, X, SlidersHorizontal,
+  MapPin, CalendarDays, Search,
 } from 'lucide-react'
 import api, { isRateLimited } from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import {
-  Button, Badge, Card, CardHeader, Input, EmptyState, SkeletonCard, Pagination,
+  Button, Badge, Card, Input, EmptyState, SkeletonCard, Pagination,
 } from '../../components/ui'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useGeolocation } from '../../hooks/useGeolocation'
@@ -24,10 +24,10 @@ type FilterTab = 'available' | 'active' | 'completed'
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_BADGE: Record<ServiceRequest['status'], { label: string; variant: string }> = {
-  Pending:             { label: 'Pending',     variant: 'pending'             },
-  Accepted:            { label: 'Accepted',    variant: 'accepted'            },
-  PendingConfirmation: { label: 'Confirming',  variant: 'pendingconfirmation' },
-  Completed:           { label: 'Completed',   variant: 'completed'           },
+  Pending:             { label: 'Pending',    variant: 'pending'             },
+  Accepted:            { label: 'Accepted',   variant: 'accepted'            },
+  PendingConfirmation: { label: 'Confirming', variant: 'pendingconfirmation' },
+  Completed:           { label: 'Completed',  variant: 'completed'           },
 }
 
 function StatusBadge({ status }: { status: ServiceRequest['status'] }) {
@@ -35,27 +35,46 @@ function StatusBadge({ status }: { status: ServiceRequest['status'] }) {
   return <Badge label={label} variant={variant as any} />
 }
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 const DEFAULT_PAGE_SIZE = 20
+
+interface TabOption {
+  key:   FilterTab
+  label: string
+}
+
+const TABS: TabOption[] = [
+  { key: 'available', label: 'Available' },
+  { key: 'active',    label: 'Active'    },
+  { key: 'completed', label: 'Completed' },
+]
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ProviderJobs() {
-  const queryClient    = useQueryClient()
+  const queryClient       = useQueryClient()
   const { hasPermission } = usePermissions()
-  const canAccept      = hasPermission('request.accept')
-  const canComplete    = hasPermission('request.complete')
-  const canViewAll     = hasPermission('request.view_all')
-  const unreadCounts   = useUnreadStore((s) => s.counts)
-  const clearUnread    = useUnreadStore((s) => s.clear)
+  const canAccept         = hasPermission('request.accept')
+  const canComplete       = hasPermission('request.complete')
+  const canViewAll        = hasPermission('request.view_all')
+  const unreadCounts      = useUnreadStore((s) => s.counts)
+  const clearUnread       = useUnreadStore((s) => s.clear)
 
-  const [activeTab, setActiveTab]         = useState<FilterTab>('available')
-  const [page, setPage]                   = useState(1)
-  const [pageSize, setPageSize]           = useState(DEFAULT_PAGE_SIZE)
-  const [acceptingId, setAcceptingId]     = useState<string | null>(null)
-  const [completingId, setCompletingId]   = useState<string | null>(null)
-  const [activeChat, setActiveChat]       = useState<{ id: string; title: string } | null>(null)
+  const [activeTab, setActiveTab]       = useState<FilterTab>('available')
+  const [page, setPage]                 = useState(1)
+  const [pageSize, setPageSize]         = useState(DEFAULT_PAGE_SIZE)
+  const [acceptingId, setAcceptingId]   = useState<string | null>(null)
+  const [completingId, setCompletingId] = useState<string | null>(null)
+  const [activeChat, setActiveChat]     = useState<{ id: string; title: string } | null>(null)
 
-  // Nearby filter state (available tab only)
+  // Search — two-state debounce identical to AdminJobs
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch]           = useState('')
+
+  // Nearby filter (available tab only)
   const [showNearby, setShowNearby]       = useState(false)
   const [lat, setLat]                     = useState('')
   const [lng, setLng]                     = useState('')
@@ -65,8 +84,14 @@ export default function ProviderJobs() {
 
   const { latitude: geoLat, longitude: geoLng, loading: geoLoading, error: geoError, detect } = useGeolocation()
 
-  // Reset page when switching tabs
-  useEffect(() => { setPage(1) }, [activeTab])
+  // Debounce: wait 350 ms after the user stops typing before firing the query
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchInput.trim()), 350)
+    return () => clearTimeout(id)
+  }, [searchInput])
+
+  // Reset page when switching tabs or search changes
+  useEffect(() => { setPage(1) }, [activeTab, search])
 
   // Auto-detect location when nearby panel opens
   useEffect(() => {
@@ -82,41 +107,41 @@ export default function ProviderJobs() {
     }
   }, [geoLat, geoLng])
 
-  // ── Queries ─────────────────────────────────────────────────────────────────
+  // ── Queries — each is enabled only when its tab is active ────────────────────
 
   const availableQuery = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['requests-pending', page, pageSize],
+    queryKey: ['requests-pending', page, pageSize, search],
     queryFn: () =>
-      api.get('/requests', { params: { page, pageSize, statusFilter: 'Pending' } }).then((r) => r.data),
+      api.get('/requests', { params: { page, pageSize, statusFilter: 'Pending', ...(search ? { search } : {}) } }).then((r) => r.data),
     placeholderData: (prev) => prev,
     enabled: activeTab === 'available',
   })
 
   const activeQuery = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['requests-active', page, pageSize],
+    queryKey: ['requests-active', page, pageSize, search],
     queryFn: () =>
-      api.get('/requests', { params: { page, pageSize, statusFilter: 'Active' } }).then((r) => r.data),
+      api.get('/requests', { params: { page, pageSize, statusFilter: 'Active', ...(search ? { search } : {}) } }).then((r) => r.data),
     placeholderData: (prev) => prev,
     enabled: activeTab === 'active',
   })
 
   const completedQuery = useQuery<PagedResult<ServiceRequest>>({
-    queryKey: ['provider-completed', page, pageSize],
+    queryKey: ['provider-completed', page, pageSize, search],
     queryFn: () =>
-      api.get('/requests/completed', { params: { page, pageSize } }).then((r) => r.data),
+      api.get('/requests/completed', { params: { page, pageSize, ...(search ? { search } : {}) } }).then((r) => r.data),
     placeholderData: (prev) => prev,
     enabled: activeTab === 'completed',
   })
 
-  const current    = activeTab === 'available' ? availableQuery
-                   : activeTab === 'active'    ? activeQuery
-                   :                             completedQuery
+  const current = activeTab === 'available' ? availableQuery
+                : activeTab === 'active'    ? activeQuery
+                :                             completedQuery
 
   const items      = current.data?.items      ?? []
   const totalCount = current.data?.totalCount ?? 0
   const totalPages = current.data?.totalPages ?? 1
 
-  // Display: nearby results override the available list when a search is active
+  // Nearby results override the available list when a search is active
   const displayItems: ServiceRequest[] = activeTab === 'available' && nearbyResults !== null
     ? nearbyResults
     : items
@@ -174,15 +199,14 @@ export default function ProviderJobs() {
     }
   }
 
-  // ── Tab config ────────────────────────────────────────────────────────────────
+  const handleTabChange = (tab: FilterTab) => {
+    setActiveTab(tab)
+    setNearbyResults(null)
+    setShowNearby(false)
+    setSearchInput('')
+  }
 
-  const TABS: { key: FilterTab; label: string; count?: number }[] = [
-    { key: 'available', label: 'Available' },
-    { key: 'active',    label: 'Active'    },
-    { key: 'completed', label: 'Completed' },
-  ]
-
-  // ── Empty state copy ──────────────────────────────────────────────────────────
+  // ── Empty-state copy ──────────────────────────────────────────────────────────
 
   const emptyTitle = activeTab === 'available' ? 'No available jobs'
                    : activeTab === 'active'    ? 'No active jobs'
@@ -192,8 +216,8 @@ export default function ProviderJobs() {
                    : activeTab === 'active'    ? 'Jobs you accept will appear here.'
                    :                             'Jobs you finish and customers confirm will appear here.'
 
-  const emptyIcon  = activeTab === 'available' ? <Briefcase size={22} />
-                   : activeTab === 'active'    ? <Loader2   size={22} />
+  const emptyIcon  = activeTab === 'available' ? <Briefcase    size={22} />
+                   : activeTab === 'active'    ? <Loader2      size={22} />
                    :                             <CheckCircle2 size={22} />
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -201,50 +225,94 @@ export default function ProviderJobs() {
   return (
     <>
       <AppLayout title="My Jobs">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+
+        {/* Page header */}
+        <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-slate-900">My Jobs</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Browse available requests, manage active work, and view history</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Browse available requests, manage active work, and view history.
+            </p>
           </div>
-          {/* Nearby filter toggle — only relevant on available tab */}
-          {activeTab === 'available' && canViewAll && (
-            <Button
-              variant={showNearby ? 'secondary' : 'primary'}
-              icon={showNearby ? <X size={15} /> : <SlidersHorizontal size={15} />}
-              onClick={() => { setShowNearby(!showNearby); setNearbyResults(null) }}
-            >
-              {showNearby ? 'Hide filter' : 'Find Nearby'}
-            </Button>
-          )}
         </div>
 
-        {/* Tab filter pills */}
-        <div className="flex items-center gap-1.5 mb-5">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => { setActiveTab(tab.key); setNearbyResults(null); setShowNearby(false) }}
-              className={`px-4 py-2 rounded-xl text-[13px] font-medium border transition-all ${
-                activeTab === tab.key
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <Card padding={false}>
 
-        {/* Nearby filter panel — available tab only */}
-        {activeTab === 'available' && showNearby && (
-          <Card className="mb-5">
-            <CardHeader
-              title="Find Nearby Requests"
-              description="Search for pending jobs within a radius of your location"
-            />
-            <div className="space-y-2 mb-4">
+          {/* ── Toolbar ───────────────────────────────────────────────────── */}
+          <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+
+            {/* Tab pills — styled identical to AdminJobs status pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+                    activeTab === tab.key
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Search input */}
+            <div className="relative w-full sm:w-56 shrink-0">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search title, category…"
+                className="w-full pl-8 pr-8 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-800
+                           placeholder:text-slate-400 bg-white
+                           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                           transition-shadow"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Nearby filter toggle — available tab + org admin only */}
+            {activeTab === 'available' && canViewAll && (
+              <button
+                type="button"
+                onClick={() => { setShowNearby(!showNearby); setNearbyResults(null) }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-medium transition-colors ${
+                  showNearby
+                    ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {showNearby ? <X size={13} /> : <SlidersHorizontal size={13} />}
+                {showNearby ? 'Hide filter' : 'Find Nearby'}
+              </button>
+            )}
+          </div>
+
+          {/* ── Nearby filter panel ────────────────────────────────────────── */}
+          {activeTab === 'available' && showNearby && (
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/60 space-y-4">
+              <p className="text-[12px] font-semibold text-slate-600 uppercase tracking-wide">
+                Search by location
+              </p>
               <div className="flex items-center justify-between">
                 <span className="text-[13px] font-medium text-slate-700">Your location</span>
                 <button
@@ -271,67 +339,40 @@ export default function ProviderJobs() {
                   <MapPin size={11} className="shrink-0" />Location detected — you can still edit the values above.
                 </p>
               )}
-            </div>
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-slate-700">Search radius</label>
-                <span className="text-sm font-semibold text-indigo-600">{radius} km</span>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[13px] font-medium text-slate-700">Search radius</label>
+                  <span className="text-[13px] font-semibold text-indigo-600">{radius} km</span>
+                </div>
+                <input
+                  type="range" min={1} max={100} value={radius}
+                  onChange={(e) => setRadius(Number(e.target.value))}
+                  className="w-full h-1.5 bg-slate-200 rounded-full appearance-none accent-indigo-600 cursor-pointer"
+                />
+                <div className="flex justify-between text-xs text-slate-400 mt-1"><span>1 km</span><span>100 km</span></div>
               </div>
-              <input
-                type="range" min={1} max={100} value={radius}
-                onChange={(e) => setRadius(Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-200 rounded-full appearance-none accent-indigo-600 cursor-pointer"
-              />
-              <div className="flex justify-between text-xs text-slate-400 mt-1"><span>1 km</span><span>100 km</span></div>
+              <div className="flex items-center gap-3">
+                <Button icon={<Search size={14} />} loading={searching} onClick={handleNearbySearch}>Search</Button>
+                {nearbyResults && <Button variant="ghost" icon={<X size={14} />} onClick={() => setNearbyResults(null)}>Clear</Button>}
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Button icon={<Search size={14} />} loading={searching} onClick={handleNearbySearch}>Search</Button>
-              {nearbyResults && <Button variant="ghost" icon={<X size={14} />} onClick={() => setNearbyResults(null)}>Clear</Button>}
-            </div>
-          </Card>
-        )}
+          )}
 
-        {/* Jobs list */}
-        <Card padding={false}>
-          {/* Card header */}
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">
-                {activeTab === 'available' && nearbyResults ? `Nearby Results (${nearbyResults.length})`
-                 : activeTab === 'available' ? 'Pending Requests'
-                 : activeTab === 'active'    ? 'In Progress'
-                 :                             'Job History'}
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {current.isLoading ? 'Loading…'
-                 : nearbyResults   ? `${nearbyResults.length} job${nearbyResults.length !== 1 ? 's' : ''} nearby`
-                 :                   `${totalCount} job${totalCount !== 1 ? 's' : ''}`}
-              </p>
+          {/* ── Result count bar ───────────────────────────────────────────── */}
+          {!current.isLoading && (
+            <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                {nearbyResults !== null
+                  ? `${nearbyResults.length} job${nearbyResults.length !== 1 ? 's' : ''} found nearby`
+                  : totalCount === 0
+                    ? search ? 'No jobs match the search term.' : emptyDesc
+                    : <>{totalCount} job{totalCount !== 1 ? 's' : ''}{search ? ' match the search term' : ''}</>
+                }
+              </span>
             </div>
-            {activeTab === 'active' && totalCount > 0 && (
-              <span
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                style={{ background: 'rgba(59,130,246,0.08)', color: '#2563eb' }}
-              >
-                <Loader2 size={11} className="animate-spin" />
-                {totalCount} ongoing
-              </span>
-            )}
-            {activeTab === 'completed' && (current.data?.items ?? []).length > 0 && (
-              <span
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                style={{ background: 'rgba(16,185,129,0.1)', color: '#059669' }}
-              >
-                <CheckCircle2 size={11} />
-                All confirmed
-              </span>
-            )}
-            {activeTab === 'available' && nearbyResults && (
-              <Badge label={`${nearbyResults.length} found`} variant="accepted" />
-            )}
-          </div>
+          )}
 
-          {/* Content */}
+          {/* ── Content ────────────────────────────────────────────────────── */}
           {current.isLoading ? (
             <div className="p-4 space-y-3">{[1, 2, 3].map((i) => <SkeletonCard key={i} />)}</div>
 
@@ -354,16 +395,12 @@ export default function ProviderJobs() {
             </div>
 
           ) : displayItems.length === 0 ? (
-            <EmptyState
-              icon={emptyIcon}
-              title={emptyTitle}
-              description={emptyDesc}
-            />
+            <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDesc} />
 
           ) : (
             <>
               {/* Column headers */}
-              <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
+              <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-white border-b border-slate-100">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                   {activeTab === 'completed' ? 'Job / Description' : 'Job / Details'}
                 </span>
@@ -377,12 +414,12 @@ export default function ProviderJobs() {
                   <li
                     key={req.id}
                     className={`px-6 py-4 transition-colors ${
-                      req.status === 'PendingConfirmation' ? 'bg-orange-50/40' : 'hover:bg-slate-50/50'
+                      req.status === 'PendingConfirmation' ? 'bg-orange-50/40' : 'hover:bg-slate-50/60'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
 
-                      {/* ── Available / Active: card-style info ── */}
+                      {/* ── Available / Active ── */}
                       {activeTab !== 'completed' && (
                         <>
                           <div className="min-w-0 flex-1">
@@ -391,15 +428,12 @@ export default function ProviderJobs() {
                               <StatusBadge status={req.status} />
                             </div>
                             <p className="text-xs text-slate-400 mb-1">
-                              {req.category} · {new Date(req.createdAt).toLocaleDateString('en-GB', {
-                                day: 'numeric', month: 'short', year: 'numeric',
-                              })}
+                              {req.category} · {formatDate(req.createdAt)}
                             </p>
                             <p className="text-xs text-slate-400 line-clamp-1">{req.description}</p>
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
-                            {/* Active tab actions */}
                             {activeTab === 'active' && (
                               <>
                                 <Button
@@ -428,7 +462,6 @@ export default function ProviderJobs() {
                               </>
                             )}
 
-                            {/* Available tab: accept action */}
                             {activeTab === 'available' && canAccept && (
                               <Button
                                 size="sm"
@@ -443,7 +476,7 @@ export default function ProviderJobs() {
                         </>
                       )}
 
-                      {/* ── Completed tab: history-style layout ── */}
+                      {/* ── Completed ── */}
                       {activeTab === 'completed' && (
                         <>
                           <div className="flex items-start gap-3.5 min-w-0">
@@ -470,9 +503,7 @@ export default function ProviderJobs() {
                             </span>
                             <p className="text-[11px] text-slate-400 flex items-center justify-end gap-1 mt-1">
                               <CalendarDays size={10} />
-                              {new Date(req.updatedAt).toLocaleDateString('en-GB', {
-                                day: 'numeric', month: 'short', year: 'numeric',
-                              })}
+                              {formatDate(req.updatedAt)}
                             </p>
                           </div>
                         </>

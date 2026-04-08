@@ -52,12 +52,13 @@ public class RequestsController : BaseController
     public async Task<IActionResult> GetAll(
         [FromQuery] int     page         = 1,
         [FromQuery] int     pageSize     = DefaultPageSize,
-        [FromQuery] string? statusFilter = null)
+        [FromQuery] string? statusFilter = null,
+        [FromQuery] string? search       = null)
     {
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
         page     = Math.Max(1, page);
 
-        var result = await _requestService.GetAllAsync(CurrentUserId, CurrentUserRole, page, pageSize, statusFilter);
+        var result = await _requestService.GetAllAsync(CurrentUserId, CurrentUserRole, page, pageSize, statusFilter, search);
         return Ok(result);
     }
 
@@ -94,13 +95,14 @@ public class RequestsController : BaseController
     [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetCompleted(
-        [FromQuery] int page     = 1,
-        [FromQuery] int pageSize = DefaultPageSize)
+        [FromQuery] int     page     = 1,
+        [FromQuery] int     pageSize = DefaultPageSize,
+        [FromQuery] string? search   = null)
     {
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
         page     = Math.Max(1, page);
 
-        var result = await _requestService.GetCompletedAsync(CurrentUserId, page, pageSize);
+        var result = await _requestService.GetCompletedAsync(CurrentUserId, page, pageSize, search);
         return Ok(result);
     }
 
