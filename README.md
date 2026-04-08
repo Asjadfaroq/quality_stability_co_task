@@ -14,8 +14,6 @@
 
 ## Overview
 
-This repository is my implementation of the HR assignment in `Recruitment_Task.md`.
-
 The platform allows customers to create service requests and providers to discover, accept, and complete nearby work, with permission-based access control enforced at the API layer.
 
 **Stack:** ASP.NET Core 10, Entity Framework Core, SQL Server, React + TypeScript (Vite), SignalR, Redis, Stripe, Serilog, Azure Application Insights.
@@ -109,7 +107,6 @@ The platform allows customers to create service requests and providers to discov
 ├── ServiceMarketplace.API/      # ASP.NET Core backend
 ├── ServiceMarketplace.Client/   # React + TypeScript frontend
 ├── Documentation.md             # Full technical documentation
-├── Recruitment_Task.md          # Assignment brief from HR
 ├── docker-compose.yml
 └── run.sh
 ```
