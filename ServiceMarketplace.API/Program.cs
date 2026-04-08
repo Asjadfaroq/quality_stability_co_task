@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http.Resilience;
@@ -558,7 +559,16 @@ app.UseResponseCompression();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-if (!app.Environment.IsDevelopment())
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+var httpsPortConfigured =
+    app.Configuration.GetValue<int?>("ASPNETCORE_HTTPS_PORT").HasValue ||
+    app.Configuration.GetValue<int?>("HTTPS_PORT").HasValue;
+
+if (app.Environment.IsDevelopment() || httpsPortConfigured)
     app.UseHttpsRedirection();
 
 app.UseCors("Frontend");
