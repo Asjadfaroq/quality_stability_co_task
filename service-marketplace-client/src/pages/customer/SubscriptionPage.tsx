@@ -52,28 +52,35 @@ function CopyField({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5"
-           style={{ color: 'rgba(255,255,255,0.45)' }}>
+    <div
+      className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-colors"
+      style={{
+        background:  copied ? 'rgba(220,252,231,0.6)' : 'rgba(255,255,255,0.6)',
+        borderColor: copied ? '#86efac' : 'rgba(199,210,254,0.7)',
+      }}
+    >
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-400 mb-0.5">
           {label}
         </p>
-        <p className="text-sm font-mono font-semibold text-white tracking-wider">{value}</p>
+        <p className="text-[13px] font-mono font-semibold text-slate-700 tracking-wider truncate">
+          {value}
+        </p>
       </div>
       <button
         type="button"
         onClick={handleCopy}
         title={`Copy ${label}`}
-        className="flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-200 shrink-0"
+        className="flex items-center justify-center w-7 h-7 rounded-lg border transition-all duration-200 shrink-0"
         style={{
-          background: copied ? 'rgba(134,239,172,0.2)' : 'rgba(255,255,255,0.1)',
-          border: copied ? '1px solid rgba(134,239,172,0.4)' : '1px solid rgba(255,255,255,0.15)',
-          transform: copied ? 'scale(0.92)' : 'scale(1)',
+          background:  copied ? '#dcfce7' : 'rgba(255,255,255,0.8)',
+          borderColor: copied ? '#86efac' : 'rgba(199,210,254,0.8)',
+          transform:   copied ? 'scale(0.88)' : 'scale(1)',
         }}
       >
         {copied
-          ? <Check size={12} style={{ color: '#86efac' }} />
-          : <Copy size={12} style={{ color: 'rgba(255,255,255,0.6)' }} />
+          ? <Check size={12} style={{ color: '#16a34a' }} />
+          : <Copy size={12} className="text-indigo-400" />
         }
       </button>
     </div>
@@ -116,7 +123,7 @@ export default function SubscriptionPage() {
 
   return (
     <AppLayout title="Subscription">
-      <div className="max-w-2xl mx-auto py-6 space-y-6">
+      <div className="max-w-xl mx-auto py-6 space-y-6">
 
         {/* Page header */}
         <div>
@@ -128,93 +135,39 @@ export default function SubscriptionPage() {
 
         {/* ── Test-mode card ──────────────────────────────────────────────── */}
         <div
-          className="rounded-2xl overflow-hidden"
-          style={{ boxShadow: '0 4px 24px rgba(99,102,241,0.18)' }}
+          className="rounded-2xl overflow-hidden border border-indigo-200"
+          style={{
+            background: 'linear-gradient(135deg,#eef2ff 0%,#ede9fe 100%)',
+            boxShadow: '0 2px 12px rgba(99,102,241,0.1)',
+          }}
         >
-          {/* Header strip */}
-          <div
-            className="flex items-center gap-2 px-5 py-2.5"
-            style={{ background: 'linear-gradient(90deg,#6366f1,#818cf8)' }}
-          >
-            <span
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-white/90"
-            >
-              <span
-                className="w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse inline-block"
-              />
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-indigo-200/60">
+            <span className="inline-flex items-center gap-2 text-[12px] font-semibold text-indigo-700">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse inline-block" />
               Stripe Test Mode
             </span>
-            <span className="ml-auto text-[11px] text-white/60 font-medium">
+            <span className="text-[11px] font-medium text-indigo-400">
               No real charge will be made
             </span>
           </div>
 
-          {/* Card body */}
-          <div
-            className="p-5"
-            style={{ background: '#0f172a' }}
-          >
-            <p className="text-[12px] text-slate-400 mb-4 leading-relaxed">
-              Use the test credentials below to complete checkout. Click any copy icon to copy the value.
+          {/* Body */}
+          <div className="px-5 py-4">
+            <p className="text-[12px] text-indigo-500 mb-3.5 leading-relaxed">
+              Use these test credentials at checkout. Click the copy icon next to any field.
             </p>
 
-            {/* Credit card mockup */}
-            <div
-              className="rounded-2xl p-5 relative overflow-hidden"
-              style={{
-                background: 'linear-gradient(135deg, #1e3a8a 0%, #3730a3 45%, #4f46e5 100%)',
-                boxShadow: '0 8px 32px rgba(79,70,229,0.35)',
-              }}
-            >
-              {/* Decorative circles */}
-              <div
-                className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-10"
-                style={{ background: 'radial-gradient(circle, #fff 0%, transparent 70%)' }}
-              />
-              <div
-                className="absolute -bottom-10 -left-6 w-32 h-32 rounded-full opacity-10"
-                style={{ background: 'radial-gradient(circle, #a5b4fc 0%, transparent 70%)' }}
-              />
-
-              {/* Card top row */}
-              <div className="flex items-center justify-between mb-5 relative">
-                {/* Chip */}
-                <div
-                  className="w-9 h-7 rounded-md"
-                  style={{
-                    background: 'linear-gradient(135deg, #fde68a 0%, #f59e0b 100%)',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
-                  }}
-                >
-                  <div className="w-full h-full rounded-md grid grid-cols-2 gap-px p-0.5 opacity-60">
-                    <div className="bg-yellow-600/60 rounded-sm" />
-                    <div className="bg-yellow-600/60 rounded-sm" />
-                    <div className="bg-yellow-600/60 rounded-sm" />
-                    <div className="bg-yellow-600/60 rounded-sm" />
-                  </div>
-                </div>
-                <p
-                  className="text-[11px] font-bold tracking-[0.2em] uppercase"
-                  style={{ color: 'rgba(255,255,255,0.5)' }}
-                >
-                  TEST CARD
-                </p>
-              </div>
-
-              {/* Card number */}
-              <div className="mb-5 relative">
-                <CopyField label="Card Number" value={TEST_CARD.number} />
-              </div>
-
-              {/* Bottom row */}
-              <div className="grid grid-cols-3 gap-4 relative">
+            <div className="space-y-2">
+              <CopyField label="Card Number" value={TEST_CARD.number} />
+              <div className="grid grid-cols-3 gap-2">
                 <CopyField label="Expiry" value={TEST_CARD.expiry} />
                 <CopyField label="CVC"    value={TEST_CARD.cvc} />
                 <CopyField label="ZIP"    value={TEST_CARD.zip} />
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-500 mt-3 flex items-center gap-1.5">
+            <p className="text-[11px] text-indigo-400 mt-3 flex items-center gap-1.5">
               <Lock size={10} className="shrink-0" />
               Any future expiry date and any 3-digit CVC also work.
             </p>
