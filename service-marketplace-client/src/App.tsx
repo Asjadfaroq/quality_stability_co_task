@@ -13,8 +13,6 @@ import SubscriptionSuccess from './pages/customer/SubscriptionSuccess'
 import Chats from './pages/Chats'
 import ProviderDashboard from './pages/provider/ProviderDashboard'
 import ProviderJobs from './pages/provider/ProviderJobs'
-import CompletedJobs from './pages/provider/CompletedJobs'
-import ActiveJobs from './pages/provider/ActiveJobs'
 import OrgPanel from './pages/provider/OrgPanel'
 import ProviderOrgStatus from './pages/provider/ProviderOrgStatus'
 import ProviderMapPage from './pages/provider/ProviderMapPage'
@@ -137,24 +135,6 @@ function AppRoutes() {
         element={
           <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
             <ProviderJobs />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/provider/active"
-        element={
-          <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
-            <ActiveJobs />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/provider/completed"
-        element={
-          <ProtectedRoute roles={['ProviderEmployee', 'ProviderAdmin']}>
-            <CompletedJobs />
           </ProtectedRoute>
         }
       />

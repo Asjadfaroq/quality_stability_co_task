@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Users, Building2,
   Menu, X, Briefcase, Bell, CheckCircle2,
-  MessageSquare, Loader2, BriefcaseBusiness, Clock, Trash2,
+  MessageSquare, BriefcaseBusiness, Clock, Trash2,
   UserPlus, UserMinus, CreditCard, ShieldCheck,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
@@ -34,22 +34,18 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'My Organization',  to: '/customer/org',          icon: <Building2       size={16} />, permission: 'org.view' },
   ],
   ProviderEmployee: [
-    { label: 'Dashboard',        to: '/provider',           icon: <LayoutDashboard size={16} /> },
-    { label: 'Available Jobs',   to: '/provider/jobs',      icon: <Briefcase       size={16} />, permission: 'request.accept'   },
-    { label: 'Active Jobs',      to: '/provider/active',    icon: <Loader2         size={16} />, permission: 'request.complete' },
-    { label: 'Completed Jobs',   to: '/provider/completed', icon: <CheckCircle2    size={16} />, permission: 'request.complete' },
-    { label: 'Jobs Map',         to: '/provider/map',       icon: <MapPin          size={16} />, permission: 'request.complete' },
-    { label: 'Chats',            to: '/chats',              icon: <MessageSquare   size={16} /> },
-    { label: 'My Organization',  to: '/provider/org',       icon: <Building2       size={16} />, permission: 'org.view'         },
+    { label: 'Dashboard',       to: '/provider',      icon: <LayoutDashboard size={16} /> },
+    { label: 'My Jobs',         to: '/provider/jobs', icon: <Briefcase       size={16} /> },
+    { label: 'Jobs Map',        to: '/provider/map',  icon: <MapPin          size={16} /> },
+    { label: 'Chats',           to: '/chats',         icon: <MessageSquare   size={16} /> },
+    { label: 'My Organization', to: '/provider/org',  icon: <Building2       size={16} />, permission: 'org.view' },
   ],
   ProviderAdmin: [
-    { label: 'Dashboard',        to: '/provider',           icon: <LayoutDashboard size={16} /> },
-    { label: 'Available Jobs',   to: '/provider/jobs',      icon: <Briefcase       size={16} />, permission: 'request.accept'   },
-    { label: 'Active Jobs',      to: '/provider/active',    icon: <Loader2         size={16} />, permission: 'request.complete' },
-    { label: 'Completed Jobs',   to: '/provider/completed', icon: <CheckCircle2    size={16} />, permission: 'request.complete' },
-    { label: 'Jobs Map',         to: '/provider/map',       icon: <MapPin          size={16} />, permission: 'request.complete' },
-    { label: 'Chats',            to: '/chats',              icon: <MessageSquare   size={16} /> },
-    { label: 'Organization',     to: '/org',                icon: <Building2       size={16} />, permission: 'org.view'          },
+    { label: 'Dashboard',    to: '/provider',      icon: <LayoutDashboard size={16} /> },
+    { label: 'My Jobs',      to: '/provider/jobs', icon: <Briefcase       size={16} /> },
+    { label: 'Jobs Map',     to: '/provider/map',  icon: <MapPin          size={16} /> },
+    { label: 'Chats',        to: '/chats',         icon: <MessageSquare   size={16} /> },
+    { label: 'Organization', to: '/org',           icon: <Building2       size={16} />, permission: 'org.view' },
   ],
   Admin: [
     { label: 'User Management',     to: '/admin',       icon: <Users       size={16} />, permission: 'admin.manage_users' },
