@@ -16,6 +16,7 @@ using Polly;
 using Polly.CircuitBreaker;
 using Polly.Retry;
 using RedisRateLimiting;
+using ServiceMarketplace.API.BackgroundJobs;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Middleware;
@@ -470,6 +471,11 @@ builder.Services.AddSingleton<ICacheService, CacheService>();
 
 // Stripe
 builder.Services.AddScoped<IStripeService, StripeService>();
+
+// Background workers
+builder.Services.AddHostedService<AutoConfirmJob>();
+builder.Services.AddHostedService<ExpireStaleRequestsJob>();
+builder.Services.AddHostedService<ChatCleanupJob>();
 
 var app = builder.Build();
 
