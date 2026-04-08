@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Briefcase, Loader2, CheckCircle2, MessageSquare,
-  AlertCircle, RefreshCw, X, SlidersHorizontal,
+  AlertCircle, RefreshCw, X,
   MapPin, CalendarDays, Search,
 } from 'lucide-react'
 import api, { isRateLimited } from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import {
-  Button, Badge, Card, Input, EmptyState, SkeletonCard, Pagination,
+  Button, Badge, Card, EmptyState, SkeletonCard, Pagination,
 } from '../../components/ui'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useGeolocation } from '../../hooks/useGeolocation'
@@ -83,6 +83,18 @@ export default function ProviderJobs() {
   const [searching, setSearching]         = useState(false)
 
   const { latitude: geoLat, longitude: geoLng, loading: geoLoading, error: geoError, detect } = useGeolocation()
+
+  // Close the nearby popover when clicking outside it
+  const nearbyRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!showNearby) return
+    const handler = (e: MouseEvent) => {
+      if (nearbyRef.current && !nearbyRef.current.contains(e.target as Node))
+        setShowNearby(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showNearby])
 
   // Debounce: wait 350 ms after the user stops typing before firing the query
   useEffect(() => {
@@ -290,73 +302,159 @@ export default function ProviderJobs() {
               )}
             </div>
 
-            {/* Nearby filter toggle — available tab + org admin only */}
+            {/* Nearby filter — popover anchored to this button */}
             {activeTab === 'available' && canViewAll && (
-              <button
-                type="button"
-                onClick={() => { setShowNearby(!showNearby); setNearbyResults(null) }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-medium transition-colors ${
-                  showNearby
-                    ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                {showNearby ? <X size={13} /> : <SlidersHorizontal size={13} />}
-                {showNearby ? 'Hide filter' : 'Find Nearby'}
-              </button>
-            )}
-          </div>
-
-          {/* ── Nearby filter panel ────────────────────────────────────────── */}
-          {activeTab === 'available' && showNearby && (
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/60 space-y-4">
-              <p className="text-[12px] font-semibold text-slate-600 uppercase tracking-wide">
-                Search by location
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] font-medium text-slate-700">Your location</span>
+              <div className="relative" ref={nearbyRef}>
                 <button
                   type="button"
-                  onClick={detect}
-                  disabled={geoLoading}
-                  className="flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => { setShowNearby(!showNearby) }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all ${
+                    showNearby || nearbyResults
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                  }`}
                 >
-                  {geoLoading ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
-                  {geoLoading ? 'Detecting…' : 'Detect my location'}
+                  <MapPin size={13} />
+                  Nearby
+                  {nearbyResults && !showNearby && (
+                    <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-white/80 inline-block" />
+                  )}
                 </button>
+
+                {/* ── Floating popover ── */}
+                {showNearby && (
+                  <div
+                    className="absolute right-0 top-full mt-2 z-30 w-[296px] rounded-2xl overflow-hidden"
+                    style={{
+                      background: '#fff',
+                      border: '1px solid #E2E8F0',
+                      boxShadow: '0 20px 60px -10px rgba(15,23,42,0.18), 0 4px 16px -4px rgba(15,23,42,0.10)',
+                      animation: 'nearbySlideIn 0.16s cubic-bezier(0.16,1,0.3,1)',
+                    }}
+                  >
+                    <style>{`
+                      @keyframes nearbySlideIn {
+                        from { opacity:0; transform:translateY(-6px) scale(0.97); }
+                        to   { opacity:1; transform:translateY(0)   scale(1);    }
+                      }
+                    `}</style>
+
+                    {/* Header */}
+                    <div
+                      className="px-4 py-3 flex items-center justify-between"
+                      style={{ background: 'linear-gradient(135deg,#4F46E5 0%,#7C3AED 100%)' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center">
+                          <MapPin size={12} className="text-white" />
+                        </div>
+                        <span className="text-[12px] font-semibold text-white">Find Nearby Jobs</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowNearby(false)}
+                        className="w-5 h-5 rounded-md bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                      >
+                        <X size={11} className="text-white/80" />
+                      </button>
+                    </div>
+
+                    <div className="p-4 space-y-3.5">
+
+                      {/* Coordinates row */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Coordinates</span>
+                          <button
+                            type="button"
+                            onClick={detect}
+                            disabled={geoLoading}
+                            className="flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {geoLoading
+                              ? <Loader2 size={10} className="animate-spin" />
+                              : <MapPin size={10} />}
+                            {geoLoading ? 'Detecting…' : 'Auto-detect'}
+                          </button>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number" step="any" placeholder="Latitude"
+                            value={lat} onChange={(e) => setLat(e.target.value)}
+                            className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-[12px] text-slate-800 placeholder:text-slate-400 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          />
+                          <input
+                            type="number" step="any" placeholder="Longitude"
+                            value={lng} onChange={(e) => setLng(e.target.value)}
+                            className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-[12px] text-slate-800 placeholder:text-slate-400 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          />
+                        </div>
+
+                        {/* Geo feedback — compact single line */}
+                        {geoError && (
+                          <p className="flex items-center gap-1 mt-1.5 text-[11px] text-amber-600">
+                            <AlertCircle size={10} className="shrink-0" />{geoError}
+                          </p>
+                        )}
+                        {!geoError && geoLat !== null && (
+                          <p className="flex items-center gap-1 mt-1.5 text-[11px] text-emerald-600">
+                            <CheckCircle2 size={10} className="shrink-0" />Location detected
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Radius slider */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Radius</span>
+                          <span
+                            className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                            style={{ background: 'rgba(79,70,229,0.1)', color: '#4F46E5' }}
+                          >
+                            {radius} km
+                          </span>
+                        </div>
+                        <input
+                          type="range" min={1} max={100} value={radius}
+                          onChange={(e) => setRadius(Number(e.target.value))}
+                          className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-indigo-600"
+                          style={{ background: `linear-gradient(to right,#4F46E5 ${radius}%,#E2E8F0 ${radius}%)` }}
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                          <span>1 km</span><span>100 km</span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={handleNearbySearch}
+                          disabled={searching}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[12px] font-semibold text-white transition-all disabled:opacity-60"
+                          style={{ background: 'linear-gradient(135deg,#4F46E5 0%,#7C3AED 100%)' }}
+                        >
+                          {searching
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <Search size={12} />}
+                          {searching ? 'Searching…' : 'Search'}
+                        </button>
+                        {nearbyResults && (
+                          <button
+                            type="button"
+                            onClick={() => { setNearbyResults(null); setShowNearby(false) }}
+                            className="px-3 py-2 rounded-xl text-[12px] font-medium text-slate-500 border border-slate-200 hover:bg-slate-50 transition-colors"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Latitude"  type="number" step="any" placeholder="e.g. 51.5074"  value={lat} onChange={(e) => setLat(e.target.value)} />
-                <Input label="Longitude" type="number" step="any" placeholder="e.g. -0.1278" value={lng} onChange={(e) => setLng(e.target.value)} />
-              </div>
-              {geoError && (
-                <p className="flex items-center gap-1.5 text-[11.5px] text-amber-600">
-                  <MapPin size={11} className="shrink-0" />{geoError}
-                </p>
-              )}
-              {!geoError && geoLat !== null && (
-                <p className="flex items-center gap-1.5 text-[11.5px] text-emerald-600">
-                  <MapPin size={11} className="shrink-0" />Location detected — you can still edit the values above.
-                </p>
-              )}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[13px] font-medium text-slate-700">Search radius</label>
-                  <span className="text-[13px] font-semibold text-indigo-600">{radius} km</span>
-                </div>
-                <input
-                  type="range" min={1} max={100} value={radius}
-                  onChange={(e) => setRadius(Number(e.target.value))}
-                  className="w-full h-1.5 bg-slate-200 rounded-full appearance-none accent-indigo-600 cursor-pointer"
-                />
-                <div className="flex justify-between text-xs text-slate-400 mt-1"><span>1 km</span><span>100 km</span></div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button icon={<Search size={14} />} loading={searching} onClick={handleNearbySearch}>Search</Button>
-                {nearbyResults && <Button variant="ghost" icon={<X size={14} />} onClick={() => setNearbyResults(null)}>Clear</Button>}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* ── Result count bar ───────────────────────────────────────────── */}
           {!current.isLoading && (
