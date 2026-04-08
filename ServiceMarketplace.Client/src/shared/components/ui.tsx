@@ -1,5 +1,5 @@
 import { forwardRef, useEffect } from 'react'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 // ── Badge ────────────────────────────────────────────────────────────────────
 
@@ -97,11 +97,14 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
   hint?: string
+  /** Renders inside the field on the right (e.g. password visibility toggle). */
+  suffix?: ReactNode
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  function Input({ label, error, hint, id, className = '', ...rest }, ref) {
+  function Input({ label, error, hint, id, className = '', suffix, ...rest }, ref) {
   const inputId = id ?? label?.toLowerCase().replace(/\s/g, '-')
+  const hasSuffix = Boolean(suffix)
   return (
     <div className="space-y-1.5">
       {label && (
@@ -109,20 +112,42 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {label}
         </label>
       )}
-      <input
-        ref={ref}
-        id={inputId}
-        className={`
-          w-full border rounded-lg px-3 py-2.5 text-sm text-slate-900 bg-white
-          placeholder:text-slate-400
-          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-          disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed
-          transition-shadow duration-150
-          ${error ? 'border-red-400 focus:ring-red-400' : 'border-slate-300'}
-          ${className}
-        `}
-        {...rest}
-      />
+      {hasSuffix ? (
+        <div className="relative">
+          <input
+            ref={ref}
+            id={inputId}
+            className={`
+              w-full border rounded-lg py-2.5 pl-3 pr-10 text-sm text-slate-900 bg-white
+              placeholder:text-slate-400
+              focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+              disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed
+              transition-shadow duration-150
+              ${error ? 'border-red-400 focus:ring-red-400' : 'border-slate-300'}
+              ${className}
+            `}
+            {...rest}
+          />
+          <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+            {suffix}
+          </div>
+        </div>
+      ) : (
+        <input
+          ref={ref}
+          id={inputId}
+          className={`
+            w-full border rounded-lg px-3 py-2.5 text-sm text-slate-900 bg-white
+            placeholder:text-slate-400
+            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+            disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed
+            transition-shadow duration-150
+            ${error ? 'border-red-400 focus:ring-red-400' : 'border-slate-300'}
+            ${className}
+          `}
+          {...rest}
+        />
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
       {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}
     </div>

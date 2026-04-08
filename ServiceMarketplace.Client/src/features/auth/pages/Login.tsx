@@ -1,10 +1,11 @@
 import axios from 'axios'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { AlertCircle, ShieldCheck } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '../../../shared/api/axios'
 import { useAuthStore } from '../../../shared/store/authStore'
@@ -42,6 +43,7 @@ const SHAPES: FloatingShapeConfig[] = [
 ]
 
 export default function Login() {
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const login    = useAuthStore((s) => s.login)
@@ -96,11 +98,21 @@ export default function Login() {
 
         <Input
           label="Password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           autoComplete="current-password"
           placeholder="Enter your password"
           error={errors.password?.message}
           {...register('password')}
+          suffix={
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+            </button>
+          }
         />
 
         <div className="pt-1">

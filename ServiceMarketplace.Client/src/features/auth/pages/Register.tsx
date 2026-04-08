@@ -1,10 +1,11 @@
 import axios from 'axios'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
-import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
 import api from '../../../shared/api/axios'
 import { Input, Select } from '../../../shared/components/ui'
 import { AuthPageLayout, type FloatingShapeConfig } from '../../../shared/components/auth/AuthPageLayout'
@@ -46,6 +47,7 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
 }
 
 export default function Register() {
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<FormData>({
@@ -96,11 +98,21 @@ export default function Register() {
 
         <Input
           label="Password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           autoComplete="new-password"
           placeholder="Min. 6 characters"
           error={errors.password?.message}
           {...register('password')}
+          suffix={
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+            </button>
+          }
         />
 
         <Select
