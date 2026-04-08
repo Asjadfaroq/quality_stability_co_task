@@ -15,21 +15,17 @@ namespace ServiceMarketplace.API.Services;
 public class StripeService : IStripeService
 {
     private readonly AppDbContext _db;
-    private readonly StripeSettings _settings;
+    private readonly IOptionsMonitor<StripeSettings> _stripeSettings;
     private readonly ILogger<StripeService> _logger;
 
     public StripeService(
         AppDbContext db,
-        IOptions<StripeSettings> settings,
+        IOptionsMonitor<StripeSettings> stripeSettings,
         ILogger<StripeService> logger)
     {
-        _db       = db;
-        _settings = settings.Value;
-        _logger   = logger;
-        // StripeConfiguration.ApiKey is a static/global setting — it is set once
-        // during app startup in Program.cs (via Configure<StripeSettings>), not here.
-        // Setting it in a scoped constructor would overwrite it on every request and
-        // is not thread-safe. See Program.cs for the startup configuration call.
+        _db             = db;
+        _stripeSettings = stripeSettings;
+        _logger         = logger;
     }
 
     // ── Checkout ─────────────────────────────────────────────────────────────
@@ -37,9 +33,10 @@ public class StripeService : IStripeService
     public async Task<string> CreateCheckoutSessionAsync(
         Guid userId, string userEmail, string successUrl, string cancelUrl)
     {
+        var settings = GetStripeSettingsOrThrow();
         var stripeCustomerId = await EnsureStripeCustomerAsync(userId, userEmail);
 
-        var sessionService = new SessionService();
+        var sessionService = new SessionService(new StripeClient(settings.SecretKey));
         var session = await sessionService.CreateAsync(new SessionCreateOptions
         {
             Customer           = stripeCustomerId,
@@ -48,7 +45,7 @@ public class StripeService : IStripeService
             [
                 new SessionLineItemOptions
                 {
-                    Price    = _settings.PriceId,
+                    Price    = settings.PriceId,
                     Quantity = 1
                 }
             ],
@@ -65,13 +62,14 @@ public class StripeService : IStripeService
 
     public async Task<string> CreateCustomerPortalSessionAsync(Guid userId, string returnUrl)
     {
+        var settings = GetStripeSettingsOrThrow();
         var stripeInfo = await _db.UserStripeInfos
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.UserId == userId)
             ?? throw new InvalidOperationException(
                 "No Stripe customer found. Subscribe first before managing billing.");
 
-        var portalService = new Stripe.BillingPortal.SessionService();
+        var portalService = new Stripe.BillingPortal.SessionService(new StripeClient(settings.SecretKey));
         var session = await portalService.CreateAsync(new Stripe.BillingPortal.SessionCreateOptions
         {
             Customer  = stripeInfo.StripeCustomerId,
@@ -85,11 +83,12 @@ public class StripeService : IStripeService
 
     public async Task HandleWebhookAsync(string payload, string stripeSignature)
     {
+        var settings = GetStripeSettingsOrThrow();
         Event stripeEvent;
         try
         {
             stripeEvent = EventUtility.ConstructEvent(
-                payload, stripeSignature, _settings.WebhookSecret);
+                payload, stripeSignature, settings.WebhookSecret);
         }
         catch (StripeException ex)
         {
@@ -148,13 +147,14 @@ public class StripeService : IStripeService
 
     private async Task<string> EnsureStripeCustomerAsync(Guid userId, string userEmail)
     {
+        var settings = GetStripeSettingsOrThrow();
         var existing = await _db.UserStripeInfos
             .FirstOrDefaultAsync(s => s.UserId == userId);
 
         if (existing != null)
             return existing.StripeCustomerId;
 
-        var customerService = new CustomerService();
+        var customerService = new CustomerService(new StripeClient(settings.SecretKey));
         var customer = await customerService.CreateAsync(new CustomerCreateOptions
         {
             Email    = userEmail,
@@ -169,6 +169,16 @@ public class StripeService : IStripeService
         await _db.SaveChangesAsync();
 
         return customer.Id;
+    }
+
+    private StripeSettings GetStripeSettingsOrThrow()
+    {
+        var settings = _stripeSettings.CurrentValue;
+        if (string.IsNullOrWhiteSpace(settings.SecretKey) || string.IsNullOrWhiteSpace(settings.PriceId))
+            throw new InvalidOperationException(
+                "Stripe billing is not configured for this environment. Set Stripe:SecretKey and Stripe:PriceId.");
+
+        return settings;
     }
 
     private async Task HandleSubscriptionChangedAsync(Subscription subscription)

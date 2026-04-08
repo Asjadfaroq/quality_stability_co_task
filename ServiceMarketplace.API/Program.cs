@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Polly;
@@ -32,14 +33,21 @@ var builder = WebApplication.CreateBuilder(args);
 //    IOptions<T> is available everywhere via the DI container.
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<HuggingFaceSettings>(builder.Configuration.GetSection("HuggingFace"));
-builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
+var stripeOptionsBuilder = builder.Services
+    .AddOptions<StripeSettings>()
+    .Bind(builder.Configuration.GetSection("Stripe"));
 
-// 1a. Initialise Stripe's global API key once at startup using the typed options.
-//     StripeConfiguration.ApiKey is a static field — setting it in a scoped service
-//     constructor is not thread-safe and would overwrite it on every request.
-var stripeSettings = builder.Configuration.GetSection("Stripe").Get<StripeSettings>();
-if (!string.IsNullOrWhiteSpace(stripeSettings?.SecretKey))
-    Stripe.StripeConfiguration.ApiKey = stripeSettings.SecretKey;
+// Production should fail-fast on missing Stripe configuration.
+// Local/dev environments can boot without Stripe and only billing calls will be rejected.
+if (!builder.Environment.IsDevelopment())
+{
+    stripeOptionsBuilder
+        .ValidateDataAnnotations()
+        .Validate(
+            s => !string.IsNullOrWhiteSpace(s.SecretKey) && !string.IsNullOrWhiteSpace(s.PriceId),
+            "Stripe configuration is invalid. Set Stripe:SecretKey and Stripe:PriceId (or Stripe__SecretKey and Stripe__PriceId).")
+        .ValidateOnStart();
+}
 
 // 1b. DbContext — SQL Server execution strategy retries transient failures (deadlocks,
 //     connection drops, timeouts) automatically before surfacing an exception.

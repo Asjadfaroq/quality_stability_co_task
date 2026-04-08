@@ -47,8 +47,16 @@ public class BillingController : BaseController
         var successUrl = $"{origin}/customer/subscription/success";
         var cancelUrl  = $"{origin}/customer/subscription";
 
-        var url = await _stripeService.CreateCheckoutSessionAsync(userId, email, successUrl, cancelUrl);
-        return Ok(new { url });
+        try
+        {
+            var url = await _stripeService.CreateCheckoutSessionAsync(userId, email, successUrl, cancelUrl);
+            return Ok(new { url });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Checkout unavailable due to billing configuration: {Message}", ex.Message);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -74,7 +82,8 @@ public class BillingController : BaseController
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            _logger.LogWarning("Billing portal unavailable: {Message}", ex.Message);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
         }
     }
 
