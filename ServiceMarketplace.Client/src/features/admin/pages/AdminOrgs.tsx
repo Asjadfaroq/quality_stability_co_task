@@ -86,7 +86,7 @@ export default function AdminOrgs() {
 
       <Card padding={false}>
         {/* ── Toolbar ───────────────────────────────────────────────────── */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-[13px] text-slate-500 shrink-0">
             {!isLoading && (
               totalCount === 0
@@ -96,7 +96,7 @@ export default function AdminOrgs() {
           </p>
 
           {/* Search */}
-          <div className="relative w-64 shrink-0">
+          <div className="relative w-full sm:w-64 shrink-0">
             <Search
               size={14}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -124,8 +124,67 @@ export default function AdminOrgs() {
           </div>
         </div>
 
-        {/* ── Table ─────────────────────────────────────────────────────── */}
-        <div className="overflow-x-auto">
+        {/* ── Mobile cards ──────────────────────────────────────────────── */}
+        <div className={`sm:hidden p-4 space-y-3 ${isPlaceholderData ? 'opacity-60' : ''}`}>
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-52" />
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              </div>
+            ))
+          ) : orgs.length === 0 ? (
+            <EmptyState
+              icon={<Building2 size={22} />}
+              title="No organisations found"
+              description={
+                search
+                  ? 'Try a different name or email.'
+                  : 'Organisations will appear here once provider admins create them.'
+              }
+            />
+          ) : (
+            orgs.map(org => (
+              <div key={org.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-bold select-none"
+                    style={{
+                      background: 'rgba(99,102,241,0.1)',
+                      color: '#6366f1',
+                    }}
+                  >
+                    {org.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-500">Organisation</p>
+                    <p className="font-medium text-slate-800 break-words">{org.name}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-xs text-slate-500">Admin</p>
+                  <p className="text-sm text-slate-700 break-all">{org.ownerEmail}</p>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-1.5 text-slate-600">
+                    <Users size={13} className="text-slate-400 shrink-0" />
+                    <span>{org.memberCount} members</span>
+                  </div>
+                  <span className="text-slate-500">{formatDate(org.createdAt)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* ── Desktop table ─────────────────────────────────────────────── */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-100 bg-white">

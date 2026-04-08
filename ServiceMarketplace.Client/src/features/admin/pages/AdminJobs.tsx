@@ -113,14 +113,14 @@ export default function AdminJobs() {
 
   return (
     <AppLayout title="All Jobs">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold text-gray-900">All Jobs</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             Platform-wide view of every service request across all statuses.
           </p>
         </div>
-        <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden self-start">
           <button
             type="button"
             onClick={() => setViewMode('table')}
@@ -155,7 +155,7 @@ export default function AdminJobs() {
       {/* ── Table view ────────────────────────────────────────────────────── */}
       {viewMode === 'table' && (
       <Card padding={false}>
-        <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
 
           {/* Status filter pills */}
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -217,7 +217,61 @@ export default function AdminJobs() {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        <div className={`sm:hidden p-4 space-y-3 ${isPlaceholderData ? 'opacity-60' : ''}`}>
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                <Skeleton className="h-5 w-44" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+                <Skeleton className="h-4 w-52" />
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              </div>
+            ))
+          ) : jobs.length === 0 ? (
+            <EmptyState
+              icon={<Briefcase size={22} />}
+              title="No jobs found"
+              description={
+                isFiltered
+                  ? 'Try adjusting the filters or search term.'
+                  : 'Jobs will appear here once customers submit requests.'
+              }
+            />
+          ) : (
+            jobs.map(job => (
+              <div key={job.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs text-slate-500">Job</p>
+                <p className="font-medium text-slate-800 break-words">{job.title}</p>
+
+                <div className="mt-2">
+                  <StatusBadge status={job.status as ServiceRequest['status']} perspective="admin" />
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-500">Category</p>
+                    <p className="text-slate-700">{job.category ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Customer</p>
+                    <p className="text-slate-700 break-all">{job.customerEmail}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Provider</p>
+                    <p className="text-slate-700 break-all">{job.providerEmail ?? '—'}</p>
+                  </div>
+                </div>
+
+                <p className="mt-3 text-xs text-slate-500">Created {formatDate(job.createdAt)}</p>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-100 bg-white">

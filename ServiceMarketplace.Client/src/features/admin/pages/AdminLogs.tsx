@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import {
-  Activity, AlertTriangle, ChevronDown, ChevronRight,
-  Info, Pause, Play, Search, ServerCrash, Trash2, X, Zap,
+  Activity, ChevronDown, ChevronRight,
+  Pause, Play, Search, Trash2, X, Zap,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 
@@ -10,7 +10,7 @@ import { Button, Card, EmptyState, Skeleton } from '../../../shared/components/u
 import { useLogsHub, type ConnectionState } from '../../../shared/hooks/useLogsHub'
 import { timeAgo, formatDate } from '../../../shared/utils/format'
 import api from '../../../shared/api/axios'
-import type { LogEntry, LogCategory, PagedResult } from '../../../shared/types'
+import type { LogEntry, LogCategory } from '../../../shared/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -178,6 +178,67 @@ function LogRow({ entry }: { entry: LogEntry }) {
   )
 }
 
+function LogMobileCard({ entry }: { entry: LogEntry }) {
+  const [expanded, setExpanded] = useState(false)
+  const level = getLevelStyle(entry.level)
+  const hasException = !!entry.exception
+  const label = entry.level === 'Information' ? 'Info' : entry.level
+
+  return (
+    <div className={`rounded-xl border border-slate-200 p-4 ${level.row}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-slate-500 font-mono" title={formatDate(entry.timestamp)}>
+          {timeAgo(entry.timestamp)}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold border ${level.badge}`}>
+            {label.toUpperCase()}
+          </span>
+          <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getCategoryStyle(entry.category)}`}>
+            {entry.category.toUpperCase()}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-2">
+        <p className="text-xs text-slate-500">Action / Source</p>
+        <p className="text-xs font-medium text-slate-700 break-words">
+          {entry.action ?? entry.sourceContext?.split('.').pop() ?? '—'}
+        </p>
+      </div>
+
+      <div className="mt-2">
+        <p className="text-xs text-slate-500">Message</p>
+        <p className="text-sm text-slate-700 leading-relaxed break-words">{entry.message}</p>
+      </div>
+
+      {entry.actorUserId && (
+        <div className="mt-2">
+          <p className="text-xs text-slate-500">Actor</p>
+          <p className="text-[11px] font-mono text-indigo-500 break-all">{entry.actorUserId}</p>
+        </div>
+      )}
+
+      {hasException && (
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700"
+        >
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          {expanded ? 'Hide exception' : 'Show exception'}
+        </button>
+      )}
+
+      {expanded && entry.exception && (
+        <pre className="mt-2 text-[10px] text-red-700 font-mono whitespace-pre-wrap break-all leading-relaxed overflow-x-auto max-h-48 bg-red-50 border border-red-100 rounded-lg p-2.5">
+          {entry.exception}
+        </pre>
+      )}
+    </div>
+  )
+}
+
 // ── Skeleton rows ─────────────────────────────────────────────────────────────
 
 function TableSkeleton() {
@@ -286,7 +347,7 @@ export default function AdminLogs() {
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3.5 border-b border-slate-100">
 
           {/* Category pills */}
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg shrink-0">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg shrink-0 overflow-x-auto max-w-full">
             {CATEGORY_FILTERS.map(f => (
               <button
                 key={f.value}
@@ -344,7 +405,7 @@ export default function AdminLogs() {
           </div>
 
           {/* Connection + controls */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <ConnectionBadge state={connectionState} />
 
             {isPaused && pauseQueueSize > 0 && (
@@ -384,8 +445,38 @@ export default function AdminLogs() {
           </div>
         )}
 
-        {/* ── Table ── */}
-        <div className="overflow-x-auto">
+        {/* ── Mobile cards ── */}
+        <div className="sm:hidden p-4 space-y-3">
+          {isLoading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-slate-200 p-4 space-y-2">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-10/12" />
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
+            <div className="py-6">
+              <EmptyState
+                icon={<Activity size={28} className="text-slate-300" />}
+                title="No log entries"
+                description={
+                  entries.length > 0
+                    ? 'No entries match your current filters.'
+                    : 'Waiting for log entries from the server…'
+                }
+              />
+            </div>
+          ) : (
+            filtered.map((entry, i) => (
+              <LogMobileCard key={`${entry.timestamp}-${i}`} entry={entry} />
+            ))
+          )}
+        </div>
+
+        {/* ── Desktop table ── */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-slate-100">

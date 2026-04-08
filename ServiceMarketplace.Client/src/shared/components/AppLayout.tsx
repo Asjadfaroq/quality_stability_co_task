@@ -157,7 +157,7 @@ function NotificationPanel({ onClose, onNavigate }: NotificationPanelProps) {
 
   return (
     <div
-      className="absolute right-0 top-11 z-50 w-[340px] bg-white rounded-2xl shadow-2xl overflow-hidden"
+      className="absolute right-0 top-11 z-50 w-[min(340px,calc(100vw-2rem))] bg-white rounded-2xl shadow-2xl overflow-hidden"
       style={{
         border: '1px solid #E2E8F0',
         animation: 'notifSlideIn 0.18s cubic-bezier(0.16,1,0.3,1)',
@@ -340,7 +340,7 @@ export default function AppLayout({ children, title }: Props) {
 
         {/* Top bar */}
         <header
-          className="flex items-center justify-between px-6 shrink-0"
+          className="flex items-center justify-between px-4 sm:px-6 shrink-0"
           style={{ height: 56, background: '#ffffff', borderBottom: '1px solid #E8EDF3' }}
         >
           {/* Mobile hamburger */}
@@ -359,7 +359,7 @@ export default function AppLayout({ children, title }: Props) {
           <div className="lg:hidden" />
 
           {/* Right actions */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
 
             {/* Bell with badge + dropdown */}
             <div className="relative" ref={notifRef}>
@@ -404,7 +404,7 @@ export default function AppLayout({ children, title }: Props) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto px-5 sm:px-7 py-6">
+        <main className="flex-1 overflow-y-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6">
           {children}
         </main>
       </div>
