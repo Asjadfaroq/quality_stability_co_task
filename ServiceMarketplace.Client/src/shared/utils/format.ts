@@ -1,3 +1,5 @@
+import axios from 'axios'
+
 /**
  * Shared formatting utilities — import from here instead of duplicating
  * per-file implementations.
@@ -42,4 +44,15 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
     return e.response?.data?.detail ?? e.response?.data?.message ?? fallback
   }
   return fallback
+}
+
+/** Machine-readable code from API (ProblemDetails extension or flat JSON body). */
+export function apiErrorCode(err: unknown): string | undefined {
+  if (!axios.isAxiosError(err)) return undefined
+  const d = err.response?.data
+  if (d && typeof d === 'object' && 'errorCode' in d) {
+    const c = (d as { errorCode: unknown }).errorCode
+    return typeof c === 'string' ? c : undefined
+  }
+  return undefined
 }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Domain.Exceptions;
 using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
@@ -34,7 +35,6 @@ public class SubscriptionService : ISubscriptionService
             .CountAsync(r => r.CustomerId == customerId);
 
         if (count >= freeLimit)
-            throw new InvalidOperationException(
-                "Free tier limit reached. Upgrade to create more requests.");
+            throw new FreeTierLimitExceededException(freeLimit);
     }
 }

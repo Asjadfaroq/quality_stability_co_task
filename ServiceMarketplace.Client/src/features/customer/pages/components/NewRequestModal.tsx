@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -9,6 +10,8 @@ import { Plus, Sparkles, MapPin, Clock, Loader2, X } from 'lucide-react'
 import axios from 'axios'
 
 import api, { isRateLimited } from '../../../../shared/api/axios'
+import { ROUTES } from '../../../../shared/constants/routes'
+import { apiErrorCode, apiErrorMessage } from '../../../../shared/utils/format'
 import { useAiEnhance } from '../../../../shared/hooks/useAiEnhance'
 import { useGeolocation } from '../../../../shared/hooks/useGeolocation'
 import { useServiceCategories } from '../../../../shared/hooks/useServiceCategories'
@@ -25,6 +28,12 @@ const schema = z.object({
 })
 
 type FormData = z.infer<typeof schema>
+
+function isLegacyFreeTierLimitError(err: unknown): boolean {
+  if (!axios.isAxiosError(err) || err.response?.status !== 422) return false
+  const msg = apiErrorMessage(err, '')
+  return /free tier limit|upgrade to (create|pro)/i.test(msg)
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -82,6 +91,37 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  const showFreeTierLimitToast = useCallback((detail: string) => {
+    toast.custom(
+      (t) => (
+        <div
+          className="max-w-[340px] rounded-xl border border-amber-200 bg-white px-4 py-3.5 shadow-lg"
+          style={{ boxShadow: '0 12px 40px rgba(15,23,42,0.14)' }}
+        >
+          <p className="text-[13px] font-semibold text-slate-900">Free plan limit reached</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{detail}</p>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+              onClick={() => toast.dismiss(t.id)}
+            >
+              Dismiss
+            </button>
+            <Link
+              to={ROUTES.CUSTOMER_SUBSCRIPTION}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
+              onClick={() => toast.dismiss(t.id)}
+            >
+              Upgrade plan
+            </Link>
+          </div>
+        </div>
+      ),
+      { duration: 9000, position: 'top-center' },
+    )
+  }, [])
+
   const createMutation = useMutation({
     mutationFn: (data: FormData) => api.post('/requests', data).then((r) => r.data),
     onSuccess: () => {
@@ -92,13 +132,27 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
     },
     onError: (err: unknown) => {
       if (isRateLimited(err)) return
-      if (axios.isAxiosError<{ errorCode?: string }>(err) && err.response?.status === 403) {
-        if (err.response.data?.errorCode === 'permission_denied') {
-          toast.error("You don't have permission to create requests. Contact your administrator.")
-        } else {
-          setFreeLimitHit(true)
-        }
+
+      const code = apiErrorCode(err)
+      if (code === 'permission_denied') {
+        toast.error(
+          "You don't have permission to create requests. Contact your administrator if you need access.",
+        )
+        return
       }
+
+      if (code === 'free_tier_limit' || isLegacyFreeTierLimitError(err)) {
+        setFreeLimitHit(true)
+        showFreeTierLimitToast(
+          apiErrorMessage(
+            err,
+            'Upgrade to Pro for unlimited service requests, or remove an old request if you no longer need it.',
+          ),
+        )
+        return
+      }
+
+      toast.error(apiErrorMessage(err, 'Could not submit your request. Please try again.'))
     },
   })
 
@@ -169,9 +223,20 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
           {/* Modal body */}
           <div className="px-6 py-5">
             {freeLimitHit && (
-              <div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-5 text-sm text-amber-800">
-                <Clock size={15} className="mt-0.5 shrink-0 text-amber-500" />
-                Free tier limit reached. Upgrade your plan to create more requests.
+              <div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-sm text-amber-900">
+                <Clock size={15} className="mt-0.5 shrink-0 text-amber-600" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-[13px] leading-snug">You&apos;ve used all Free plan requests</p>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-800/90">
+                    Upgrade to Pro for unlimited requests, or free a slot by deleting a request you no longer need from My Requests.
+                  </p>
+                  <Link
+                    to={ROUTES.CUSTOMER_SUBSCRIPTION}
+                    className="mt-2 inline-flex text-xs font-semibold text-indigo-700 hover:text-indigo-800 hover:underline"
+                  >
+                    View subscription &amp; upgrade →
+                  </Link>
+                </div>
               </div>
             )}
 
@@ -253,6 +318,12 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
                 )}
               </div>
 
+              {freeLimitHit && (
+                <p className="text-[11px] leading-relaxed text-amber-700/90 text-center px-1">
+                  Submit is disabled until you upgrade or reduce your request count — see the notice above.
+                </p>
+              )}
+
               {/* Footer actions */}
               <div
                 className="flex items-center justify-end gap-3 pt-2"
@@ -261,7 +332,12 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
                 <Button type="button" variant="secondary" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button type="submit" loading={createMutation.isPending} icon={<Plus size={15} />}>
+                <Button
+                  type="submit"
+                  loading={createMutation.isPending}
+                  disabled={freeLimitHit}
+                  icon={<Plus size={15} />}
+                >
                   Submit Request
                 </Button>
               </div>
