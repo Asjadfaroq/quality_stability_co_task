@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Briefcase, Search, X, SlidersHorizontal } from 'lucide-react'
+import { Briefcase, Search, X, SlidersHorizontal, MapPin, Loader2 } from 'lucide-react'
 import api, { isRateLimited } from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Button, Badge, Card, CardHeader, Input, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import { usePermissions } from '../../hooks/usePermissions'
+import { useGeolocation } from '../../hooks/useGeolocation'
 import type { PagedResult, ServiceRequest } from '../../types'
 
 const DEFAULT_PAGE_SIZE = 20
@@ -23,6 +24,22 @@ export default function ProviderJobs() {
   const [radius, setRadius]               = useState(10)
   const [nearbyResults, setNearbyResults] = useState<ServiceRequest[] | null>(null)
   const [searching, setSearching]         = useState(false)
+
+  const { latitude: geoLat, longitude: geoLng, loading: geoLoading, error: geoError, detect } = useGeolocation()
+
+  // Auto-detect when filter panel opens
+  useEffect(() => {
+    if (showNearby) detect()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showNearby])
+
+  // Fill lat/lng inputs once geolocation resolves
+  useEffect(() => {
+    if (geoLat !== null && geoLng !== null) {
+      setLat(String(geoLat))
+      setLng(String(geoLng))
+    }
+  }, [geoLat, geoLng])
 
   const { data, isLoading } = useQuery<PagedResult<ServiceRequest>>({
     queryKey: ['requests-pending', page, pageSize],
@@ -99,9 +116,33 @@ export default function ProviderJobs() {
             title="Find Nearby Requests"
             description="Search for pending jobs within a radius of your location"
           />
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <Input label="Latitude"  type="number" step="any" placeholder="e.g. 51.5074"  value={lat} onChange={(e) => setLat(e.target.value)} />
-            <Input label="Longitude" type="number" step="any" placeholder="e.g. -0.1278" value={lng} onChange={(e) => setLng(e.target.value)} />
+          <div className="space-y-2 mb-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium text-slate-700">Your location</span>
+              <button
+                type="button"
+                onClick={detect}
+                disabled={geoLoading}
+                className="flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {geoLoading ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
+                {geoLoading ? 'Detecting…' : 'Detect my location'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Latitude"  type="number" step="any" placeholder="e.g. 51.5074"  value={lat} onChange={(e) => setLat(e.target.value)} />
+              <Input label="Longitude" type="number" step="any" placeholder="e.g. -0.1278" value={lng} onChange={(e) => setLng(e.target.value)} />
+            </div>
+            {geoError && (
+              <p className="flex items-center gap-1.5 text-[11.5px] text-amber-600">
+                <MapPin size={11} className="shrink-0" />{geoError}
+              </p>
+            )}
+            {!geoError && geoLat !== null && (
+              <p className="flex items-center gap-1.5 text-[11.5px] text-emerald-600">
+                <MapPin size={11} className="shrink-0" />Location detected — you can still edit the values above.
+              </p>
+            )}
           </div>
           <div className="mb-5">
             <div className="flex items-center justify-between mb-2">

@@ -8,13 +8,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Plus, Sparkles, MessageSquare, ClipboardList,
-  Clock, Loader2, X, Zap, CheckCircle2, ArrowRight,
+  Clock, Loader2, X, Zap, CheckCircle2, ArrowRight, MapPin,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useUnreadStore } from '../../store/unreadStore'
 import { isRateLimited } from '../../api/axios'
 import api from '../../api/axios'
 import { useAiEnhance } from '../../hooks/useAiEnhance'
+import { useGeolocation } from '../../hooks/useGeolocation'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
 import {
@@ -59,6 +60,7 @@ interface NewRequestModalProps {
 function NewRequestModal({ open, onClose }: NewRequestModalProps) {
   const queryClient   = useQueryClient()
   const { enhancing, enhance } = useAiEnhance()
+  const { latitude: geoLat, longitude: geoLng, loading: geoLoading, error: geoError, detect } = useGeolocation()
   const [freeLimitHit, setFreeLimitHit] = useState(false)
   const [visible, setVisible]           = useState(false)
   const { register, handleSubmit, setValue, watch, reset, setFocus, formState: { errors } } = useForm<FormData>({
@@ -67,6 +69,20 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
   })
   const title       = watch('title')
   const description = watch('description')
+
+  // Auto-detect location when the modal opens
+  useEffect(() => {
+    if (open) detect()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // Fill coordinates once geolocation resolves
+  useEffect(() => {
+    if (geoLat !== null && geoLng !== null) {
+      setValue('latitude',  geoLat,  { shouldValidate: true })
+      setValue('longitude', geoLng, { shouldValidate: true })
+    }
+  }, [geoLat, geoLng, setValue])
 
   // Drive enter/leave animation
   useEffect(() => {
@@ -216,19 +232,51 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
                 {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </Select>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Latitude"
-                  type="number" step="any" placeholder="e.g. 51.5074"
-                  error={errors.latitude?.message}
-                  {...register('latitude', { valueAsNumber: true })}
-                />
-                <Input
-                  label="Longitude"
-                  type="number" step="any" placeholder="e.g. -0.1278"
-                  error={errors.longitude?.message}
-                  {...register('longitude', { valueAsNumber: true })}
-                />
+              {/* Location section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-slate-700">Location</span>
+                  <button
+                    type="button"
+                    onClick={detect}
+                    disabled={geoLoading}
+                    className="flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {geoLoading
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <MapPin size={12} />
+                    }
+                    {geoLoading ? 'Detecting…' : 'Detect my location'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Latitude"
+                    type="number" step="any" placeholder="e.g. 51.5074"
+                    error={errors.latitude?.message}
+                    {...register('latitude', { valueAsNumber: true })}
+                  />
+                  <Input
+                    label="Longitude"
+                    type="number" step="any" placeholder="e.g. -0.1278"
+                    error={errors.longitude?.message}
+                    {...register('longitude', { valueAsNumber: true })}
+                  />
+                </div>
+
+                {geoError && (
+                  <p className="flex items-center gap-1.5 text-[11.5px] text-amber-600">
+                    <MapPin size={11} className="shrink-0" />
+                    {geoError}
+                  </p>
+                )}
+                {!geoError && geoLat !== null && (
+                  <p className="flex items-center gap-1.5 text-[11.5px] text-emerald-600">
+                    <MapPin size={11} className="shrink-0" />
+                    Location detected — you can still edit the values below.
+                  </p>
+                )}
               </div>
 
               {/* Footer actions */}
