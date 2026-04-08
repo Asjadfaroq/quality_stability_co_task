@@ -137,6 +137,26 @@ public class AdminController : BaseController
         }
     }
 
+    [HttpPatch("users/{id:guid}/role")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateUserRole(Guid id, [FromBody] UpdateUserRoleRequest request)
+    {
+        if (id == CurrentUserId)
+            return Forbidden("Cannot modify your own role.");
+
+        try
+        {
+            await _adminService.UpdateUserRoleAsync(id, request.Role);
+            return Ok(new { message = "User role updated." });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
     // ── User permission overrides ─────────────────────────────────────────────
 
     /// <summary>

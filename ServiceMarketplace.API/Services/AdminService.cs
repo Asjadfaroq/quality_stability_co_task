@@ -220,6 +220,25 @@ public class AdminService : IAdminService
         };
     }
 
+    public async Task UpdateUserRoleAsync(Guid userId, UserRole role)
+    {
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new KeyNotFoundException("User not found.");
+
+        if (user.Role == role)
+            return; // Idempotent.
+
+        user.Role = role;
+        await _db.SaveChangesAsync();
+
+        // Invalidate cached role and effective-permission snapshots so the update
+        // takes effect on the target user's very next request.
+        await _cache.RemoveAsync($"user_role:{userId}");
+        await _cache.RemoveAsync($"permissions:{userId}");
+        _memory.Remove($"l1:user_role:{userId}");
+        _memory.Remove($"l1:permissions:{userId}");
+    }
+
     public async Task UpdateSubscriptionAsync(Guid userId, SubscriptionTier subTier)
     {
         var user = await _db.Users.FindAsync(userId)

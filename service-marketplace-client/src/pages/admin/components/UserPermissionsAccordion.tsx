@@ -38,6 +38,8 @@ interface Props {
   defaultAvatar: { bg: string; color: string }
 }
 
+const USER_ROLES = ['Admin', 'ProviderAdmin', 'ProviderEmployee', 'Customer'] as const
+
 const toBadgeVariant = (value: string): BadgeVariant => {
   const normalized = value.toLowerCase().replace(/\s/g, '')
   return normalized as BadgeVariant
@@ -108,9 +110,29 @@ export function UserPermissionsAccordion({
   roleAvatar,
   defaultAvatar,
 }: Props) {
+  const queryClient = useQueryClient()
   const isSelf = user.id === userId
   const avatar = roleAvatar[user.role] ?? defaultAvatar
   const isPaid = user.subTier === 'Paid'
+
+  const [updatingRole, setUpdatingRole] = useState(false)
+  const roleMutation = useMutation({
+    mutationFn: (role: string) =>
+      api.patch(`/admin/users/${user.id}/role`, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['user-permissions', user.id] })
+      toast.success('User role updated.')
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update role.')),
+    onSettled: () => setUpdatingRole(false),
+  })
+
+  const handleRoleChange = (nextRole: string) => {
+    if (isSelf || roleMutation.isPending || nextRole === user.role) return
+    setUpdatingRole(true)
+    roleMutation.mutate(nextRole)
+  }
 
   return (
     <li className={isSelf ? 'opacity-60' : ''}>
@@ -135,8 +157,23 @@ export function UserPermissionsAccordion({
               </span>
             )}
           </div>
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-2">
             <Badge label={user.role} variant={toBadgeVariant(user.role)} />
+            {!isSelf && (
+              <select
+                value={user.role}
+                disabled={updatingRole || roleMutation.isPending}
+                onChange={(e) => handleRoleChange(e.target.value)}
+                className="text-[11px] font-medium px-2 py-1 rounded-md border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                title="Assign role"
+              >
+                {USER_ROLES.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 

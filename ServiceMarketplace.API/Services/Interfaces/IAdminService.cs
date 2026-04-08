@@ -12,6 +12,7 @@ public interface IAdminService
     /// Optional <paramref name="search"/> applies a case-insensitive substring match against email.
     /// </summary>
     Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize, string? role, string? search);
+    Task UpdateUserRoleAsync(Guid userId, UserRole role);
     Task UpdateSubscriptionAsync(Guid userId, SubscriptionTier subTier);
 
     /// <summary>

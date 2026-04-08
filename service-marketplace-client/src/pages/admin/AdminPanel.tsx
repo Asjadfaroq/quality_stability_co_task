@@ -227,7 +227,7 @@ export default function AdminPanel() {
         <div>
           <h2 className="text-xl font-bold text-slate-900">User Management</h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Manage subscriptions and per-user permission overrides.
+            Manage user roles, subscriptions, and per-user permission overrides.
           </p>
         </div>
       </div>
