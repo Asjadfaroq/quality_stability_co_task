@@ -26,7 +26,7 @@ const STATUS_STYLE: Record<string, { label: string; color: string; bg: string }>
   Pending:            { label: 'Pending',     color: '#6b7280', bg: 'rgba(107,114,128,0.08)' },
 }
 
-const DEFAULT_PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE = 10
 
 export default function Chats() {
   const { email: myEmail } = useAuthStore()

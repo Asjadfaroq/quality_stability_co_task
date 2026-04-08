@@ -31,7 +31,7 @@ type FilterTab = 'available' | 'active' | 'completed'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE = 10
 
 interface TabOption {
   key:   FilterTab

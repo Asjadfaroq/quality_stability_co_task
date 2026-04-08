@@ -15,7 +15,7 @@ import { useAuthStore } from '../../../shared/store/authStore'
 import { UserPermissionsAccordion, type AdminUserRow } from './components/UserPermissionsAccordion'
 import type { PagedResult } from '../../../shared/types/index'
 
-const DEFAULT_PAGE_SIZE = 50
+const DEFAULT_PAGE_SIZE = 10
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

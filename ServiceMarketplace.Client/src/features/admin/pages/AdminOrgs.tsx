@@ -22,7 +22,7 @@ interface AdminOrgDto {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_PAGE_SIZE = 25
+const DEFAULT_PAGE_SIZE = 10
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 

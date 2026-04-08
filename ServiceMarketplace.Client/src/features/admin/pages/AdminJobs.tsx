@@ -30,7 +30,7 @@ interface AdminJobDto {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_PAGE_SIZE = 25
+const DEFAULT_PAGE_SIZE = 10
 
 interface StatusOption {
   value: string

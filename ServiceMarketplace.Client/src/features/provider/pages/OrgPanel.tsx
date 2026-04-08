@@ -20,7 +20,7 @@ import { usePermissions } from '../../../shared/hooks/usePermissions'
 import { PERMISSIONS } from '../../../shared/constants/permissions'
 import type { PagedResult } from '../../../shared/types/index'
 
-const DEFAULT_PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE = 10
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
