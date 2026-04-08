@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Domain.Exceptions;
 using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Models.DTOs;

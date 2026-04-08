@@ -128,6 +128,10 @@ builder.Services.AddHealthChecks()
         failureStatus:    HealthStatus.Unhealthy,
         tags:             ["ready"]);
 
+// Problem Details + Global Exception Handler (RFC 9457)
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 // 5. Controllers + FluentValidation
 builder.Services.AddControllers()
     .AddJsonOptions(o =>
@@ -494,8 +498,9 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// Exception middleware — must be first
-app.UseExceptionMiddleware();
+// Global exception handler — must be first in the pipeline
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 // Response compression — before anything that writes a response body
 app.UseResponseCompression();
