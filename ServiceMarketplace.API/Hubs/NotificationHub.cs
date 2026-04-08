@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using ServiceMarketplace.API.Helpers;
+using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Hubs;
@@ -23,8 +24,7 @@ public class NotificationHub : Hub
         if (userId != null)
             await Groups.AddToGroupAsync(Context.ConnectionId, userId);
 
-        var role = Context.User?.FindFirst(ClaimConstants.Role)?.Value;
-        if (role is "ProviderEmployee" or "ProviderAdmin")
+        if (IsProvider(Context.User?.FindFirst(ClaimConstants.Role)?.Value))
             await Groups.AddToGroupAsync(Context.ConnectionId, "providers");
 
         await base.OnConnectedAsync();
@@ -36,8 +36,7 @@ public class NotificationHub : Hub
         if (userId != null)
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, userId);
 
-        var role = Context.User?.FindFirst(ClaimConstants.Role)?.Value;
-        if (role is "ProviderEmployee" or "ProviderAdmin")
+        if (IsProvider(Context.User?.FindFirst(ClaimConstants.Role)?.Value))
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, "providers");
 
         await base.OnDisconnectedAsync(exception);
@@ -116,4 +115,13 @@ public class NotificationHub : Hub
         var raw = Context.UserIdentifier;
         return Guid.TryParse(raw, out var id) ? id : null;
     }
+
+    /// <summary>
+    /// Returns true for roles that should join the shared "providers" group.
+    /// Uses enum name comparison to avoid hardcoded string literals.
+    /// </summary>
+    private static bool IsProvider(string? roleValue) =>
+        roleValue is not null &&
+        (roleValue == nameof(UserRole.ProviderEmployee) ||
+         roleValue == nameof(UserRole.ProviderAdmin));
 }

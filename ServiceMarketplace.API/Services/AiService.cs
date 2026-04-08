@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
+using ServiceMarketplace.API.Models.Config;
 using ServiceMarketplace.API.Models.DTOs.Ai;
 using ServiceMarketplace.API.Resilience;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -9,29 +11,27 @@ namespace ServiceMarketplace.API.Services;
 
 public class AiService : IAiService
 {
-    private readonly IConfiguration _configuration;
+    private readonly HuggingFaceSettings _settings;
     private readonly ILogger<AiService> _logger;
     private readonly HttpClient _httpClient;
 
-    public AiService(IConfiguration configuration, ILogger<AiService> logger, IHttpClientFactory httpClientFactory)
+    public AiService(
+        IOptions<HuggingFaceSettings> settings,
+        ILogger<AiService> logger,
+        IHttpClientFactory httpClientFactory)
     {
-        _configuration = configuration;
-        _logger = logger;
-        // Named client carries the Polly resilience pipeline (retry + timeouts)
+        _settings   = settings.Value;
+        _logger     = logger;
         _httpClient = httpClientFactory.CreateClient(ResilienceKeys.HuggingFace);
     }
 
     public async Task<EnhanceDescriptionResponse> EnhanceDescriptionAsync(EnhanceDescriptionRequest request)
     {
+        if (!_settings.IsConfigured)
+            return Mock(request);
+
         try
         {
-            var apiKey  = _configuration["HuggingFace:ApiKey"];
-            var model    = _configuration["HuggingFace:Model"]    ?? "Qwen/Qwen2.5-7B-Instruct-Turbo";
-            var endpoint = _configuration["HuggingFace:Endpoint"] ?? "https://router.huggingface.co/together/v1/chat/completions";
-
-            if (string.IsNullOrWhiteSpace(apiKey) || apiKey == "YOUR-HUGGINGFACE-KEY-HERE")
-                return Mock(request);
-
             var prompt =
                 "You are a professional service marketplace assistant. " +
                 "Enhance the following service request description to be clear and professional. " +
@@ -43,21 +43,22 @@ public class AiService : IAiService
 
             var body = new
             {
-                model,
-                messages = new[] { new { role = "user", content = prompt } },
-                max_tokens = 512,
+                model       = _settings.Model,
+                messages    = new[] { new { role = "user", content = prompt } },
+                max_tokens  = 512,
                 temperature = 0.5
             };
 
-            var requestMessage = new HttpRequestMessage(HttpMethod.Post, endpoint);
-            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            requestMessage.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, _settings.Endpoint);
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+            httpRequest.Content = new StringContent(
+                JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.SendAsync(requestMessage);
+            var response = await _httpClient.SendAsync(httpRequest);
             response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync();
-            var doc = JsonDocument.Parse(json);
+            var json    = await response.Content.ReadAsStringAsync();
+            var doc     = JsonDocument.Parse(json);
             var content = doc.RootElement
                 .GetProperty("choices")[0]
                 .GetProperty("message")
@@ -81,18 +82,18 @@ public class AiService : IAiService
     private static EnhanceDescriptionResponse Mock(EnhanceDescriptionRequest request)
     {
         var enhanced = $"Professional service: {request.RawDescription}";
-        var lower = $"{request.Title} {request.RawDescription}".ToLowerInvariant();
+        var lower    = $"{request.Title} {request.RawDescription}".ToLowerInvariant();
 
         var category = lower switch
         {
-            var s when s.Contains("pipe") || s.Contains("leak") || s.Contains("plumb") => "Plumbing",
-            var s when s.Contains("electric") || s.Contains("wire") || s.Contains("socket") => "Electrical",
-            var s when s.Contains("clean") || s.Contains("wash") || s.Contains("dust") => "Cleaning",
-            var s when s.Contains("wood") || s.Contains("furniture") || s.Contains("carpen") => "Carpentry",
-            var s when s.Contains("paint") || s.Contains("wall") || s.Contains("colour") => "Painting",
-            var s when s.Contains("mov") || s.Contains("transport") || s.Contains("haul") => "Moving",
-            var s when s.Contains("garden") || s.Contains("lawn") || s.Contains("tree") => "Gardening",
-            var s when s.Contains("computer") || s.Contains("laptop") || s.Contains("it ") || s.Contains("software") => "IT Support",
+            var s when s.Contains("pipe")     || s.Contains("leak")      || s.Contains("plumb")    => "Plumbing",
+            var s when s.Contains("electric") || s.Contains("wire")      || s.Contains("socket")   => "Electrical",
+            var s when s.Contains("clean")    || s.Contains("wash")      || s.Contains("dust")     => "Cleaning",
+            var s when s.Contains("wood")     || s.Contains("furniture") || s.Contains("carpen")   => "Carpentry",
+            var s when s.Contains("paint")    || s.Contains("wall")      || s.Contains("colour")   => "Painting",
+            var s when s.Contains("mov")      || s.Contains("transport") || s.Contains("haul")     => "Moving",
+            var s when s.Contains("garden")   || s.Contains("lawn")      || s.Contains("tree")     => "Gardening",
+            var s when s.Contains("computer") || s.Contains("laptop")    || s.Contains("software") => "IT Support",
             _ => "Other"
         };
 
@@ -101,11 +102,6 @@ public class AiService : IAiService
 
     // ── In-app AI chat ────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// System prompt that hard-constrains the model to only answer questions
-    /// about ServiceMarket.  The prompt is authoritative knowledge the model
-    /// uses for every reply; it is never sent to or visible by the user.
-    /// </summary>
     private const string ChatSystemPrompt = """
         You are ServiceMarket Assistant — a friendly, concise help assistant embedded
         inside the ServiceMarket platform. Your sole purpose is to help users understand
@@ -211,40 +207,33 @@ public class AiService : IAiService
         if (string.IsNullOrWhiteSpace(request.Message))
             return new AiChatResponse { Reply = "Please enter a message." };
 
+        if (!_settings.IsConfigured)
+            return MockChat(request.Message);
+
         try
         {
-            var apiKey   = _configuration["HuggingFace:ApiKey"];
-            var model    = _configuration["HuggingFace:Model"]    ?? "Qwen/Qwen2.5-7B-Instruct-Turbo";
-            var endpoint = _configuration["HuggingFace:Endpoint"] ?? "https://router.huggingface.co/together/v1/chat/completions";
-
-            if (string.IsNullOrWhiteSpace(apiKey) || apiKey == "YOUR-HUGGINGFACE-KEY-HERE")
-                return MockChat(request.Message);
-
-            // Build the messages array: system prompt → history → current user message
             var messages = new List<object>
             {
                 new { role = "system", content = ChatSystemPrompt },
             };
 
-            // Include the last 10 turns of history to keep the context window manageable
             const int maxHistoryTurns = 10;
-            var history = request.History.TakeLast(maxHistoryTurns);
-            foreach (var turn in history)
+            foreach (var turn in request.History.TakeLast(maxHistoryTurns))
                 messages.Add(new { role = turn.Role, content = turn.Content });
 
             messages.Add(new { role = "user", content = request.Message });
 
             var body = new
             {
-                model,
+                model       = _settings.Model,
                 messages,
                 max_tokens  = 512,
-                temperature = 0.4   // lower = more deterministic / factual
+                temperature = 0.4
             };
 
-            var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, _settings.Endpoint);
             httpRequest.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
             httpRequest.Content =
                 new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
@@ -270,7 +259,6 @@ public class AiService : IAiService
 
     private static AiChatResponse MockChat(string message)
     {
-        // Minimal keyword-based fallback so the feature works without an API key
         var lower = message.ToLowerInvariant();
 
         var reply = lower switch

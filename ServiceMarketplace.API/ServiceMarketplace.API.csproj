@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.*" />
     <PackageReference Include="Mapster" Version="7.*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
@@ -10,7 +11,7 @@ namespace ServiceMarketplace.API.Controllers;
 
 [Route("api/admin")]
 [Authorize]
-[RequirePermission("admin.manage_users")]
+[RequirePermission(PermissionNames.AdminManageUsers)]
 public class AdminController : BaseController
 {
     private const int DefaultPageSize = 50;
@@ -123,8 +124,7 @@ public class AdminController : BaseController
     public async Task<IActionResult> UpdateSubscription(Guid id, [FromBody] UpdateSubscriptionRequest request)
     {
         if (id == CurrentUserId)
-            return StatusCode(StatusCodes.Status403Forbidden,
-                new { message = "Cannot modify your own account." });
+            return Forbidden("Cannot modify your own account.");
 
         try
         {
@@ -162,8 +162,7 @@ public class AdminController : BaseController
     public async Task<IActionResult> UpdateUserPermission(Guid id, [FromBody] UpdateUserPermissionRequest request)
     {
         if (id == CurrentUserId)
-            return StatusCode(StatusCodes.Status403Forbidden,
-                new { message = "Cannot modify your own permissions." });
+            return Forbidden("Cannot modify your own permissions.");
 
         try
         {

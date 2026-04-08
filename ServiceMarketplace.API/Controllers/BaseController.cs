@@ -30,6 +30,6 @@ public abstract class BaseController : ControllerBase
     /// Returns a 401 Unauthorized with a human-readable <c>{ "message": "..." }</c> body.
     /// Use this instead of <c>Unauthorized()</c>, which produces an empty 401 response.
     /// </summary>
-    protected new IActionResult Unauthorized(string message) =>
+    protected IActionResult Unauthorized(string message) =>
         new ObjectResult(new { message }) { StatusCode = StatusCodes.Status401Unauthorized };
 }

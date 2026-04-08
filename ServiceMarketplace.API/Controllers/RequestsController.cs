@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Requests;
@@ -29,7 +30,7 @@ public class RequestsController : BaseController
     /// <summary>Create a new service request. Requires request.create permission. Free tier limited to 3 requests.</summary>
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
-    [RequirePermission("request.create")]
+    [RequirePermission(PermissionNames.RequestCreate)]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -65,7 +66,7 @@ public class RequestsController : BaseController
     /// <summary>Find pending requests within a radius using Haversine. Requires request.view_all permission.</summary>
     [HttpGet("nearby")]
     [EnableRateLimiting(RateLimitPolicies.Nearby)]
-    [RequirePermission("request.view_all")]
+    [RequirePermission(PermissionNames.RequestViewAll)]
     [ProducesResponseType(typeof(List<ServiceRequestDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -91,7 +92,7 @@ public class RequestsController : BaseController
     /// Get all completed jobs for the calling provider. Paginated.
     /// </summary>
     [HttpGet("completed")]
-    [RequirePermission("request.complete")]
+    [RequirePermission(PermissionNames.RequestComplete)]
     [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetCompleted(
@@ -134,7 +135,7 @@ public class RequestsController : BaseController
     /// <summary>Accept a pending request. Returns 409 if already accepted.</summary>
     [HttpPatch("{id:guid}/accept")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
-    [RequirePermission("request.accept")]
+    [RequirePermission(PermissionNames.RequestAccept)]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -148,7 +149,7 @@ public class RequestsController : BaseController
     /// <summary>Mark an accepted request as pending customer confirmation.</summary>
     [HttpPatch("{id:guid}/complete")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
-    [RequirePermission("request.complete")]
+    [RequirePermission(PermissionNames.RequestComplete)]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

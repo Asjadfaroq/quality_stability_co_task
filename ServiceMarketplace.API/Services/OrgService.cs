@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Models.DTOs;
@@ -15,13 +16,19 @@ public class OrgService : IOrgService
 {
     private readonly AppDbContext _db;
     private readonly ICacheService _cache;
+    private readonly IMemoryCache _memory;
     private readonly IHubContext<NotificationHub> _hub;
 
-    public OrgService(AppDbContext db, ICacheService cache, IHubContext<NotificationHub> hub)
+    public OrgService(
+        AppDbContext db,
+        ICacheService cache,
+        IMemoryCache memory,
+        IHubContext<NotificationHub> hub)
     {
-        _db    = db;
-        _cache = cache;
-        _hub   = hub;
+        _db     = db;
+        _cache  = cache;
+        _memory = memory;
+        _hub    = hub;
     }
 
     public async Task<OrgDto?> GetOrgForUserAsync(Guid userId)
@@ -287,8 +294,10 @@ public class OrgService : IOrgService
 
         await _db.SaveChangesAsync();
 
-        // Invalidate per-user effective-permissions cache immediately.
-        await _cache.RemoveAsync($"permissions:{memberId}");
+        // Invalidate both cache layers so the change takes effect on the very
+        // next API call from this member — not after the L1 TTL expires.
+        await _cache.RemoveAsync($"permissions:{memberId}");  // L2 Redis
+        _memory.Remove($"l1:permissions:{memberId}");         // L1 in-process
     }
 
     /// <summary>Validates that <paramref name="memberId"/> belongs to the ProviderAdmin's org.</summary>

@@ -34,7 +34,7 @@ public class SubscriptionService : ISubscriptionService
             .CountAsync(r => r.CustomerId == customerId);
 
         if (count >= freeLimit)
-            throw new UnauthorizedAccessException(
+            throw new InvalidOperationException(
                 "Free tier limit reached. Upgrade to create more requests.");
     }
 }

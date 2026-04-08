@@ -3,7 +3,9 @@ using Microsoft.Extensions.Options;
 using Stripe;
 using Stripe.Checkout;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Models.Config;
+using ServiceMarketplace.API.Models.DTOs.Billing;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -24,7 +26,10 @@ public class StripeService : IStripeService
         _db       = db;
         _settings = settings.Value;
         _logger   = logger;
-        StripeConfiguration.ApiKey = _settings.SecretKey;
+        // StripeConfiguration.ApiKey is a static/global setting — it is set once
+        // during app startup in Program.cs (via Configure<StripeSettings>), not here.
+        // Setting it in a scoped constructor would overwrite it on every request and
+        // is not thread-safe. See Program.cs for the startup configuration call.
     }
 
     // ── Checkout ─────────────────────────────────────────────────────────────
@@ -114,6 +119,31 @@ public class StripeService : IStripeService
         }
     }
 
+    // ── Subscription status ───────────────────────────────────────────────────
+
+    public async Task<SubscriptionStatusDto> GetSubscriptionStatusAsync(Guid userId)
+    {
+        var info = await _db.UserStripeInfos
+            .Include(s => s.User)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+
+        if (info is null)
+            return new SubscriptionStatusDto(); // Free tier, no Stripe record
+
+        return new SubscriptionStatusDto
+        {
+            Tier             = info.User.SubTier.ToString(),
+            Status           = info.SubscriptionStatus,
+            CurrentPeriodEnd = info.CurrentPeriodEnd
+        };
+    }
+
+    public async Task<bool> HasActiveSubscriptionAsync(Guid userId) =>
+        await _db.UserStripeInfos
+            .AnyAsync(s => s.UserId == userId &&
+                           s.SubscriptionStatus == StripeSubscriptionStatus.Active);
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private async Task<string> EnsureStripeCustomerAsync(Guid userId, string userEmail)
@@ -161,9 +191,10 @@ public class StripeService : IStripeService
         stripeInfo.UpdatedAt            = DateTime.UtcNow;
 
         // "active" and "trialing" count as Paid; everything else reverts to Free
-        stripeInfo.User.SubTier = subscription.Status is "active" or "trialing"
-            ? SubscriptionTier.Paid
-            : SubscriptionTier.Free;
+        stripeInfo.User.SubTier =
+            subscription.Status is StripeSubscriptionStatus.Active or StripeSubscriptionStatus.Trialing
+                ? SubscriptionTier.Paid
+                : SubscriptionTier.Free;
 
         await _db.SaveChangesAsync();
 
@@ -180,7 +211,7 @@ public class StripeService : IStripeService
 
         if (stripeInfo == null) return;
 
-        stripeInfo.SubscriptionStatus = "canceled";
+        stripeInfo.SubscriptionStatus = StripeSubscriptionStatus.Canceled;
         stripeInfo.UpdatedAt          = DateTime.UtcNow;
         stripeInfo.User.SubTier       = SubscriptionTier.Free;
 
@@ -197,7 +228,7 @@ public class StripeService : IStripeService
 
         if (stripeInfo == null) return;
 
-        stripeInfo.SubscriptionStatus = "past_due";
+        stripeInfo.SubscriptionStatus = StripeSubscriptionStatus.PastDue;
         stripeInfo.UpdatedAt          = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();

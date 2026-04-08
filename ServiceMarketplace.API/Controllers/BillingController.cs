@@ -1,29 +1,23 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Helpers;
+using ServiceMarketplace.API.Models.DTOs.Billing;
 using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Controllers;
 
 [Route("api/billing")]
-[Authorize]   // all actions require a valid JWT; the webhook overrides with [AllowAnonymous]
+[Authorize]
 public class BillingController : BaseController
 {
     private readonly IStripeService _stripeService;
-    private readonly AppDbContext _db;
     private readonly ILogger<BillingController> _logger;
 
-    public BillingController(
-        IStripeService stripeService,
-        AppDbContext db,
-        ILogger<BillingController> logger)
+    public BillingController(IStripeService stripeService, ILogger<BillingController> logger)
     {
         _stripeService = stripeService;
-        _db            = db;
         _logger        = logger;
     }
 
@@ -41,16 +35,13 @@ public class BillingController : BaseController
             return Forbidden("Subscription checkout is available to Customer accounts only.");
 
         var userId = CurrentUserId;
-        var email  = User.FindFirstValue(ClaimConstants.Email)
-                  ?? User.FindFirstValue(ClaimTypes.Email)
-                  ?? string.Empty;
 
-        // Prevent double-subscribing
-        var alreadyActive = await _db.UserStripeInfos
-            .AnyAsync(s => s.UserId == userId && s.SubscriptionStatus == "active");
-
-        if (alreadyActive)
+        if (await _stripeService.HasActiveSubscriptionAsync(userId))
             return BadRequest(new { message = "You already have an active subscription." });
+
+        var email = User.FindFirstValue(ClaimConstants.Email)
+                 ?? User.FindFirstValue(ClaimTypes.Email)
+                 ?? string.Empty;
 
         var origin     = Request.Headers.Origin.ToString();
         var successUrl = $"{origin}/customer/subscription/success";
@@ -91,36 +82,15 @@ public class BillingController : BaseController
     /// Returns the current subscription status for the authenticated customer.
     /// </summary>
     [HttpGet("status")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SubscriptionStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetSubscriptionStatus()
     {
         if (CurrentUserRole != UserRole.Customer)
             return Forbidden("Subscription status is available to Customer accounts only.");
 
-        var userId = CurrentUserId;
-
-        var info = await _db.UserStripeInfos
-            .Include(s => s.User)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.UserId == userId);
-
-        if (info == null)
-        {
-            return Ok(new
-            {
-                tier             = "Free",
-                status           = (string?)null,
-                currentPeriodEnd = (DateTime?)null
-            });
-        }
-
-        return Ok(new
-        {
-            tier             = info.User.SubTier.ToString(),
-            status           = info.SubscriptionStatus,
-            currentPeriodEnd = info.CurrentPeriodEnd
-        });
+        var status = await _stripeService.GetSubscriptionStatusAsync(CurrentUserId);
+        return Ok(status);
     }
 
     /// <summary>

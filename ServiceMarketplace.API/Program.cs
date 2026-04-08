@@ -2,10 +2,12 @@ using System.Text;
 using System.Threading.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -26,8 +28,21 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. DbContext — SQL Server execution strategy retries transient failures (deadlocks,
-//    connection drops, timeouts) automatically before surfacing an exception.
+// 1. Typed configuration — bind before any service that reads settings so that
+//    IOptions<T> is available everywhere via the DI container.
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<HuggingFaceSettings>(builder.Configuration.GetSection("HuggingFace"));
+builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
+
+// 1a. Initialise Stripe's global API key once at startup using the typed options.
+//     StripeConfiguration.ApiKey is a static field — setting it in a scoped service
+//     constructor is not thread-safe and would overwrite it on every request.
+var stripeSettings = builder.Configuration.GetSection("Stripe").Get<StripeSettings>();
+if (!string.IsNullOrWhiteSpace(stripeSettings?.SecretKey))
+    Stripe.StripeConfiguration.ApiKey = stripeSettings.SecretKey;
+
+// 1b. DbContext — SQL Server execution strategy retries transient failures (deadlocks,
+//     connection drops, timeouts) automatically before surfacing an exception.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -48,9 +63,9 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
-// 3. JWT Authentication
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var jwtKey = jwtSection["Key"]!;
+// 3. JWT Authentication — reads from the already-bound JwtSettings options.
+var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
+    ?? throw new InvalidOperationException("JWT settings are not configured.");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -62,15 +77,15 @@ builder.Services.AddAuthentication(options =>
     options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
+        ValidateIssuer           = true,
+        ValidateAudience         = true,
+        ValidateLifetime         = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSection["Issuer"],
-        ValidAudience = jwtSection["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-        NameClaimType = "userId",
-        RoleClaimType = "role"
+        ValidIssuer              = jwtSettings.Issuer,
+        ValidAudience            = jwtSettings.Audience,
+        IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key)),
+        NameClaimType            = "userId",
+        RoleClaimType            = "role"
     };
     // Browsers can't set WebSocket headers, so SignalR passes the JWT as ?access_token=
     options.Events = new JwtBearerEvents
@@ -100,8 +115,14 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 
-// 4b. Health check — used by Azure App Service health probe and uptime monitoring
-builder.Services.AddHealthChecks();
+// 4b. Health checks — registered here; Redis probe is added conditionally after
+//     Redis is initialised below (requires redisAvailable, declared in section 10).
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        connectionString: builder.Configuration.GetConnectionString("DefaultConnection")!,
+        name:             "sql",
+        failureStatus:    HealthStatus.Unhealthy,
+        tags:             ["ready"]);
 
 // 5. Controllers + FluentValidation
 builder.Services.AddControllers()
@@ -216,6 +237,17 @@ if (redisAvailable)
 else
 {
     builder.Services.AddDistributedMemoryCache();
+}
+
+// Add Redis health check now that redisAvailable is known.
+if (redisAvailable)
+{
+    builder.Services.AddHealthChecks()
+        .AddRedis(
+            redisConnectionString: redisConnection!,
+            name:                  "redis",
+            failureStatus:         HealthStatus.Degraded,
+            tags:                  ["ready"]);
 }
 
 // 11. Redis resilience pipeline used by CacheService:
@@ -449,7 +481,6 @@ builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddSingleton<ICacheService, CacheService>();
 
 // Stripe
-builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
 builder.Services.AddScoped<IStripeService, StripeService>();
 
 var app = builder.Build();
@@ -494,7 +525,33 @@ app.MapControllers();
 
 app.MapHub<NotificationHub>("/hubs/notifications");
 
-// Health check endpoint — Azure App Service polls this to confirm the app is alive
-app.MapHealthChecks("/health");
+// Liveness probe — returns 200 immediately if the process is running.
+// Azure App Service and container orchestrators poll this to restart unhealthy instances.
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false  // skip all dependency checks — just confirm the app is alive
+});
+
+// Readiness probe — checks SQL Server and Redis.
+// Azure deployment slots use this to confirm the app is ready to receive traffic.
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate            = check => check.Tags.Contains("ready"),
+    ResponseWriter       = async (ctx, report) =>
+    {
+        ctx.Response.ContentType = "application/json";
+        var result = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            status  = report.Status.ToString(),
+            checks  = report.Entries.Select(e => new
+            {
+                name    = e.Key,
+                status  = e.Value.Status.ToString(),
+                error   = e.Value.Exception?.Message
+            })
+        });
+        await ctx.Response.WriteAsync(result);
+    }
+});
 
 app.Run();

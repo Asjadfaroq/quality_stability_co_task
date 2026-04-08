@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
@@ -24,7 +25,7 @@ public class OrgController : BaseController
     /// Always 200; null body means not yet assigned to an org.
     /// </summary>
     [HttpGet("mine")]
-    [RequirePermission("org.view")]
+    [RequirePermission(PermissionNames.OrgView)]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyOrgAsMember()
     {
@@ -38,7 +39,7 @@ public class OrgController : BaseController
     /// Requires org.view — management operations within the page require org.manage.
     /// </summary>
     [HttpGet]
-    [RequirePermission("org.view")]
+    [RequirePermission(PermissionNames.OrgView)]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyOrg()
     {
@@ -47,7 +48,7 @@ public class OrgController : BaseController
     }
 
     [HttpPost]
-    [RequirePermission("org.manage")]
+    [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateOrg([FromBody] CreateOrgRequest request)
@@ -64,7 +65,7 @@ public class OrgController : BaseController
     }
 
     [HttpPost("members")]
-    [RequirePermission("org.manage")]
+    [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -86,7 +87,7 @@ public class OrgController : BaseController
     }
 
     [HttpDelete("members/{id:guid}")]
-    [RequirePermission("org.manage")]
+    [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -108,7 +109,7 @@ public class OrgController : BaseController
     }
 
     [HttpGet("members")]
-    [RequirePermission("org.view")]
+    [RequirePermission(PermissionNames.OrgView)]
     [ProducesResponseType(typeof(PagedResult<OrgMemberDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMembers(
         [FromQuery] int page     = 1,
@@ -128,7 +129,7 @@ public class OrgController : BaseController
     /// Used by ProviderAdmin to populate the member permission override UI.
     /// </summary>
     [HttpGet("permissions")]
-    [RequirePermission("org.manage")]
+    [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(typeof(List<PermissionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllPermissions()
     {
@@ -140,7 +141,7 @@ public class OrgController : BaseController
     /// Returns explicit permission overrides for a member of the calling ProviderAdmin's org.
     /// </summary>
     [HttpGet("members/{id:guid}/permissions")]
-    [RequirePermission("org.manage")]
+    [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(typeof(List<UserPermissionOverrideDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMemberPermissions(Guid id)
@@ -161,7 +162,7 @@ public class OrgController : BaseController
     /// granted=true → force-grant; false → force-revoke; null → remove override.
     /// </summary>
     [HttpPatch("members/{id:guid}/permissions")]
-    [RequirePermission("org.manage")]
+    [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

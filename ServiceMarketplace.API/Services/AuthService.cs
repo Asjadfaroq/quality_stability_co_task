@@ -2,8 +2,10 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using ServiceMarketplace.API.Helpers;
+using ServiceMarketplace.API.Models.Config;
 using ServiceMarketplace.API.Models.DTOs.Auth;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -13,12 +15,12 @@ namespace ServiceMarketplace.API.Services;
 public class AuthService : IAuthService
 {
     private readonly UserManager<User> _userManager;
-    private readonly IConfiguration _configuration;
+    private readonly JwtSettings _jwtSettings;
 
-    public AuthService(UserManager<User> userManager, IConfiguration configuration)
+    public AuthService(UserManager<User> userManager, IOptions<JwtSettings> jwtSettings)
     {
         _userManager = userManager;
-        _configuration = configuration;
+        _jwtSettings = jwtSettings.Value;
     }
 
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
@@ -29,10 +31,10 @@ public class AuthService : IAuthService
 
         var user = new User
         {
-            Id = Guid.NewGuid(),
-            UserName = request.Email,
-            Email = request.Email,
-            Role = request.Role,
+            Id        = Guid.NewGuid(),
+            UserName  = request.Email,
+            Email     = request.Email,
+            Role      = request.Role,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -45,8 +47,8 @@ public class AuthService : IAuthService
 
         return new LoginResponse
         {
-            Token = GenerateJwt(user),
-            Role = user.Role.ToString(),
+            Token  = GenerateJwt(user),
+            Role   = user.Role.ToString(),
             UserId = user.Id
         };
     }
@@ -62,16 +64,15 @@ public class AuthService : IAuthService
 
         return new LoginResponse
         {
-            Token = GenerateJwt(user),
-            Role = user.Role.ToString(),
+            Token  = GenerateJwt(user),
+            Role   = user.Role.ToString(),
             UserId = user.Id
         };
     }
 
     private string GenerateJwt(User user)
     {
-        var jwtSection = _configuration.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!));
+        var key   = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -82,12 +83,11 @@ public class AuthService : IAuthService
             new Claim(ClaimConstants.Role, user.Role.ToString())
         };
 
-        var expiry = int.Parse(jwtSection["ExpiryMinutes"] ?? "1440");
         var token = new JwtSecurityToken(
-            issuer: jwtSection["Issuer"],
-            audience: jwtSection["Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiry),
+            issuer:             _jwtSettings.Issuer,
+            audience:           _jwtSettings.Audience,
+            claims:             claims,
+            expires:            DateTime.UtcNow.AddMinutes(_jwtSettings.ExpiryMinutes),
             signingCredentials: creds
         );
 

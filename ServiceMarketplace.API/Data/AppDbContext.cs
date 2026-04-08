@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Models.Entities;
 using ServiceMarketplace.API.Models.Enums;
 
@@ -132,15 +133,15 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     {
         builder.Entity<Permission>().HasData(
             // Service-request lifecycle
-            new Permission { Id = 1, Name = "request.create"      },
-            new Permission { Id = 2, Name = "request.accept"      },
-            new Permission { Id = 3, Name = "request.complete"    },
-            new Permission { Id = 4, Name = "request.view_all"    },
+            new Permission { Id = 1, Name = PermissionNames.RequestCreate   },
+            new Permission { Id = 2, Name = PermissionNames.RequestAccept   },
+            new Permission { Id = 3, Name = PermissionNames.RequestComplete },
+            new Permission { Id = 4, Name = PermissionNames.RequestViewAll  },
             // Platform administration
-            new Permission { Id = 5, Name = "admin.manage_users"  },
+            new Permission { Id = 5, Name = PermissionNames.AdminManageUsers },
             // Organisation management
-            new Permission { Id = 6, Name = "org.manage"          },
-            new Permission { Id = 7, Name = "org.view"            }
+            new Permission { Id = 6, Name = PermissionNames.OrgManage },
+            new Permission { Id = 7, Name = PermissionNames.OrgView   }
         );
     }
 
