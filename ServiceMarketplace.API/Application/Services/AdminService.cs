@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using ServiceMarketplace.API.Data;
+using ServiceMarketplace.API.Hubs;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.Entities;
@@ -14,15 +16,17 @@ public class AdminService : IAdminService
 {
     private static readonly TimeSpan RolePermissionCacheTtl = TimeSpan.FromHours(24);
 
-    private readonly AppDbContext  _db;
-    private readonly ICacheService _cache;
-    private readonly IMemoryCache  _memory;
+    private readonly AppDbContext              _db;
+    private readonly ICacheService             _cache;
+    private readonly IMemoryCache              _memory;
+    private readonly IHubContext<NotificationHub> _hub;
 
-    public AdminService(AppDbContext db, ICacheService cache, IMemoryCache memory)
+    public AdminService(AppDbContext db, ICacheService cache, IMemoryCache memory, IHubContext<NotificationHub> hub)
     {
         _db     = db;
         _cache  = cache;
         _memory = memory;
+        _hub    = hub;
     }
 
     public async Task<PagedResult<AdminJobDto>> GetAllJobsAsync(
@@ -229,6 +233,10 @@ public class AdminService : IAdminService
 
         user.SubTier = subTier;
         await _db.SaveChangesAsync();
+
+        await _hub.Clients
+            .Group(userId.ToString())
+            .SendAsync("SubscriptionChanged", new { tier = subTier.ToString() });
     }
 
     public async Task<RolePermissionsDto> GetRolePermissionsAsync()

@@ -74,8 +74,9 @@ const NOTIF_ICON: Record<AppNotification['type'], { icon: React.ReactNode; bg: s
   job_confirmed:    { icon: <CheckCircle2      size={14} />, bg: 'rgba(16,185,129,0.1)',  color: '#10b981' },
   message:          { icon: <MessageSquare     size={14} />, bg: 'rgba(59,130,246,0.1)',  color: '#3b82f6' },
   confirm_needed:   { icon: <Clock             size={14} />, bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' },
-  org_added:        { icon: <UserPlus          size={14} />, bg: 'rgba(16,185,129,0.1)',  color: '#10b981' },
-  org_removed:      { icon: <UserMinus         size={14} />, bg: 'rgba(239,68,68,0.1)',   color: '#ef4444' },
+  org_added:            { icon: <UserPlus   size={14} />, bg: 'rgba(16,185,129,0.1)',  color: '#10b981' },
+  org_removed:          { icon: <UserMinus  size={14} />, bg: 'rgba(239,68,68,0.1)',   color: '#ef4444' },
+  subscription_changed: { icon: <CreditCard size={14} />, bg: 'rgba(99,102,241,0.1)',  color: '#6366f1' },
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────

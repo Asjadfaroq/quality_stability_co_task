@@ -110,6 +110,17 @@ export default function SignalRProvider() {
       queryClient.invalidateQueries({ queryKey: ['my-org-member'] })
     },
 
+    SubscriptionChanged: (data: { tier: string }) => {
+      const upgraded = data.tier === 'Paid'
+      add({
+        type:  'subscription_changed',
+        title: upgraded ? 'Subscription Upgraded' : 'Subscription Downgraded',
+        body:  upgraded ? 'Your plan has been upgraded to Paid.' : 'Your plan has been changed to Free.',
+        link:  '/customer/subscription',
+      })
+      queryClient.invalidateQueries({ queryKey: ['subscription'] })
+    },
+
     // ── Both ──
     NewMessageNotification: (data: { requestId: string; senderEmail: string }) => {
       add({

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type NotificationType = 'new_job' | 'job_accepted' | 'job_confirmed' | 'message' | 'confirm_needed' | 'org_added' | 'org_removed'
+export type NotificationType = 'new_job' | 'job_accepted' | 'job_confirmed' | 'message' | 'confirm_needed' | 'org_added' | 'org_removed' | 'subscription_changed'
 
 export interface AppNotification {
   id:    string
