@@ -334,7 +334,7 @@ export default function AdminPanel() {
                   user={user}
                   userId={userId}
                   isExpanded={expandedUserId === user.id}
-                  isUpdatingSub={updatingSubId !== null}
+                  isUpdatingSub={updatingSubId === user.id}
                   onToggleExpand={toggleExpand}
                   onToggleSub={toggleSub}
                   onDelete={setPendingDeleteUser}
