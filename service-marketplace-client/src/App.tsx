@@ -222,7 +222,44 @@ export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <Toaster position="top-right" />
+        <Toaster
+          position="top-right"
+          gutter={10}
+          containerStyle={{ top: 20, right: 20 }}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              borderRadius: '12px',
+              background: '#ffffff',
+              color: '#0f172a',
+              fontSize: '13.5px',
+              fontWeight: 500,
+              lineHeight: '1.45',
+              padding: '11px 14px',
+              boxShadow: '0 4px 24px rgba(15,23,42,0.08), 0 1px 6px rgba(15,23,42,0.04)',
+              border: '1px solid #f1f5f9',
+              maxWidth: '340px',
+            },
+            success: {
+              iconTheme: { primary: '#16a34a', secondary: '#dcfce7' },
+              style: {
+                borderLeft: '3.5px solid #16a34a',
+              },
+            },
+            error: {
+              iconTheme: { primary: '#dc2626', secondary: '#fee2e2' },
+              style: {
+                borderLeft: '3.5px solid #dc2626',
+              },
+            },
+            loading: {
+              iconTheme: { primary: '#6366f1', secondary: '#e0e7ff' },
+              style: {
+                borderLeft: '3.5px solid #6366f1',
+              },
+            },
+          }}
+        />
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>
