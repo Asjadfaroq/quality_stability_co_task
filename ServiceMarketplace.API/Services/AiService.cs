@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using ServiceMarketplace.API.Constants;
 using ServiceMarketplace.API.Models.Config;
 using ServiceMarketplace.API.Models.DTOs.Ai;
 using ServiceMarketplace.API.Resilience;
@@ -11,6 +12,7 @@ namespace ServiceMarketplace.API.Services;
 
 public class AiService : IAiService
 {
+    private static readonly string CategoryPromptList = string.Join(", ", ServiceCategories.All);
     private readonly HuggingFaceSettings _settings;
     private readonly ILogger<AiService> _logger;
     private readonly HttpClient _httpClient;
@@ -35,7 +37,7 @@ public class AiService : IAiService
             var prompt =
                 "You are a professional service marketplace assistant. " +
                 "Enhance the following service request description to be clear and professional. " +
-                "Also suggest the most appropriate category from: Plumbing, Electrical, Cleaning, Carpentry, Painting, Moving, Gardening, IT Support, Other.\n\n" +
+                $"Also suggest the most appropriate category from: {CategoryPromptList}.\n\n" +
                 $"Title: {request.Title}\n" +
                 $"Description: {request.RawDescription}\n\n" +
                 "Respond ONLY in JSON with exactly two fields, no extra text:\n" +

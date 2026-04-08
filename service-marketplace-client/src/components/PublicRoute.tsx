@@ -1,4 +1,5 @@
 import { Navigate } from 'react-router-dom'
+import { ROUTES } from '../constants/routes'
 import { useAuthStore } from '../store/authStore'
 import { getDashboardPath, isTokenExpired } from '../utils/auth'
 
@@ -19,7 +20,7 @@ export default function PublicRoute({ children }: Props) {
 
   // Authenticated and token still valid → send to their dashboard
   if (token && !isTokenExpired(expiresAt)) {
-    return <Navigate to={getDashboardPath(role)} replace />
+    return <Navigate to={role ? getDashboardPath(role) : ROUTES.LOGIN} replace />
   }
 
   return <>{children}</>
