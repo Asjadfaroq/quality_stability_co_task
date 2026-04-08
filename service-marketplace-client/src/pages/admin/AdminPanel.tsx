@@ -1,15 +1,25 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Users, CreditCard, ChevronDown, ChevronUp, ShieldCheck, Minus, Trash2, AlertTriangle } from 'lucide-react'
+import { Users, CreditCard, ChevronDown, ChevronUp, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react'
 
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, CardHeader, Badge, Button, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
+import {
+  PermissionToggleGrid,
+  nextOverrideState,
+  type PermissionDto,
+  type PermissionOverride,
+  type OverrideState,
+} from '../../components/PermissionToggleGrid'
+import { apiErrorMessage } from '../../utils/format'
 import { useAuthStore } from '../../store/authStore'
 import type { PagedResult } from '../../types'
 
 const DEFAULT_PAGE_SIZE = 50
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface UserDto {
   id: string
@@ -18,42 +28,9 @@ interface UserDto {
   subTier: string
 }
 
-interface PermissionDto {
-  id: number
-  name: string
-}
-
 interface RolePermissionsDto {
   permissions: PermissionDto[]
   roleAssignments: Record<string, string[]>
-}
-
-interface UserPermissionOverride {
-  permissionName: string
-  granted: boolean
-}
-
-// ── Permission override state: true=grant, false=revoke, null=no override ──────
-
-type OverrideState = true | false | null
-
-/** Cycles none → grant → revoke → none */
-function nextOverrideState(current: OverrideState): OverrideState {
-  if (current === null)  return true
-  if (current === true)  return false
-  return null
-}
-
-// ── Human-readable permission labels ──────────────────────────────────────────
-
-const PERMISSION_LABELS: Record<string, string> = {
-  'request.create':     'Create Requests',
-  'request.accept':     'Accept Requests',
-  'request.complete':   'Complete Requests',
-  'request.view_all':   'View All Requests',
-  'admin.manage_users': 'Manage Users',
-  'org.manage':         'Manage Organisation',
-  'org.view':           'View Organisation',
 }
 
 // ── UserPermissionsPanel ──────────────────────────────────────────────────────
@@ -64,13 +41,13 @@ function UserPermissionsPanel({ userId, isSelf }: { userId: string; isSelf: bool
 
   const { data: roleData } = useQuery<RolePermissionsDto>({
     queryKey: ['admin-role-permissions'],
-    queryFn:  () => api.get('/admin/roles/permissions').then(r => r.data),
+    queryFn:  () => api.get('/admin/roles/permissions').then((r) => r.data),
     staleTime: 60_000,
   })
 
-  const { data: overrides = [], isLoading } = useQuery<UserPermissionOverride[]>({
+  const { data: overrides = [], isLoading } = useQuery<PermissionOverride[]>({
     queryKey: ['user-permissions', userId],
-    queryFn:  () => api.get(`/admin/users/${userId}/permissions`).then(r => r.data),
+    queryFn:  () => api.get(`/admin/users/${userId}/permissions`).then((r) => r.data),
   })
 
   const mutation = useMutation({
@@ -80,21 +57,13 @@ function UserPermissionsPanel({ userId, isSelf }: { userId: string; isSelf: bool
       queryClient.invalidateQueries({ queryKey: ['user-permissions', userId] })
       toast.success('Permission updated.')
     },
-    onError:   () => toast.error('Failed to update permission.'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update permission.')),
     onSettled: () => setUpdatingKey(null),
   })
 
-  const permissions = roleData?.permissions ?? []
-
-  const overrideMap = new Map<string, boolean>(
-    overrides.map(o => [o.permissionName, o.granted])
-  )
-
-  const toggle = (permName: string) => {
-    if (updatingKey !== null || isSelf) return
-    const current: OverrideState = overrideMap.has(permName)
-      ? (overrideMap.get(permName) as boolean)
-      : null
+  const handleToggle = (permName: string) => {
+    if (isSelf || updatingKey !== null) return
+    const current: OverrideState = overrides.find((o) => o.permissionName === permName)?.granted ?? null
     const next = nextOverrideState(current)
     setUpdatingKey(permName)
     mutation.mutate({ permissionName: permName, granted: next })
@@ -109,82 +78,14 @@ function UserPermissionsPanel({ userId, isSelf }: { userId: string; isSelf: bool
   }
 
   return (
-    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3">
-        Permission Overrides
-        <span className="ml-2 font-normal normal-case text-slate-400">
-          — overrides take precedence over the role assignment
-        </span>
-      </p>
-
-      {isSelf && (
-        <p className="text-xs text-amber-600 mb-3">Cannot modify your own permissions.</p>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {permissions.map(perm => {
-          const override     = overrideMap.has(perm.name) ? overrideMap.get(perm.name)! : null
-          const isUpdating   = updatingKey === perm.name
-          const label        = PERMISSION_LABELS[perm.name] ?? perm.name
-
-          let btnStyle = 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-          let icon: React.ReactNode = <Minus size={11} className="text-slate-300" />
-
-          if (override === true) {
-            btnStyle = 'bg-emerald-50 border-emerald-300 text-emerald-700'
-            icon = (
-              <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-                <path d="M2.5 7L5.5 10L11.5 4" stroke="#059669" strokeWidth="2.2"
-                  strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )
-          } else if (override === false) {
-            btnStyle = 'bg-red-50 border-red-300 text-red-700'
-            icon = (
-              <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-                <path d="M3 3L11 11M11 3L3 11" stroke="#dc2626" strokeWidth="2.2"
-                  strokeLinecap="round" />
-              </svg>
-            )
-          }
-
-          return (
-            <button
-              key={perm.name}
-              type="button"
-              disabled={isSelf || updatingKey !== null}
-              onClick={() => toggle(perm.name)}
-              title={
-                override === null
-                  ? `${label}: inheriting from role (click to grant)`
-                  : override
-                  ? `${label}: explicitly granted (click to revoke)`
-                  : `${label}: explicitly revoked (click to remove override)`
-              }
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium
-                transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60
-                ${isUpdating ? 'opacity-50' : 'hover:scale-105'}
-                ${btnStyle}
-              `}
-            >
-              {isUpdating ? (
-                <span className="w-2.5 h-2.5 rounded-full border-2 border-t-transparent border-current animate-spin block" />
-              ) : icon}
-              {label}
-            </button>
-          )
-        })}
-      </div>
-
-      <p className="text-[10px] text-slate-400 mt-3">
-        <span className="inline-flex items-center gap-1 mr-3">
-          <Minus size={9} className="text-slate-300" /> inherits from role
-        </span>
-        <span className="text-emerald-600 mr-3">✓ explicitly granted</span>
-        <span className="text-red-500">✕ explicitly revoked</span>
-        <span className="ml-1 text-slate-400">— click to cycle</span>
-      </p>
-    </div>
+    <PermissionToggleGrid
+      permissions={roleData?.permissions ?? []}
+      overrides={overrides}
+      updatingKey={updatingKey}
+      disabled={isSelf}
+      disabledReason="Cannot modify your own permissions."
+      onToggle={handleToggle}
+    />
   )
 }
 
@@ -198,8 +99,17 @@ interface ConfirmDeleteModalProps {
 }
 
 function ConfirmDeleteModal({ user, isDeleting, onConfirm, onCancel }: ConfirmDeleteModalProps) {
+  const deletionEffects = [
+    'User account and login credentials',
+    'All service requests submitted as customer',
+    'Chat messages on those requests',
+    user.role === 'ProviderAdmin'
+      ? 'Owned organization (members will be detached)'
+      : 'Organization membership',
+    'Permission overrides and billing data',
+  ]
+
   return (
-    // Backdrop
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(2px)' }}
@@ -212,8 +122,10 @@ function ConfirmDeleteModal({ user, isDeleting, onConfirm, onCancel }: ConfirmDe
         {/* Header */}
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: 'rgba(239,68,68,0.1)' }}>
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'rgba(239,68,68,0.1)' }}
+            >
               <AlertTriangle size={18} style={{ color: '#ef4444' }} />
             </div>
             <div className="min-w-0">
@@ -229,15 +141,7 @@ function ConfirmDeleteModal({ user, isDeleting, onConfirm, onCancel }: ConfirmDe
             This action is <strong>permanent and irreversible</strong>. The following will be deleted:
           </p>
           <ul className="space-y-1.5 mb-4">
-            {[
-              'User account and login credentials',
-              'All service requests submitted as customer',
-              'Chat messages on those requests',
-              user.role === 'ProviderAdmin'
-                ? 'Owned organization (members will be detached)'
-                : 'Organization membership',
-              'Permission overrides and billing data',
-            ].map((item) => (
+            {deletionEffects.map((item) => (
               <li key={item} className="flex items-start gap-2 text-[12px] text-slate-500">
                 <span className="mt-0.5 shrink-0" style={{ color: '#ef4444' }}>•</span>
                 {item}
@@ -291,14 +195,14 @@ export default function AdminPanel() {
   const { userId }              = useAuthStore()
   const [page, setPage]         = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
-  const [updatingSubId, setUpdatingSubId]   = useState<string | null>(null)
-  const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
+  const [updatingSubId, setUpdatingSubId]         = useState<string | null>(null)
+  const [expandedUserId, setExpandedUserId]       = useState<string | null>(null)
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserDto | null>(null)
 
   const { data, isLoading } = useQuery<PagedResult<UserDto>>({
     queryKey: ['admin-users', page, pageSize],
-    queryFn:  () => api.get('/admin/users', { params: { page, pageSize } }).then(r => r.data),
-    placeholderData: prev => prev,
+    queryFn:  () => api.get('/admin/users', { params: { page, pageSize } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   })
 
   const users      = data?.items      ?? []
@@ -308,23 +212,24 @@ export default function AdminPanel() {
   const subMutation = useMutation({
     mutationFn: ({ id, subTier }: { id: string; subTier: string }) =>
       api.patch(`/admin/users/${id}/subscription`, { subTier }),
-    onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); toast.success('Subscription updated.') },
-    onError:    () => toast.error('Failed to update subscription.'),
-    onSettled:  () => setUpdatingSubId(null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      toast.success('Subscription updated.')
+    },
+    onError:   () => toast.error('Failed to update subscription.'),
+    onSettled: () => setUpdatingSubId(null),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/admin/users/${id}`),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       toast.success('User deleted successfully.')
       setPendingDeleteUser(null)
-      // Collapse the permissions panel for the deleted user if it was open
-      setExpandedUserId(prev => prev === pendingDeleteUser?.id ? null : prev)
+      setExpandedUserId((prev) => (prev === deletedId ? null : prev))
     },
-    onError: (err: any) => {
-      const msg = err?.response?.data?.detail ?? err?.response?.data?.message ?? 'Failed to delete user.'
-      toast.error(msg)
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to delete user.'))
       setPendingDeleteUser(null)
     },
   })
@@ -335,7 +240,7 @@ export default function AdminPanel() {
   }
 
   const toggleExpand = (id: string) =>
-    setExpandedUserId(prev => (prev === id ? null : id))
+    setExpandedUserId((prev) => (prev === id ? null : id))
 
   return (
     <AppLayout title="User Management">
@@ -343,7 +248,8 @@ export default function AdminPanel() {
         <h2 className="text-xl font-bold text-gray-900">User Management</h2>
         <p className="text-sm text-gray-500 mt-0.5">
           Manage subscriptions and per-user permission overrides. Use{' '}
-          <span className="font-medium text-indigo-600">Roles &amp; Permissions</span> to control role-level access.
+          <span className="font-medium text-indigo-600">Roles &amp; Permissions</span> to control
+          role-level access.
         </p>
       </div>
 
@@ -357,7 +263,7 @@ export default function AdminPanel() {
 
         {isLoading ? (
           <div className="p-4 space-y-3">
-            {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+            {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
           </div>
         ) : users.length === 0 ? (
           <EmptyState
@@ -367,21 +273,25 @@ export default function AdminPanel() {
           />
         ) : (
           <>
+            {/* Column headers */}
             <div className="px-6 py-2.5 flex items-center gap-4 bg-slate-50 border-b border-slate-100">
               <div className="w-9 shrink-0" />
               <div className="flex-1 min-w-0">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">User / Role</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  User / Role
+                </span>
               </div>
               <div className="w-36 shrink-0 text-right">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Subscription</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Subscription
+                </span>
               </div>
-              {/* delete column + expand toggle column */}
               <div className="w-8 shrink-0" />
               <div className="w-8 shrink-0" />
             </div>
 
             <ul className="divide-y divide-gray-100">
-              {users.map(user => {
+              {users.map((user) => {
                 const isSelf     = user.id === userId
                 const isExpanded = expandedUserId === user.id
 
@@ -422,8 +332,8 @@ export default function AdminPanel() {
                         </Button>
                       </div>
 
-                      {/* Delete button — hidden for self and Admin accounts (both are protected) */}
-                      {!isSelf && user.role !== 'Admin' && (
+                      {/* Delete — hidden for self and Admin accounts */}
+                      {!isSelf && user.role !== 'Admin' ? (
                         <button
                           type="button"
                           onClick={() => setPendingDeleteUser(user)}
@@ -432,9 +342,7 @@ export default function AdminPanel() {
                         >
                           <Trash2 size={14} />
                         </button>
-                      )}
-                      {/* Reserve the column space for protected rows so layout stays stable */}
-                      {(isSelf || user.role === 'Admin') && (
+                      ) : (
                         <div className="w-8 h-8 shrink-0" />
                       )}
 
@@ -445,17 +353,11 @@ export default function AdminPanel() {
                         title={isExpanded ? 'Hide permissions' : 'Manage permissions'}
                         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
                       >
-                        {isExpanded
-                          ? <ChevronUp size={15} />
-                          : <ChevronDown size={15} />
-                        }
+                        {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                       </button>
                     </div>
 
-                    {/* Permission overrides panel */}
-                    {isExpanded && (
-                      <UserPermissionsPanel userId={user.id} isSelf={isSelf} />
-                    )}
+                    {isExpanded && <UserPermissionsPanel userId={user.id} isSelf={isSelf} />}
                   </li>
                 )
               })}
@@ -466,9 +368,9 @@ export default function AdminPanel() {
               totalPages={totalPages}
               totalCount={totalCount}
               pageSize={pageSize}
-              onPageChange={p => setPage(p)}
+              onPageChange={(p) => setPage(p)}
               pageSizeOptions={[10, 25, 50, 100]}
-              onPageSizeChange={s => { setPageSize(s); setPage(1) }}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
             />
           </>
         )}
@@ -479,12 +381,12 @@ export default function AdminPanel() {
         <ShieldCheck size={14} className="shrink-0 mt-0.5 text-slate-400" />
         <p className="text-[11px] text-slate-500 leading-relaxed">
           Click the <strong>chevron</strong> next to any user to manage per-user permission overrides.
-          Overrides take precedence over the role's default permissions — granting gives a user extra access,
-          revoking removes access even if their role has it. Changes take effect immediately.
+          Overrides take precedence over the role's default permissions — granting gives extra access,
+          revoking removes access even if the role has it. Changes take effect immediately.
         </p>
       </div>
 
-      {/* Delete confirmation modal — rendered at layout root so it sits above everything */}
+      {/* Delete confirmation modal */}
       {pendingDeleteUser && (
         <ConfirmDeleteModal
           user={pendingDeleteUser}

@@ -9,6 +9,7 @@ import {
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore, type AppNotification } from '../store/notificationStore'
 import { usePermissions } from '../hooks/usePermissions'
+import { timeAgo } from '../utils/format'
 import AiAssistant from './AiAssistant'
 import UserProfileDropdown from './UserProfileDropdown'
 import SidebarUserProfile from './SidebarUserProfile'
@@ -72,16 +73,6 @@ const NOTIF_ICON: Record<AppNotification['type'], { icon: React.ReactNode; bg: s
   confirm_needed:   { icon: <Clock             size={14} />, bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' },
   org_added:        { icon: <UserPlus          size={14} />, bg: 'rgba(16,185,129,0.1)',  color: '#10b981' },
   org_removed:      { icon: <UserMinus         size={14} />, bg: 'rgba(239,68,68,0.1)',   color: '#ef4444' },
-}
-
-function timeAgo(date: Date): string {
-  const diff = Date.now() - date.getTime()
-  const mins  = Math.floor(diff / 60_000)
-  const hours = Math.floor(diff / 3_600_000)
-  if (mins  < 1)  return 'Just now'
-  if (mins  < 60) return `${mins}m ago`
-  if (hours < 24) return `${hours}h ago`
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────

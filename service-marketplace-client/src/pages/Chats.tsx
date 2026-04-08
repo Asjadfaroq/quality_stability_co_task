@@ -5,6 +5,7 @@ import api from '../api/axios'
 import AppLayout from '../components/AppLayout'
 import ChatPanel from '../components/ChatPanel'
 import { EmptyState, Pagination, SkeletonCard } from '../components/ui'
+import { timeAgo } from '../utils/format'
 import { useAuthStore } from '../store/authStore'
 import type { PagedResult } from '../types'
 
@@ -23,18 +24,6 @@ const STATUS_STYLE: Record<string, { label: string; color: string; bg: string }>
   PendingConfirmation:{ label: 'Confirming',  color: '#d97706', bg: 'rgba(217,119,6,0.08)' },
   Completed:          { label: 'Completed',   color: '#059669', bg: 'rgba(5,150,105,0.08)' },
   Pending:            { label: 'Pending',     color: '#6b7280', bg: 'rgba(107,114,128,0.08)' },
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins  = Math.floor(diff / 60_000)
-  const hours = Math.floor(diff / 3_600_000)
-  const days  = Math.floor(diff / 86_400_000)
-  if (mins  < 1)  return 'Just now'
-  if (mins  < 60) return `${mins}m ago`
-  if (hours < 24) return `${hours}h ago`
-  if (days  < 7)  return `${days}d ago`
-  return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 const DEFAULT_PAGE_SIZE = 20

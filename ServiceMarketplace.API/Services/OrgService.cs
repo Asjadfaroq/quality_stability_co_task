@@ -68,20 +68,32 @@ public class OrgService : IOrgService
         if (alreadyOwns)
             throw new InvalidOperationException("You already have an organization.");
 
-        var org = new Organization
+        // The SQL Server retry strategy requires that any user-initiated transaction
+        // is executed via the execution strategy so the entire block (including the
+        // BEGIN/COMMIT) can be retried on transient failures.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        Organization org = null!;
+
+        await strategy.ExecuteAsync(async () =>
         {
-            Id        = Guid.NewGuid(),
-            Name      = name.Trim(),
-            OwnerId   = providerAdminId,
-            CreatedAt = DateTime.UtcNow,
-        };
+            await using var tx = await _db.Database.BeginTransactionAsync();
 
-        _db.Organizations.Add(org);
+            org = new Organization
+            {
+                Id        = Guid.NewGuid(),
+                Name      = name.Trim(),
+                OwnerId   = providerAdminId,
+                CreatedAt = DateTime.UtcNow,
+            };
 
-        var owner = await _db.Users.FindAsync(providerAdminId);
-        owner!.OrganizationId = org.Id;
+            _db.Organizations.Add(org);
 
-        await _db.SaveChangesAsync();
+            var owner = await _db.Users.FindAsync(providerAdminId);
+            owner!.OrganizationId = org.Id;
+
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+        });
 
         return new OrgDto
         {
@@ -119,14 +131,15 @@ public class OrgService : IOrgService
         if (target.OrganizationId.HasValue)
             throw new InvalidOperationException("This user already belongs to another organization.");
 
-        target.OrganizationId = orgId;
-        await _db.SaveChangesAsync();
-
+        // Fetch org name before saving so we avoid an extra round-trip after commit.
         var orgName = await _db.Organizations
             .AsNoTracking()
             .Where(o => o.Id == orgId)
             .Select(o => o.Name)
             .FirstOrDefaultAsync() ?? string.Empty;
+
+        target.OrganizationId = orgId;
+        await _db.SaveChangesAsync();
 
         await _hub.Clients
             .Group(target.Id.ToString())

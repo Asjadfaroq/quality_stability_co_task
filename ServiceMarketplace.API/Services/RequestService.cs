@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ServiceMarketplace.API.Data;
@@ -18,16 +19,44 @@ public class RequestService : IRequestService
     private readonly IHubContext<NotificationHub> _hub;
     private readonly ILogger<RequestService> _logger;
 
+    // Single source-of-truth DTO projection used by every EF Core query in this
+    // service.  Defining it as an Expression<> (not a compiled Func<>) lets EF
+    // Core translate the selector to SQL rather than running it in memory.
+    //
+    // All read paths (GetAll, GetCompleted, GetById, GetNearby) share this
+    // expression via .Select(DtoSelector), while write paths (Create, Accept,
+    // Complete, Confirm) use the compiled ProjectToDto() helper on the already-
+    // materialised tracked entity.
+    private static readonly Expression<Func<ServiceRequest, ServiceRequestDto>> DtoSelector =
+        r => new ServiceRequestDto
+        {
+            Id                   = r.Id,
+            CustomerId           = r.CustomerId,
+            Title                = r.Title,
+            Description          = r.Description,
+            Category             = r.Category,
+            Latitude             = r.Latitude,
+            Longitude            = r.Longitude,
+            Status               = r.Status.ToString(),
+            AcceptedByProviderId = r.AcceptedByProviderId,
+            CreatedAt            = r.CreatedAt,
+            UpdatedAt            = r.UpdatedAt,
+        };
+
+    // Compiled once from DtoSelector for in-process use on tracked entities.
+    private static readonly Func<ServiceRequest, ServiceRequestDto> ProjectToDto =
+        DtoSelector.Compile();
+
     public RequestService(
         AppDbContext db,
         ISubscriptionService subscriptionService,
         IHubContext<NotificationHub> hub,
         ILogger<RequestService> logger)
     {
-        _db = db;
+        _db                  = db;
         _subscriptionService = subscriptionService;
-        _hub = hub;
-        _logger = logger;
+        _hub                 = hub;
+        _logger              = logger;
     }
 
     public async Task<ServiceRequestDto> CreateAsync(Guid customerId, CreateRequestDto dto)
@@ -45,7 +74,7 @@ public class RequestService : IRequestService
             Longitude   = dto.Longitude,
             Status      = RequestStatus.Pending,
             CreatedAt   = DateTime.UtcNow,
-            UpdatedAt   = DateTime.UtcNow
+            UpdatedAt   = DateTime.UtcNow,
         };
 
         _db.ServiceRequests.Add(request);
@@ -59,13 +88,14 @@ public class RequestService : IRequestService
             {
                 requestId = request.Id,
                 title     = request.Title,
-                category  = request.Category
+                category  = request.Category,
             });
 
         return ProjectToDto(request);
     }
 
-    public async Task<PagedResult<ServiceRequestDto>> GetAllAsync(Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null)
+    public async Task<PagedResult<ServiceRequestDto>> GetAllAsync(
+        Guid userId, UserRole role, int page, int pageSize, string? statusFilter = null)
     {
         var query = _db.ServiceRequests.AsNoTracking();
 
@@ -73,42 +103,30 @@ public class RequestService : IRequestService
         {
             UserRole.Customer => query.Where(r => r.CustomerId == userId),
             UserRole.Admin    => query,
-            // Provider: narrow by statusFilter if supplied, otherwise return all visible requests.
+            // Provider: narrow by statusFilter when supplied, otherwise show
+            // all Pending requests plus those the provider has personally accepted.
             _ => statusFilter switch
             {
                 "Pending" => query.Where(r => r.Status == RequestStatus.Pending),
                 "Active"  => query.Where(r =>
-                                 (r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation)
+                                 (r.Status == RequestStatus.Accepted ||
+                                  r.Status == RequestStatus.PendingConfirmation)
                                  && r.AcceptedByProviderId == userId),
                 _         => query.Where(r =>
                                  r.Status == RequestStatus.Pending ||
-                                 ((r.Status == RequestStatus.Accepted || r.Status == RequestStatus.PendingConfirmation)
+                                 ((r.Status == RequestStatus.Accepted ||
+                                   r.Status == RequestStatus.PendingConfirmation)
                                   && r.AcceptedByProviderId == userId))
             }
         };
 
         var totalCount = await query.CountAsync();
 
-        // Project directly to DTO in SQL — avoids loading the full entity (including
-        // Description nvarchar(2000)) just to re-map it in memory afterwards.
         var items = await query
             .OrderByDescending(r => r.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(r => new ServiceRequestDto
-            {
-                Id                   = r.Id,
-                CustomerId           = r.CustomerId,
-                Title                = r.Title,
-                Description          = r.Description,
-                Category             = r.Category,
-                Latitude             = r.Latitude,
-                Longitude            = r.Longitude,
-                Status               = r.Status.ToString(),
-                AcceptedByProviderId = r.AcceptedByProviderId,
-                CreatedAt            = r.CreatedAt,
-                UpdatedAt            = r.UpdatedAt
-            })
+            .Select(DtoSelector)
             .ToListAsync();
 
         return new PagedResult<ServiceRequestDto>
@@ -116,11 +134,12 @@ public class RequestService : IRequestService
             Items      = items,
             Page       = page,
             PageSize   = pageSize,
-            TotalCount = totalCount
+            TotalCount = totalCount,
         };
     }
 
-    public async Task<PagedResult<ServiceRequestDto>> GetCompletedAsync(Guid providerId, int page, int pageSize)
+    public async Task<PagedResult<ServiceRequestDto>> GetCompletedAsync(
+        Guid providerId, int page, int pageSize)
     {
         var query = _db.ServiceRequests
             .AsNoTracking()
@@ -134,20 +153,7 @@ public class RequestService : IRequestService
             .OrderByDescending(r => r.UpdatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(r => new ServiceRequestDto
-            {
-                Id                   = r.Id,
-                CustomerId           = r.CustomerId,
-                Title                = r.Title,
-                Description          = r.Description,
-                Category             = r.Category,
-                Latitude             = r.Latitude,
-                Longitude            = r.Longitude,
-                Status               = r.Status.ToString(),
-                AcceptedByProviderId = r.AcceptedByProviderId,
-                CreatedAt            = r.CreatedAt,
-                UpdatedAt            = r.UpdatedAt
-            })
+            .Select(DtoSelector)
             .ToListAsync();
 
         return new PagedResult<ServiceRequestDto>
@@ -155,7 +161,7 @@ public class RequestService : IRequestService
             Items      = items,
             Page       = page,
             PageSize   = pageSize,
-            TotalCount = totalCount
+            TotalCount = totalCount,
         };
     }
 
@@ -163,21 +169,9 @@ public class RequestService : IRequestService
     {
         var request = await _db.ServiceRequests
             .AsNoTracking()
-            .Select(r => new ServiceRequestDto
-            {
-                Id                   = r.Id,
-                CustomerId           = r.CustomerId,
-                Title                = r.Title,
-                Description          = r.Description,
-                Category             = r.Category,
-                Latitude             = r.Latitude,
-                Longitude            = r.Longitude,
-                Status               = r.Status.ToString(),
-                AcceptedByProviderId = r.AcceptedByProviderId,
-                CreatedAt            = r.CreatedAt,
-                UpdatedAt            = r.UpdatedAt
-            })
-            .FirstOrDefaultAsync(r => r.Id == requestId)
+            .Where(r => r.Id == requestId)
+            .Select(DtoSelector)
+            .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("Request not found.");
 
         if (role == UserRole.Customer && request.CustomerId != userId)
@@ -197,32 +191,19 @@ public class RequestService : IRequestService
         var lngMax = (decimal)(lng + delta);
 
         // Bounding-box pre-filter is covered by IX_ServiceRequests_Status_Latitude_Longitude.
-        // Project to DTO inside SQL to avoid loading unnecessary columns.
         var candidates = await _db.ServiceRequests
             .AsNoTracking()
             .Where(r =>
                 r.Status    == RequestStatus.Pending &&
                 r.Latitude  >= latMin && r.Latitude  <= latMax &&
                 r.Longitude >= lngMin && r.Longitude <= lngMax)
-            .Select(r => new ServiceRequestDto
-            {
-                Id                   = r.Id,
-                CustomerId           = r.CustomerId,
-                Title                = r.Title,
-                Description          = r.Description,
-                Category             = r.Category,
-                Latitude             = r.Latitude,
-                Longitude            = r.Longitude,
-                Status               = r.Status.ToString(),
-                AcceptedByProviderId = r.AcceptedByProviderId,
-                CreatedAt            = r.CreatedAt,
-                UpdatedAt            = r.UpdatedAt
-            })
+            .Select(DtoSelector)
             .ToListAsync();
 
         // Haversine exact filter runs in-process after the cheap bounding-box pre-filter.
         return candidates
-            .Where(r => GeoHelper.CalculateDistance(lat, lng, (double)r.Latitude, (double)r.Longitude) <= radiusKm)
+            .Where(r => GeoHelper.CalculateDistance(
+                lat, lng, (double)r.Latitude, (double)r.Longitude) <= radiusKm)
             .ToList();
     }
 
@@ -248,7 +229,8 @@ public class RequestService : IRequestService
             throw new ConflictException("Request was accepted by another provider. Please refresh.");
         }
 
-        _logger.LogInformation("Request {RequestId} accepted by provider {ProviderId}", requestId, providerId);
+        _logger.LogInformation(
+            "Request {RequestId} accepted by provider {ProviderId}", requestId, providerId);
 
         await _hub.Clients
             .Group("providers")
@@ -277,14 +259,17 @@ public class RequestService : IRequestService
             throw new InvalidOperationException("Request must be accepted before it can be completed.");
 
         if (request.AcceptedByProviderId != providerId)
-            throw new UnauthorizedAccessException("Only the provider who accepted this request can complete it.");
+            throw new UnauthorizedAccessException(
+                "Only the provider who accepted this request can complete it.");
 
         request.Status    = RequestStatus.PendingConfirmation;
         request.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("Request {RequestId} marked PendingConfirmation by provider {ProviderId}", requestId, providerId);
+        _logger.LogInformation(
+            "Request {RequestId} marked PendingConfirmation by provider {ProviderId}",
+            requestId, providerId);
 
         await _hub.Clients
             .Group(request.CustomerId.ToString())
@@ -304,7 +289,8 @@ public class RequestService : IRequestService
             ?? throw new KeyNotFoundException("Request not found.");
 
         if (request.CustomerId != customerId)
-            throw new UnauthorizedAccessException("Only the customer who created this request can confirm completion.");
+            throw new UnauthorizedAccessException(
+                "Only the customer who created this request can confirm completion.");
 
         if (request.Status != RequestStatus.PendingConfirmation)
             throw new InvalidOperationException("Request is not awaiting confirmation.");
@@ -314,7 +300,8 @@ public class RequestService : IRequestService
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("Request {RequestId} confirmed completed by customer {CustomerId}", requestId, customerId);
+        _logger.LogInformation(
+            "Request {RequestId} confirmed completed by customer {CustomerId}", requestId, customerId);
 
         if (request.AcceptedByProviderId.HasValue)
             await _hub.Clients
@@ -327,21 +314,4 @@ public class RequestService : IRequestService
 
         return ProjectToDto(request);
     }
-
-    // Used only for tracked entities returned after write operations (Accept, Complete, Confirm, Create)
-    // where the entity is already materialised and we cannot project in SQL.
-    private static ServiceRequestDto ProjectToDto(ServiceRequest r) => new()
-    {
-        Id                   = r.Id,
-        CustomerId           = r.CustomerId,
-        Title                = r.Title,
-        Description          = r.Description,
-        Category             = r.Category,
-        Latitude             = r.Latitude,
-        Longitude            = r.Longitude,
-        Status               = r.Status.ToString(),
-        AcceptedByProviderId = r.AcceptedByProviderId,
-        CreatedAt            = r.CreatedAt,
-        UpdatedAt            = r.UpdatedAt
-    };
 }
