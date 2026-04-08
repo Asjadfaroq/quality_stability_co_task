@@ -1,34 +1,191 @@
-# Service Marketplace Platform
+# Service Marketplace Platform (Senior Fullstack Take-Home)
 
-A full-stack service marketplace where customers post service requests, providers accept and complete them, and an admin manages users and permissions. Features role-based access control, subscription gating, geolocation filtering, and AI-enhanced descriptions.
+This repository contains my implementation of the **Service Marketplace Platform (MVP)** from `Recruitment_Task.md`.
+
+The platform allows:
+- Customers to create service requests
+- Providers to discover and accept nearby requests
+- API-level RBAC with dynamic permissions
+- Subscription-based feature gating
+- AI-powered request assistance
+
+## Live URL
+
+- Frontend: [https://yellow-sand-0fab52c03.4.azurestaticapps.net/](https://yellow-sand-0fab52c03.4.azurestaticapps.net/)
 
 ---
 
-## 1. Setup Instructions
+## Requirement Coverage (From Recruitment Task)
 
-### Prerequisites
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- [Node.js 20+](https://nodejs.org)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop) (for Docker setup)
-- SQL Server (local) or Docker (handles it automatically)
+### 1) Authentication & RBAC
+- JWT authentication implemented with ASP.NET Core Identity.
+- Roles implemented: `Admin`, `ProviderAdmin`, `ProviderEmployee`, `Customer`.
+- Access control is enforced at API level via `[Authorize]` + custom `[RequirePermission("...")]`.
+- UI role separation exists (Customer/Provider/Admin flows), but API remains source of truth.
+
+### 2) Core Functionality
+- **Customer**
+  - Create request (`title`, `description`, `location`)
+  - View own requests and statuses
+- **Provider**
+  - View available requests
+  - Retrieve nearby requests by radius
+  - Accept request
+  - Update status to complete
+- **Lifecycle**
+  - Implemented flow: `Pending -> Accepted -> PendingConfirmation -> Completed`
+  - Includes auto-confirm background worker for stale confirmation cases
+
+### 3) Geolocation
+- Latitude/longitude stored per request.
+- Nearby search implemented with radius filtering (bounding-box + Haversine).
+- Map UI added as a bonus (React Leaflet).
+
+### 4) Subscription / Feature Gating
+- Free tier request cap enforced (default: 3 requests).
+- Paid tier has no request limit.
+- Real Stripe integration implemented (beyond assignment's "simulate if needed" baseline).
+
+### 5) AI Feature
+- AI request description enhancement + category suggestion implemented.
+- AI help chat assistant implemented as additional AI feature.
+- Graceful fallback is included if external AI call fails.
+
+### 6) Frontend
+- Functional frontend with role-aware pages/flows.
+- Supports core actions: create, list, accept, complete, confirm, manage.
+- Clear role-specific views for customer/provider/admin capabilities.
+
+### 7) API & Backend Design
+- Clean, layered architecture with clear responsibility separation.
+- SQL schema managed via EF Core migrations.
+- Maintainable service-based design with interfaces and DI.
+
+### 8) Advanced RBAC (Bonus)
+- Permission model is dynamic, not hardcoded strictly by role.
+- Permission keys include examples from task:
+  - `request.create`
+  - `request.accept`
+  - `request.complete`
+  - `request.view_all`
+- Admin can grant/revoke role and user-level permissions.
+- ProviderAdmin can manage scoped employee permissions inside own organization.
+- ProviderEmployee receives limited permissions.
 
 ---
 
-### Option A — Run Locally
+## Deliverables Checklist
 
-**1. Clone the repo**
-```bash
-git clone <repo-url>
-cd quality_stability_co_task
+### 1) Source Code
+- This GitHub repository contains full source for backend + frontend.
+
+### 2) README Includes
+- Setup instructions (local + Docker)
+- Architecture overview
+- Key design decisions and trade-offs
+- RBAC design explanation (storage + enforcement)
+- Improvements with more time
+
+### 3) API Documentation
+- Swagger is enabled and available at `/swagger` when API is running.
+
+### 4) Run Instructions
+- Docker-based run path is included below.
+- Local run path is also included.
+
+---
+
+## Architecture Overview
+
+### High-Level Layers
+- **Presentation**: Controllers, SignalR hubs, middleware, rate limiting
+- **Application**: Business services, validators, background jobs
+- **Infrastructure**: EF Core, Redis, Stripe, AI provider, logging
+- **Domain**: Entities, enums, constants, contracts
+
+### Project Structure
+
+```text
+.
+├── ServiceMarketplace.API/      # ASP.NET Core API
+├── ServiceMarketplace.Client/   # React + TypeScript frontend
+├── Documentation.md             # Detailed technical walkthrough
+├── Recruitment_Task.md          # Assignment brief
+├── docker-compose.yml
+└── run.sh
 ```
 
-**2. Configure secrets**
+---
 
-Create `ServiceMarketplace.API/appsettings.json` (git-ignored) with:
+## Tech Stack
+
+### Backend
+- ASP.NET Core 10 Web API
+- Entity Framework Core + SQL Server
+- ASP.NET Core Identity + JWT
+- FluentValidation
+- Redis (cache + distributed limiter support)
+- SignalR
+- Serilog + Azure Application Insights
+- Stripe
+- Swagger / OpenAPI
+
+### Frontend
+- React + TypeScript + Vite
+- Zustand
+- Axios
+- SignalR client
+- React Leaflet
+
+### Platform / Ops
+- Azure App Service (API)
+- Azure Static Web Apps (Frontend)
+- Azure SQL Server
+- Upstash Redis
+- GitHub Actions CI/CD
+
+---
+
+## Setup Instructions
+
+## Option A: Docker (Recommended)
+
+Set required environment variables:
+
+```bash
+export HUGGINGFACE_API_KEY=hf_your_key_here
+export STRIPE_SECRET_KEY=sk_test_your_key
+export STRIPE_WEBHOOK_SECRET=whsec_your_secret
+export STRIPE_PRICE_ID=price_your_price_id
+export JWT_KEY=your-secret-key-minimum-32-characters-long!!
+```
+
+Run:
+
+```bash
+docker compose up --build
+```
+
+Expected endpoints:
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8080`
+- Swagger: `http://localhost:8080/swagger`
+
+## Option B: Local Development
+
+### Prerequisites
+- .NET 10 SDK
+- Node.js 20+
+- SQL Server
+- Redis (optional but recommended)
+
+Create `ServiceMarketplace.API/appsettings.Development.json`:
+
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost,1433;Database=ServiceMarketplaceDb;User Id=sa;Password=YourPassword;TrustServerCertificate=True;"
+    "DefaultConnection": "Server=localhost,1433;Database=ServiceMarketplaceDb;User Id=sa;Password=YourPassword;TrustServerCertificate=True;",
+    "Redis": "localhost:6379"
   },
   "Jwt": {
     "Key": "your-secret-key-minimum-32-characters-long!!",
@@ -39,156 +196,101 @@ Create `ServiceMarketplace.API/appsettings.json` (git-ignored) with:
   "HuggingFace": {
     "ApiKey": "hf_your_key_here"
   },
+  "Stripe": {
+    "SecretKey": "sk_test_your_key",
+    "WebhookSecret": "whsec_your_secret",
+    "PriceId": "price_your_price_id"
+  },
+  "ApplicationInsights": {
+    "ConnectionString": ""
+  },
   "Subscription": {
     "FreeRequestLimit": 3
   }
 }
 ```
 
-**3. Apply database migrations**
+Run backend:
+
 ```bash
 cd ServiceMarketplace.API
+dotnet restore
 dotnet ef database update
+dotnet run
 ```
 
-**4. Start everything (API + frontend)**
+Run frontend:
+
 ```bash
-cd ..
-./run.sh
+cd ServiceMarketplace.Client
+npm install
+npm run dev
 ```
-
-- API: `http://localhost:5132`
-- Swagger UI: `http://localhost:5132/swagger`
-- Frontend: `http://localhost:5173`
 
 ---
 
-### Option B — Docker
+## RBAC Design (How Permissions Are Stored and Enforced)
 
-**1. Set your HuggingFace API key**
-```bash
-export HUGGINGFACE_API_KEY=hf_your_key_here
-```
+### Storage Model
+- `RolePermissions`: default permission set for each role
+- `UserPermissions`: per-user overrides (`Granted=true` add, `Granted=false` revoke)
+- Effective permissions = role defaults +/- user overrides
 
-**2. Start all services**
-```bash
-docker compose up --build
-```
+### Enforcement Model
+- Endpoints use `[RequirePermission("permission.name")]`.
+- Middleware/filter extracts `userId` from JWT and checks effective permissions.
+- Denied access returns `403 Forbidden` with a consistent permission-denied response.
+- Admin role short-circuits permission checks by design.
 
-- Frontend: `http://localhost:3000`
-- API: `http://localhost:8080`
-- Swagger: `http://localhost:8080/swagger`
-
-> The database migrations run automatically on API startup via EF Core.
-
----
-
-## 2. Architecture Overview
-
-```
-┌─────────────────────┐         ┌──────────────────────────┐
-│   React Frontend    │ ──JWT──▶│    ASP.NET Core 10 API   │
-│   (Vite + TS)       │◀─JSON───│    (REST + Swagger)       │
-└─────────────────────┘         └───────────┬──────────────┘
-                                             │ EF Core
-                                             ▼
-                                  ┌─────────────────────┐
-                                  │   SQL Server (Azure) │
-                                  └─────────────────────┘
-```
-
-**Request flow:**
-1. User logs in → API issues a JWT with `userId`, `email`, `role` claims
-2. Frontend stores JWT in `localStorage` via Zustand (persisted)
-3. Axios attaches `Authorization: Bearer <token>` on every request
-4. `[RequirePermission]` attribute resolves the user's effective permissions before the controller runs
-5. Controllers delegate to services → services interact with EF Core → SQL Server
-
-**Layer responsibilities:**
-| Layer | Responsibility |
-|---|---|
-| Controllers | Route HTTP, validate input, return status codes |
-| Services | Business logic, state transitions, subscription gating |
-| Repositories (via EF Core) | Data access, migrations, seeding |
-| Middleware | Global exception handling, never exposes stack traces |
+### Dynamic Permission Management
+- Admin can:
+  - Change user roles
+  - Change role-permission matrix
+  - Set per-user permission overrides
+- ProviderAdmin can manage employee permissions within own organization scope.
 
 ---
 
-## 3. Key Design Decisions & Trade-offs
+## Key Design Decisions & Trade-Offs
 
-### JWT over Sessions
-Stateless authentication scales horizontally — no session store needed. JWTs carry `userId`, `email`, and `role` claims so the API never looks up the session on every request.
-
-### Haversine over PostGIS
-Implemented Haversine in `GeoHelper.cs` with a SQL bounding-box pre-filter. No PostGIS extension required, works on any SQL Server instance. Trade-off: slightly less accurate than PostGIS spherical geometry at very long distances, but sufficient for service marketplace radius queries under 200km.
-
-### Simulated Payments
-Subscription tier (`Free` / `Paid`) is a field on the `User` entity, toggled by Admin. No real payment gateway is integrated. In production this would be replaced with Stripe webhooks updating the `SubTier` field on successful payment.
-
-### AI — HuggingFace Inference API (with mock fallback)
-Uses `Qwen/Qwen2.5-7B-Instruct-Turbo` via HuggingFace's router. The AI call is isolated to `POST /api/ai/enhance-description` — it is never called automatically on request creation, only when the user explicitly clicks "Enhance with AI" in the UI. If the AI call fails for any reason, the service silently falls back to a keyword-based mock so the user experience is never broken.
-
-### Clean Folder Structure over Full Clean Architecture
-Controllers → Services → EF Core directly. Avoids the overhead of repository interfaces, domain events, and application/domain layer separation for an MVP. The trade-off is slightly lower testability in isolation, acceptable for this scope.
+- **Permission-first authorization** over role-string-only checks for flexibility.
+- **Two-tier caching (memory + Redis)** for hot-path permission checks; trade-off is explicit cache invalidation complexity.
+- **EF Core code-first** for schema/version control; trade-off is migration discipline.
+- **Real Stripe integration** (richer than assignment baseline); trade-off is extra external dependency complexity.
+- **SignalR for real-time UX**; trade-off is additional connection/state handling.
+- **Resilience + fallbacks** (Redis, AI) to keep user flows available under partial failures.
 
 ---
 
-## 4. RBAC Design
+## Bonus Items Implemented
 
-### Four Roles
-| Role | Value | Description |
-|---|---|---|
-| Admin | 0 | Platform superuser — manages users, subscriptions, all permissions |
-| ProviderAdmin | 1 | Manages their own org's employee permissions + provider actions |
-| ProviderEmployee | 2 | Accept and complete service requests |
-| Customer | 3 | Create and view their own service requests |
-
-### Permission Storage
-**`RolePermissions` table** — seeded defaults per role:
-- `Customer` → `request.create`
-- `ProviderAdmin` → `request.accept`, `request.complete`, `request.view_all`
-- `ProviderEmployee` → `request.accept`, `request.complete`
-
-**`UserPermissions` table** — dynamic per-user overrides:
-- `granted = true` → adds a permission the role doesn't have by default
-- `granted = false` → revokes a permission the role has by default
-
-### Permission Resolution (IPermissionService)
-```
-HasPermission(userId, permissionName):
-  1. Load user's role → get role's default permissions from RolePermissions
-  2. Load user's overrides from UserPermissions
-  3. Apply grants (add) and revokes (remove)
-  4. Return true if permissionName is in the final set
-```
-
-### Enforcement
-Every protected endpoint uses `[RequirePermission("permission.name")]` instead of `[Authorize(Roles="...")]`. The attribute calls `IPermissionService.HasPermission` and returns `403 Forbidden` if denied. This means permissions can be changed at runtime without redeploying.
+Beyond baseline requirements:
+- Dockerized setup
+- CI/CD pipeline
+- Background jobs
+- Caching strategy
+- Logging + error handling strategy
+- Real-time updates with WebSockets (SignalR)
 
 ---
 
-## 5. What I Would Improve With More Time
+## API Documentation
 
-**Real payment gateway**
-Replace the `SubTier` toggle with Stripe webhooks. On successful payment, update `SubTier = Paid`. On subscription cancellation, revert to `Free`.
+- Swagger/OpenAPI UI is available at `/swagger` when API is running.
 
-**SignalR for real-time notifications**
-When a provider accepts or completes a request, broadcast a WebSocket event to the customer via a SignalR hub. The customer would see a live toast notification without polling.
+---
 
-**Customer completion confirmation**
-Add a `PendingConfirmation` status between `Accepted` and `Completed`. Provider marks complete → customer receives SignalR notification → customer confirms → status becomes `Completed`. Auto-confirm after 24 hours via a background job.
+## What I Would Improve With More Time
 
-**Audit log table**
-Record every permission change (who changed what, when, old value, new value). Critical for compliance and debugging in a production RBAC system.
+- Add end-to-end integration tests for full request lifecycle and RBAC edge cases.
+- Add prebuilt Application Insights/Kusto dashboards for audit/incident workflows.
+- Add stronger outbox/event-driven patterns for high-scale consistency paths.
+- Add attachment/file proof flow for request completion.
+- Expand operational runbooks and alerting thresholds.
 
-**Redis cache for permission lookups**
-Cache `HasPermission(userId, permissionName)` results in Redis with a short TTL (60s). Invalidate on permission change. This removes a DB round-trip from every protected API call.
+---
 
-**Rate limiting on AI endpoint**
-Add ASP.NET Core rate limiting middleware on `POST /api/ai/enhance-description` to prevent abuse of the HuggingFace quota.
+## Additional Notes
 
-**Spatial index for geo queries at scale**
-Add a computed geography column with a spatial index for the nearby query. At 100k+ requests, the current bounding-box + Haversine approach would need replacing with `ST_DWithin` (PostGIS) or Redis `GEORADIUS`.
-
-**File uploads for request completion**
-Allow providers to attach photos when marking a request complete, stored in Azure Blob Storage. Customers would see proof of work on their completed request cards.
+- Full deep-dive technical documentation is available in `Documentation.md`.
+- This README is aligned directly to the requirements and deliverables in `Recruitment_Task.md`.
