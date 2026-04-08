@@ -357,31 +357,26 @@ export default function CustomerRequests() {
             <h2 className="text-xl font-bold text-slate-900">My Requests</h2>
             <p className="text-sm text-slate-500 mt-0.5">Welcome back, {email?.split('@')[0]}</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* View mode toggle */}
-            <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
-                  viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <List size={13} /> List
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('map')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
-                  viewMode === 'map' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <Map size={13} /> Map
-              </button>
-            </div>
-            <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
-              New Request
-            </Button>
+          {/* View mode toggle — right-aligned */}
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
+                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <List size={13} /> List
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('map')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
+                viewMode === 'map' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <Map size={13} /> Map
+            </button>
           </div>
         </div>
 
@@ -448,8 +443,13 @@ export default function CustomerRequests() {
         {/* Requests list */}
         <Card padding={false}>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-slate-900">All Requests</h3>
-            <span className="text-xs text-slate-400">{totalCount} total</span>
+            <div className="flex items-center gap-3">
+              <h3 className="text-base font-semibold text-slate-900">All Requests</h3>
+              <span className="text-xs text-slate-400">{totalCount} total</span>
+            </div>
+            <Button icon={<Plus size={15} />} size="sm" onClick={() => setShowModal(true)}>
+              New Request
+            </Button>
           </div>
 
           {isLoading ? (
