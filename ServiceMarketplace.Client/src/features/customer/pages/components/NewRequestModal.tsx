@@ -193,12 +193,12 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
                   <p className="mt-1 text-xs leading-relaxed text-amber-800/90">
                     Upgrade to Pro for unlimited requests, or free a slot by deleting a request you no longer need from My Requests.
                   </p>
-                  <Link
-                    to={ROUTES.CUSTOMER_SUBSCRIPTION}
+                  <a
+                    href={ROUTES.CUSTOMER_SUBSCRIPTION}
                     className="mt-2 inline-flex text-xs font-semibold text-indigo-700 hover:text-indigo-800 hover:underline"
                   >
                     View subscription &amp; upgrade →
-                  </Link>
+                  </a>
                 </div>
               </div>
             )}
