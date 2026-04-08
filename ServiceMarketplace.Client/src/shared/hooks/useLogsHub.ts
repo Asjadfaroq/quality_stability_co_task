@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useCallback } from 'react'
 import * as signalR from '@microsoft/signalr'
 import { useAuthStore } from '../store/authStore'
-import type { LogEntry } from '../types'
+import type { LogCategory, LogEntry } from '../types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

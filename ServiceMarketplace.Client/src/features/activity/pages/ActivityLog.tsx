@@ -1,6 +1,6 @@
 import {
   Briefcase, Building2, CheckCircle2, CreditCard,
-  KeyRound, LogIn, ShieldCheck, Trash2, UserCheck,
+  KeyRound, LogIn, ShieldCheck, UserCheck,
   UserMinus, UserPlus, UserX, Zap,
 } from 'lucide-react'
 
