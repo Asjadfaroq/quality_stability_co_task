@@ -137,47 +137,49 @@ export function UserPermissionsAccordion({
   return (
     <li className={isSelf ? 'opacity-60' : ''}>
       <div
-        className={`px-6 py-4 grid grid-cols-[36px_1fr_auto_32px_32px] gap-4 items-center transition-colors ${
+        className={`px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-[36px_1fr_auto_32px_32px] gap-3 sm:gap-4 items-start sm:items-center transition-colors ${
           isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'
         }`}
       >
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 select-none"
-          style={{ background: avatar.bg, color: avatar.color }}
-        >
-          {user.email.slice(0, 2).toUpperCase()}
+        <div className="flex items-start gap-3 min-w-0 sm:contents">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 select-none"
+            style={{ background: avatar.bg, color: avatar.color }}
+          >
+            {user.email.slice(0, 2).toUpperCase()}
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium text-slate-800 break-all sm:truncate">{user.email}</p>
+              {isSelf && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 uppercase tracking-wide">
+                  You
+                </span>
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
+              <Badge label={user.role} variant={toBadgeVariant(user.role)} />
+              {!isSelf && (
+                <select
+                  value={user.role}
+                  disabled={updatingRole || roleMutation.isPending}
+                  onChange={(e) => handleRoleChange(e.target.value)}
+                  className="text-[11px] font-medium px-2 py-1 rounded-md border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  title="Assign role"
+                >
+                  {USER_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-medium text-slate-800 truncate">{user.email}</p>
-            {isSelf && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 uppercase tracking-wide">
-                You
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-2">
-            <Badge label={user.role} variant={toBadgeVariant(user.role)} />
-            {!isSelf && (
-              <select
-                value={user.role}
-                disabled={updatingRole || roleMutation.isPending}
-                onChange={(e) => handleRoleChange(e.target.value)}
-                className="text-[11px] font-medium px-2 py-1 rounded-md border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                title="Assign role"
-              >
-                {USER_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 sm:justify-self-end flex-wrap">
           <Badge label={user.subTier} variant={toBadgeVariant(user.subTier)} />
           {!isSelf && (
             <button
@@ -203,31 +205,33 @@ export function UserPermissionsAccordion({
           )}
         </div>
 
-        {!isSelf && user.role !== 'Admin' ? (
+        <div className="flex items-center gap-2 sm:contents">
+          {!isSelf && user.role !== 'Admin' ? (
+            <button
+              type="button"
+              onClick={() => onDelete(user)}
+              title="Delete user"
+              className="w-8 h-8 flex items-center justify-center rounded-lg transition-all text-red-300 hover:text-red-500 hover:bg-red-50"
+            >
+              <Trash2 size={14} />
+            </button>
+          ) : (
+            <div className="w-8 h-8 shrink-0 hidden sm:block" />
+          )}
+
           <button
             type="button"
-            onClick={() => onDelete(user)}
-            title="Delete user"
-            className="w-8 h-8 flex items-center justify-center rounded-lg transition-all text-red-300 hover:text-red-500 hover:bg-red-50"
+            onClick={() => onToggleExpand(user.id)}
+            title={isExpanded ? 'Hide permissions' : 'Manage permissions'}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+              isExpanded
+                ? 'bg-indigo-100 text-indigo-600'
+                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+            }`}
           >
-            <Trash2 size={14} />
+            {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
-        ) : (
-          <div className="w-8 h-8 shrink-0" />
-        )}
-
-        <button
-          type="button"
-          onClick={() => onToggleExpand(user.id)}
-          title={isExpanded ? 'Hide permissions' : 'Manage permissions'}
-          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
-            isExpanded
-              ? 'bg-indigo-100 text-indigo-600'
-              : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
-          }`}
-        >
-          {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-        </button>
+        </div>
       </div>
 
       {isExpanded && <UserPermissionsPanel userId={user.id} isSelf={isSelf} />}

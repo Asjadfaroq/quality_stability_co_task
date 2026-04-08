@@ -117,7 +117,7 @@ export default function AdminRoles() {
       <div className="h-full flex flex-col gap-4">
 
         {/* ── Page header ──────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between shrink-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Roles &amp; Permissions</h2>
             <p className="text-sm text-slate-500 mt-0.5">
@@ -125,7 +125,7 @@ export default function AdminRoles() {
             </p>
           </div>
           <div
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[12px] font-medium text-indigo-700 border border-indigo-200"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[12px] font-medium text-indigo-700 border border-indigo-200 self-start"
             style={{ background: '#eef2ff' }}
           >
             <Lock size={12} className="shrink-0" />
@@ -138,9 +138,59 @@ export default function AdminRoles() {
           className="flex-1 min-h-0 flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden"
           style={{ boxShadow: '0 1px 8px rgba(15,23,42,0.06)' }}
         >
+          {/* Mobile card layout */}
+          <div className="sm:hidden flex-1 overflow-y-auto p-3 space-y-3">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 size={24} className="animate-spin text-slate-300" />
+              </div>
+            ) : (
+              permissions.map((perm) => {
+                const meta = PERMISSION_META[perm.name]
+                return (
+                  <div key={perm.name} className="rounded-xl border border-slate-200 p-3.5">
+                    <p className="text-[13px] font-semibold text-slate-800 leading-tight">
+                      {meta?.label ?? perm.name}
+                    </p>
+                    {meta?.description && (
+                      <p className="text-[11.5px] text-slate-400 mt-0.5 leading-snug">
+                        {meta.description}
+                      </p>
+                    )}
+                    <div className="mt-3 space-y-2">
+                      {EDITABLE_ROLES.map(role => {
+                        const granted = (assignments[role] ?? []).includes(perm.name)
+                        const key = `${role}:${perm.name}`
+                        const isUpdating = updatingKey === key
+                        const m = ROLE_META[role]
+                        return (
+                          <div key={role} className="flex items-center justify-between">
+                            <span className="text-xs font-medium" style={{ color: m.accent }}>{m.label}</span>
+                            <Toggle
+                              checked={granted}
+                              loading={isUpdating}
+                              disabled={updatingKey !== null}
+                              color={m.track}
+                              onToggle={() => toggle(role, perm.name, granted)}
+                              title={`${granted ? 'Revoke' : 'Grant'} "${meta?.label ?? perm.name}" for ${m.label}`}
+                            />
+                          </div>
+                        )
+                      })}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-500">Admin</span>
+                        <span className="text-[11px] px-2 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Always allowed</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
           {/* Column header row */}
           <div
-            className="shrink-0 grid border-b border-slate-100"
+            className="hidden sm:grid shrink-0 border-b border-slate-100"
             style={{ gridTemplateColumns: '1fr 120px 132px 148px 100px' }}
           >
             {/* Permission column */}
@@ -179,7 +229,7 @@ export default function AdminRoles() {
           </div>
 
           {/* Table body */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="hidden sm:block flex-1 overflow-y-auto">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 size={24} className="animate-spin text-slate-300" />
@@ -254,7 +304,7 @@ export default function AdminRoles() {
           </div>
 
           {/* Footer */}
-          <div className="shrink-0 px-6 py-3 border-t border-slate-100 flex items-center justify-between"
+          <div className="shrink-0 px-4 sm:px-6 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5"
                style={{ background: '#fafbfc' }}>
             <p className="text-[11px] text-slate-400">
               {permissions.length} permissions · {EDITABLE_ROLES.length + 1} roles

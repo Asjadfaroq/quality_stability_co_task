@@ -73,13 +73,13 @@ export default function CustomerRequests() {
   return (
     <>
       <AppLayout title="My Requests">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-slate-900">My Requests</h2>
             <p className="text-sm text-slate-500 mt-0.5">Welcome back, {email?.split('@')[0]}</p>
           </div>
           {/* View mode toggle — right-aligned */}
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden self-start">
             <button
               type="button"
               onClick={() => setViewMode('list')}
@@ -113,7 +113,7 @@ export default function CustomerRequests() {
 
         {/* Subscription banner */}
         <div
-          className="mb-5 rounded-2xl flex items-center justify-between gap-4 px-5 py-4"
+          className="mb-5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-4 sm:px-5 py-4"
           style={{
             background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5498 55%, #3b6fd4 100%)',
             boxShadow: '0 4px 20px rgba(30,58,95,0.22)',
@@ -163,7 +163,7 @@ export default function CustomerRequests() {
 
         {/* Requests list */}
         <Card padding={false}>
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
               <h3 className="text-base font-semibold text-slate-900">All Requests</h3>
               <span className="text-xs text-slate-400">{totalCount} total</span>
@@ -185,15 +185,15 @@ export default function CustomerRequests() {
           ) : (
             <>
               {/* Column headers */}
-              <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
+              <div className="hidden sm:grid px-6 py-2.5 grid-cols-[1fr_auto] gap-4 bg-slate-50 border-b border-slate-100">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Request / Category</span>
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status / Actions</span>
               </div>
 
             <ul className="divide-y divide-slate-100">
               {requests.map((req) => (
-                <li key={req.id} className={`px-6 py-4 transition-colors ${req.status === 'PendingConfirmation' ? 'bg-orange-50/50' : 'hover:bg-slate-50/50'}`}>
-                  <div className="flex items-start justify-between gap-4">
+                <li key={req.id} className={`px-4 sm:px-6 py-4 transition-colors ${req.status === 'PendingConfirmation' ? 'bg-orange-50/50' : 'hover:bg-slate-50/50'}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2.5 flex-wrap">
                         <p className="text-sm font-medium text-slate-800 truncate">{req.title}</p>
@@ -203,7 +203,7 @@ export default function CustomerRequests() {
                         {req.category} · {formatDate(req.createdAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
                       {(req.status === 'Accepted' || req.status === 'PendingConfirmation') && (
                         <button
                           type="button"
@@ -223,7 +223,7 @@ export default function CustomerRequests() {
                   </div>
 
                   {req.status === 'PendingConfirmation' && (
-                    <div className="mt-3 flex items-center justify-between bg-white border border-orange-200 rounded-lg px-4 py-3">
+                    <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white border border-orange-200 rounded-lg px-4 py-3">
                       <p className="text-xs text-orange-700 font-medium">The provider has marked this job as complete — please confirm.</p>
                       <Button variant="success" size="sm" loading={confirmMutation.isPending} onClick={() => confirmMutation.mutate(req.id)} className="ml-4 shrink-0">
                         Confirm Complete

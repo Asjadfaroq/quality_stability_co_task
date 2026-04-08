@@ -216,7 +216,7 @@ export default function ProviderJobs() {
       <AppLayout title="My Jobs">
 
         {/* Page header */}
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-slate-900">My Jobs</h2>
             <p className="text-sm text-slate-500 mt-0.5">
@@ -228,7 +228,7 @@ export default function ProviderJobs() {
         <Card padding={false}>
 
           {/* ── Toolbar ───────────────────────────────────────────────────── */}
-          <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
 
             {/* Tab pills — styled identical to AdminJobs status pills */}
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -305,7 +305,7 @@ export default function ProviderJobs() {
 
           {/* ── Result count bar ───────────────────────────────────────────── */}
           {!current.isLoading && (
-            <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-100">
+            <div className="px-4 sm:px-5 py-2.5 bg-slate-50 border-b border-slate-100">
               <span className="text-[11px] text-slate-500">
                 {nearbyResults !== null
                   ? `${nearbyResults.length} job${nearbyResults.length !== 1 ? 's' : ''} found nearby`
@@ -345,7 +345,7 @@ export default function ProviderJobs() {
           ) : (
             <>
               {/* Column headers */}
-              <div className="px-6 py-2.5 grid grid-cols-[1fr_auto] gap-4 bg-white border-b border-slate-100">
+              <div className="hidden sm:grid px-6 py-2.5 grid-cols-[1fr_auto] gap-4 bg-white border-b border-slate-100">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                   {activeTab === 'completed' ? 'Job / Description' : 'Job / Details'}
                 </span>
@@ -358,11 +358,11 @@ export default function ProviderJobs() {
                 {displayItems.map((req) => (
                   <li
                     key={req.id}
-                    className={`px-6 py-4 transition-colors ${
+                    className={`px-4 sm:px-6 py-4 transition-colors ${
                       req.status === 'PendingConfirmation' ? 'bg-orange-50/40' : 'hover:bg-slate-50/60'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
 
                       {/* ── Available / Active ── */}
                       {activeTab !== 'completed' && (
@@ -378,7 +378,7 @@ export default function ProviderJobs() {
                             <p className="text-xs text-slate-400 line-clamp-1">{req.description}</p>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
                             {activeTab === 'active' && (
                               <>
                                 <button
@@ -439,7 +439,7 @@ export default function ProviderJobs() {
                               </span>
                             </div>
                           </div>
-                          <div className="shrink-0 text-right">
+                          <div className="shrink-0 sm:text-right">
                             <span
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium mb-1"
                               style={{ background: 'rgba(16,185,129,0.1)', color: '#059669' }}

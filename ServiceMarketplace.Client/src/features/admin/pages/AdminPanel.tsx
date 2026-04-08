@@ -223,7 +223,7 @@ export default function AdminPanel() {
     <AppLayout title="User Management">
 
       {/* Page header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold text-slate-900">User Management</h2>
           <p className="text-sm text-slate-500 mt-0.5">
@@ -235,7 +235,7 @@ export default function AdminPanel() {
       <Card padding={false}>
 
         {/* ── Toolbar ───────────────────────────────────────────────────────── */}
-        <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
 
           {/* Role filter tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -289,7 +289,7 @@ export default function AdminPanel() {
 
         {/* ── Result count bar ───────────────────────────────────────────────── */}
         {!isLoading && (
-          <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-100">
+          <div className="px-4 sm:px-5 py-2.5 bg-slate-50 border-b border-slate-100">
             <span className="text-[11px] text-slate-500">
               {totalCount === 0
                 ? isFiltered ? 'No users match the current filters.' : 'No users registered yet.'
@@ -315,7 +315,7 @@ export default function AdminPanel() {
         ) : (
           <>
             {/* Column headers */}
-            <div className="px-6 py-2.5 grid grid-cols-[36px_1fr_auto_32px_32px] gap-4 items-center bg-white border-b border-slate-100">
+            <div className="hidden sm:grid px-6 py-2.5 grid-cols-[36px_1fr_auto_32px_32px] gap-4 items-center bg-white border-b border-slate-100">
               <div />
               <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 User / Role
