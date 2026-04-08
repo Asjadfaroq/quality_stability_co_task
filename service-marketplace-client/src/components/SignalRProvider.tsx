@@ -28,12 +28,14 @@ export default function SignalRProvider() {
         body:  `"${data.title}" · ${data.category}`,
         link:  '/provider/jobs',
       })
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
     },
 
     RequestTaken: () => {
       if (!isProvider) return
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      // Remove the taken job from other providers' pending list in real time
+      queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
+      queryClient.invalidateQueries({ queryKey: ['requests-active'] })
     },
 
     RequestConfirmed: (data: { requestId: string; title: string }) => {
@@ -44,15 +46,20 @@ export default function SignalRProvider() {
         body:  `"${data.title}" was confirmed by the customer`,
         link:  '/provider/completed',
       })
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['requests-active'] })
       queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
     },
 
     // Fired when a provider accepts the customer's request (Pending → Accepted).
-    // Keeps the customer's tab in sync without a manual refresh.
-    RequestAccepted: (data: { requestId: string }) => {
+    // Refreshes the customer's list and shows a bell notification.
+    RequestAccepted: (_data: { requestId: string }) => {
       if (!isCustomer) return
-      void data // requestId available for future per-item cache updates
+      add({
+        type:  'job_accepted',
+        title: 'Job Accepted!',
+        body:  'A provider has accepted your service request.',
+        link:  '/customer/requests',
+      })
       queryClient.invalidateQueries({ queryKey: ['requests'] })
     },
 
@@ -73,7 +80,8 @@ export default function SignalRProvider() {
     // updates; customer confirms in Tab 1, Tab 2 My Requests updates).
     RequestStatusUpdated: (data: { requestId: string }) => {
       void data
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['requests-active'] })
+      queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
       queryClient.invalidateQueries({ queryKey: ['provider-completed'] })
     },
 

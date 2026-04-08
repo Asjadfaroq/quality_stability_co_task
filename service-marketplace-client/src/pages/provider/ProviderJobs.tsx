@@ -56,8 +56,13 @@ export default function ProviderJobs() {
 
   const acceptMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/requests/${id}/accept`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    onSuccess: (_data, acceptedId) => {
+      // Invalidate the pending list so the accepted job disappears immediately
+      queryClient.invalidateQueries({ queryKey: ['requests-pending'] })
+      // Invalidate active jobs so it shows up there right away
+      queryClient.invalidateQueries({ queryKey: ['requests-active'] })
+      // Drop the accepted job from the nearby results without waiting for a refetch
+      setNearbyResults((prev) => prev ? prev.filter((r) => r.id !== acceptedId) : null)
       toast.success('Request accepted!')
     },
     onError: (err: any) => {
