@@ -56,7 +56,7 @@ export default function AdminOrgs() {
   }, [searchInput])
 
   // Reset to page 1 when the search term changes.
-  useEffect(() => { setPage(1) }, [search])
+  useEffect(() => { setPage(1) }, [search, setPage])
 
   const { data, isLoading, isPlaceholderData } = useQuery<PagedResult<AdminOrgDto>>({
     queryKey: ['admin-orgs', page, pageSize, search],

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -25,6 +25,10 @@ function getRegisterError(error: unknown): string {
   return 'Something went wrong. Please try again.'
 }
 
+function hasHttpStatus(error: unknown, status: number): boolean {
+  return axios.isAxiosError(error) && error.response?.status === status
+}
+
 const SHAPES: FloatingShapeConfig[] = [
   { type: 'circle',  top: '10%', left: '8%',  size: 64,  delay: '0s',   duration: '7s'   },
   { type: 'diamond', top: '22%', left: '36%', size: 44,  delay: '1s',   duration: '6s'   },
@@ -44,19 +48,19 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
 export default function Register() {
   const navigate = useNavigate()
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { role: 'Customer' },
   })
 
-  const selectedRole = watch('role')
+  const selectedRole = useWatch({ control, name: 'role' })
 
   const mutation = useMutation({
     mutationFn: (data: FormData) => api.post('/auth/register', data).then((r) => r.data),
     onSuccess: () => navigate(ROUTES.LOGIN, { state: { registered: true } }),
   })
 
-  const showBanner = mutation.isError && (mutation.error as any)?.response?.status !== 429
+  const showBanner = mutation.isError && !hasHttpStatus(mutation.error, 429)
 
   return (
     <AuthPageLayout

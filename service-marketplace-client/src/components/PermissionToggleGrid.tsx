@@ -30,12 +30,14 @@ export type OverrideState = true | false | null
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Cycles through the three override states: null → true → false → null */
+// eslint-disable-next-line react-refresh/only-export-components
 export function nextOverrideState(current: OverrideState): OverrideState {
   if (current === null) return true
   if (current === true) return false
   return null
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.REQUEST_CREATE]:     'Create Requests',
   [PERMISSIONS.REQUEST_ACCEPT]:     'Accept Requests',

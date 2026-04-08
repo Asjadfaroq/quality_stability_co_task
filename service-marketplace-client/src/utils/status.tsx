@@ -8,10 +8,12 @@
  */
 
 import { Badge } from '../components/ui'
+import type { BadgeVariant } from '../components/ui'
 import type { ServiceRequest } from '../types'
 
 /** Badge variant key for each request status — drives colour only. */
-export const STATUS_BADGE_VARIANTS: Record<ServiceRequest['status'], string> = {
+// eslint-disable-next-line react-refresh/only-export-components
+export const STATUS_BADGE_VARIANTS: Record<ServiceRequest['status'], BadgeVariant> = {
   Pending:             'pending',
   Accepted:            'accepted',
   PendingConfirmation: 'pendingconfirmation',
@@ -60,5 +62,5 @@ interface StatusBadgeProps {
 export function StatusBadge({ status, perspective = 'customer' }: StatusBadgeProps) {
   const label   = STATUS_LABELS[perspective][status]
   const variant = STATUS_BADGE_VARIANTS[status]
-  return <Badge label={label} variant={variant as any} />
+  return <Badge label={label} variant={variant} />
 }

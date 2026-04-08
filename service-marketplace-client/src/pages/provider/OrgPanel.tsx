@@ -7,6 +7,7 @@ import { Users, Building2, UserPlus, UserMinus, ChevronDown, ChevronUp } from 'l
 import api, { isRateLimited } from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 import { Card, CardHeader, Badge, Button, Input, EmptyState, Pagination, SkeletonCard } from '../../components/ui'
+import type { BadgeVariant } from '../../components/ui'
 import {
   PermissionToggleGrid,
   nextOverrideState,
@@ -34,6 +35,11 @@ interface OrgMember {
   id: string
   email: string
   role: string
+}
+
+const toBadgeVariant = (value: string): BadgeVariant => {
+  const normalized = value.toLowerCase().replace(/\s/g, '')
+  return normalized as BadgeVariant
 }
 
 // ── MemberPermissionsPanel ────────────────────────────────────────────────────
@@ -351,7 +357,7 @@ function OrgDashboard({ org, canManage }: { org: Org; canManage: boolean }) {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{member.email}</p>
                         <div className="mt-1">
-                          <Badge label={member.role} variant={member.role.toLowerCase() as any} />
+                          <Badge label={member.role} variant={toBadgeVariant(member.role)} />
                         </div>
                       </div>
 

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { ChevronDown, ChevronUp, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import api from '../../../api/axios'
 import { Badge } from '../../../components/ui'
+import type { BadgeVariant } from '../../../components/ui'
 import {
   PermissionToggleGrid,
   nextOverrideState,
@@ -35,6 +36,11 @@ interface Props {
   onDelete: (user: AdminUserRow) => void
   roleAvatar: Record<string, { bg: string; color: string }>
   defaultAvatar: { bg: string; color: string }
+}
+
+const toBadgeVariant = (value: string): BadgeVariant => {
+  const normalized = value.toLowerCase().replace(/\s/g, '')
+  return normalized as BadgeVariant
 }
 
 function UserPermissionsPanel({ userId, isSelf }: { userId: string; isSelf: boolean }) {
@@ -130,12 +136,12 @@ export function UserPermissionsAccordion({
             )}
           </div>
           <div className="mt-1">
-            <Badge label={user.role} variant={user.role.toLowerCase() as any} />
+            <Badge label={user.role} variant={toBadgeVariant(user.role)} />
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Badge label={user.subTier} variant={user.subTier.toLowerCase() as any} />
+          <Badge label={user.subTier} variant={toBadgeVariant(user.subTier)} />
           {!isSelf && (
             <button
               type="button"

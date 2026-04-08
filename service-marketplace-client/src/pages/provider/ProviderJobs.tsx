@@ -6,6 +6,7 @@ import {
   AlertCircle, RefreshCw, X,
   MapPin, CalendarDays, Search,
 } from 'lucide-react'
+import axios from 'axios'
 import api, { isRateLimited } from '../../api/axios'
 import { formatDate } from '../../utils/format'
 import { StatusBadge } from '../../utils/status'
@@ -79,7 +80,7 @@ export default function ProviderJobs() {
   }, [searchInput])
 
   // Reset page when switching tabs or search changes
-  useEffect(() => { setPage(1) }, [activeTab, search])
+  useEffect(() => { setPage(1) }, [activeTab, search, setPage])
 
   // Auto-detect location when nearby panel opens
   useEffect(() => {
@@ -144,9 +145,9 @@ export default function ProviderJobs() {
       setNearbyResults((prev) => prev ? prev.filter((r) => r.id !== acceptedId) : null)
       toast.success('Request accepted!')
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       if (isRateLimited(err)) return
-      toast.error(err?.response?.status === 409
+      toast.error(axios.isAxiosError(err) && err.response?.status === 409
         ? 'This request was already accepted by someone else.'
         : 'Failed to accept request.')
     },

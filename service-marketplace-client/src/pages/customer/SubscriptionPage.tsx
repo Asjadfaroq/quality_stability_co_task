@@ -5,6 +5,7 @@ import {
   CreditCard, CheckCircle2, AlertCircle, Loader2,
   Copy, Check, Zap, Shield, Sparkles, Lock, ArrowRight,
 } from 'lucide-react'
+import axios from 'axios'
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
 
@@ -88,6 +89,11 @@ function CopyField({ label, value }: { label: string; value: string }) {
 }
 
 export default function SubscriptionPage() {
+  const getErrorMessage = (error: unknown, fallback: string) =>
+    axios.isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? fallback)
+      : fallback
+
   const { data, isLoading } = useQuery<SubscriptionStatus>({
     queryKey: ['subscription-status'],
     queryFn: () => api.get('/billing/status').then((r) => r.data),
@@ -99,8 +105,8 @@ export default function SubscriptionPage() {
     mutationFn: () =>
       api.post<{ url: string }>('/billing/checkout').then((r) => r.data),
     onSuccess: ({ url }) => { window.location.href = url },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message ?? 'Failed to start checkout.')
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, 'Failed to start checkout.'))
     },
   })
 
@@ -108,8 +114,8 @@ export default function SubscriptionPage() {
     mutationFn: () =>
       api.post<{ url: string }>('/billing/portal').then((r) => r.data),
     onSuccess: ({ url }) => { window.location.href = url },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message ?? 'Failed to open billing portal.')
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, 'Failed to open billing portal.'))
     },
   })
 

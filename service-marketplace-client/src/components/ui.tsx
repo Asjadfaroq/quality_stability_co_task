@@ -17,9 +17,11 @@ const badgeVariants = {
   default:            'bg-gray-50 text-gray-600 border-gray-200',
 }
 
+export type BadgeVariant = keyof typeof badgeVariants
+
 interface BadgeProps {
   label: string
-  variant?: keyof typeof badgeVariants
+  variant?: BadgeVariant
 }
 
 export function Badge({ label, variant }: BadgeProps) {

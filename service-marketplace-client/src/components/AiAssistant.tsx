@@ -101,7 +101,6 @@ export default function AiAssistant() {
   // Animate panel in / out
   useEffect(() => {
     if (open) {
-      setVisible(true)
       setTimeout(() => inputRef.current?.focus(), 120)
     } else {
       const t = setTimeout(() => setVisible(false), 250)
@@ -159,7 +158,12 @@ export default function AiAssistant() {
 
       {/* ── Floating trigger ─────────────────────────────────────────────── */}
       <button
-        onClick={() => setOpen((p) => !p)}
+        onClick={() => {
+          setOpen((p) => {
+            if (!p) setVisible(true)
+            return !p
+          })
+        }}
         aria-label={open ? 'Close AI Assistant' : 'Open AI Assistant'}
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 40,

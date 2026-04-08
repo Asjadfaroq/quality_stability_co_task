@@ -162,7 +162,7 @@ export default function AdminPanel() {
   }, [searchInput])
 
   // Reset to page 1 on filter/search changes
-  useEffect(() => { setPage(1) }, [roleFilter, search])
+  useEffect(() => { setPage(1) }, [roleFilter, search, setPage])
 
   const { data, isLoading } = useQuery<PagedResult<UserDto>>({
     queryKey: ['admin-users', page, pageSize, roleFilter, search],

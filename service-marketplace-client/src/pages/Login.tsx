@@ -27,6 +27,10 @@ function getLoginError(error: unknown): string {
   return 'Something went wrong. Please try again.'
 }
 
+function hasHttpStatus(error: unknown, status: number): boolean {
+  return axios.isAxiosError(error) && error.response?.status === status
+}
+
 const SHAPES: FloatingShapeConfig[] = [
   { type: 'circle',  top: '8%',  left: '6%',  size: 72,  delay: '0s',   duration: '6s'   },
   { type: 'square',  top: '18%', left: '34%', size: 42,  delay: '1.2s', duration: '7s'   },
@@ -59,7 +63,7 @@ export default function Login() {
     },
   })
 
-  const showBanner = mutation.isError && (mutation.error as any)?.response?.status !== 429
+  const showBanner = mutation.isError && !hasHttpStatus(mutation.error, 429)
 
   return (
     <AuthPageLayout

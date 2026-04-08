@@ -5,7 +5,8 @@ import { useAuthStore } from '../store/authStore'
 const HUB_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:5132/api')
   .replace('/api', '/hubs/notifications')
 
-type EventHandlers = Record<string, (...args: any[]) => void>
+type EventHandler = { bivarianceHack(...args: unknown[]): void }['bivarianceHack']
+type EventHandlers = Record<string, EventHandler>
 
 /**
  * Connects to the SignalR hub and subscribes to events.
@@ -41,7 +42,7 @@ export function useSignalR(handlers: EventHandlers) {
     // current handler from handlersRef, avoiding stale closure issues.
     const registeredEvents = Object.keys(handlers)
     registeredEvents.forEach((event) => {
-      connection.on(event, (...args: any[]) => {
+      connection.on(event, (...args: unknown[]) => {
         handlersRef.current[event]?.(...args)
       })
     })

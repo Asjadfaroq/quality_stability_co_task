@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Plus, Sparkles, MapPin, Clock, Loader2, X } from 'lucide-react'
+import axios from 'axios'
 
 import api, { isRateLimited } from '../../../api/axios'
 import { useAiEnhance } from '../../../hooks/useAiEnhance'
@@ -63,8 +64,9 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
   // Drive enter/leave animation
   useEffect(() => {
     if (open) {
-      setVisible(true)
+      const t = setTimeout(() => setVisible(true), 0)
       setTimeout(() => setFocus('title'), 120)
+      return () => clearTimeout(t)
     } else {
       const t = setTimeout(() => setVisible(false), 250)
       return () => clearTimeout(t)
@@ -88,9 +90,9 @@ export function NewRequestModal({ open, onClose }: NewRequestModalProps) {
       handleClose()
       toast.success('Request submitted successfully!')
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       if (isRateLimited(err)) return
-      if (err?.response?.status === 403) {
+      if (axios.isAxiosError<{ errorCode?: string }>(err) && err.response?.status === 403) {
         if (err.response.data?.errorCode === 'permission_denied') {
           toast.error("You don't have permission to create requests. Contact your administrator.")
         } else {

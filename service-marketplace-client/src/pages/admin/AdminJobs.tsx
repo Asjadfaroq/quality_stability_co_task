@@ -82,7 +82,7 @@ export default function AdminJobs() {
   }, [searchInput])
 
   // Reset to page 1 whenever filters change.
-  useEffect(() => { setPage(1) }, [statusFilter, search])
+  useEffect(() => { setPage(1) }, [statusFilter, search, setPage])
 
   const { data, isLoading, isPlaceholderData } = useQuery<PagedResult<AdminJobDto>>({
     queryKey: ['admin-jobs', page, pageSize, statusFilter, search],

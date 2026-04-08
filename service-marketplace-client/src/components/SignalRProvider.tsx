@@ -52,7 +52,7 @@ export default function SignalRProvider() {
 
     // Fired when a provider accepts the customer's request (Pending → Accepted).
     // Refreshes the customer's list and shows a bell notification.
-    RequestAccepted: (_data: { requestId: string }) => {
+    RequestAccepted: () => {
       if (!isCustomer) return
       add({
         type:  'job_accepted',
