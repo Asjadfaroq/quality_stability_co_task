@@ -247,6 +247,9 @@ export default function AdminPanel() {
       },
     }).then((r) => r.data),
     placeholderData: (prev) => prev,
+    // Keep each tab's data fresh for 30 s — switching back to a recently-loaded
+    // tab is instant (served from cache) instead of firing a new API request.
+    staleTime: 30_000,
   })
 
   const users      = data?.items      ?? []

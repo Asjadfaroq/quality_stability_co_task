@@ -470,6 +470,9 @@ namespace ServiceMarketplace.API.Data.Migrations
 
                     b.HasIndex("OrganizationId");
 
+                    b.HasIndex("Role", "Email")
+                        .HasDatabaseName("IX_AspNetUsers_Role_Email");
+
                     b.ToTable("AspNetUsers", (string)null);
                 });
 

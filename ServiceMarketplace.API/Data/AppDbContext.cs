@@ -31,6 +31,9 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
              .HasForeignKey(u => u.OrganizationId)
              .OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(u => u.OrganizationId);
+            // Covers the admin user-list query: WHERE Role = @role ORDER BY Email
+            e.HasIndex(u => new { u.Role, u.Email })
+             .HasDatabaseName("IX_AspNetUsers_Role_Email");
         });
 
         builder.Entity<Organization>(e =>

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
@@ -13,13 +14,15 @@ public class AdminService : IAdminService
 {
     private static readonly TimeSpan RolePermissionCacheTtl = TimeSpan.FromHours(24);
 
-    private readonly AppDbContext _db;
+    private readonly AppDbContext  _db;
     private readonly ICacheService _cache;
+    private readonly IMemoryCache  _memory;
 
-    public AdminService(AppDbContext db, ICacheService cache)
+    public AdminService(AppDbContext db, ICacheService cache, IMemoryCache memory)
     {
-        _db    = db;
-        _cache = cache;
+        _db     = db;
+        _cache  = cache;
+        _memory = memory;
     }
 
     // ── Admin jobs view ───────────────────────────────────────────────────────
@@ -171,6 +174,8 @@ public class AdminService : IAdminService
         var query = _db.Users.AsNoTracking();
 
         // ── Role filter ───────────────────────────────────────────────────────
+        // Parsed once here so both the COUNT and the SELECT share the same filter
+        // without re-parsing inside each lambda.
         if (!string.IsNullOrWhiteSpace(role) &&
             Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsedRole))
         {
@@ -184,6 +189,8 @@ public class AdminService : IAdminService
             query = query.Where(u => u.Email != null && u.Email.Contains(term));
         }
 
+        // EF Core's DbContext is not thread-safe — two async operations cannot run
+        // concurrently on the same instance. Run COUNT first, then the page fetch.
         var totalCount = await query.CountAsync();
 
         if (totalCount == 0)
@@ -293,6 +300,11 @@ public class AdminService : IAdminService
 
         await Task.WhenAll(affectedUserIds.Select(uid =>
             _cache.RemoveAsync($"permissions:{uid}")));
+
+        // Evict L1 (in-process) entries for all affected users so the change takes
+        // effect on the very next request, not after the 60 s L1 TTL expires.
+        foreach (var uid in affectedUserIds)
+            _memory.Remove($"l1:permissions:{uid}");
     }
 
     // ── User deletion ─────────────────────────────────────────────────────────
@@ -386,6 +398,8 @@ public class AdminService : IAdminService
         // Done after the commit so we never evict a valid cache entry for a user
         // that still exists (edge case: commit fails after eviction).
         await _cache.RemoveAsync($"permissions:{targetUserId}");
+        _memory.Remove($"l1:permissions:{targetUserId}");
+        _memory.Remove($"l1:user_role:{targetUserId}");
     }
 
     // ── User-level permission overrides ───────────────────────────────────────
@@ -442,5 +456,6 @@ public class AdminService : IAdminService
         // Invalidate the per-user effective-permissions cache immediately so the
         // change takes effect on the very next API call from this user.
         await _cache.RemoveAsync($"permissions:{userId}");
+        _memory.Remove($"l1:permissions:{userId}");
     }
 }

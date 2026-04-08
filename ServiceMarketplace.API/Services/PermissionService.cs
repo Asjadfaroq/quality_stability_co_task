@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -7,31 +8,36 @@ namespace ServiceMarketplace.API.Services;
 
 public class PermissionService : IPermissionService
 {
-    // Per-user cache: short TTL because a role change takes effect on the next request after expiry.
-    private static readonly TimeSpan UserPermissionCacheTtl = TimeSpan.FromMinutes(5);
+    // L1 (in-process IMemoryCache) TTLs — short enough that a permission change
+    // propagates within one minute without any explicit invalidation.
+    // Redis (L2) still holds the authoritative copy; L1 just avoids the ~270 ms
+    // network round-trip on every authenticated request.
+    private static readonly TimeSpan L1UserTtl = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan L1RoleTtl = TimeSpan.FromSeconds(60);
 
-    // Role-permission cache: long TTL because mappings only change via the admin UI,
-    // which explicitly invalidates this key on every write.
+    // L2 (Redis) TTLs — unchanged from before.
+    private static readonly TimeSpan UserPermissionCacheTtl = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RolePermissionCacheTtl = TimeSpan.FromHours(24);
 
-    private readonly AppDbContext _db;
-    private readonly ICacheService _cache;
+    private readonly AppDbContext    _db;
+    private readonly ICacheService   _cache;   // L2 — Redis
+    private readonly IMemoryCache    _memory;  // L1 — in-process
 
-    public PermissionService(AppDbContext db, ICacheService cache)
+    public PermissionService(AppDbContext db, ICacheService cache, IMemoryCache memory)
     {
-        _db    = db;
-        _cache = cache;
+        _db     = db;
+        _cache  = cache;
+        _memory = memory;
     }
 
     public async Task<bool> HasPermissionAsync(Guid userId, string permissionName)
     {
-        // Admin has unrestricted access — short-circuit before any DB or cache call.
-        // This is the single authoritative place for that rule.
+        // Admin has unrestricted access — short-circuit before any cache call.
         var role = await GetUserRoleAsync(userId);
         if (role is null)           return false;
         if (role == UserRole.Admin) return true;
 
-        var permissions = await GetRolePermissionsAsync(role.Value, userId);
+        var permissions = await GetEffectivePermissionsInternalAsync(role.Value, userId);
         return permissions.Contains(permissionName);
     }
 
@@ -50,22 +56,32 @@ public class PermissionService : IPermissionService
             return [..allNames];
         }
 
-        return await GetRolePermissionsAsync(role.Value, userId);
+        return await GetEffectivePermissionsInternalAsync(role.Value, userId);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns the user's role from cache, falling back to the database.
-    /// Null means the userId does not exist.
+    /// Returns the user's role. Read order: L1 memory → L2 Redis → DB.
     /// </summary>
     private async Task<UserRole?> GetUserRoleAsync(Guid userId)
     {
-        var key    = $"user_role:{userId}";
-        var cached = await _cache.GetAsync<UserRole?>(key);
-        if (cached is not null)
-            return cached;
+        var l1Key = $"l1:user_role:{userId}";
 
+        // L1 hit — microseconds, zero network
+        if (_memory.TryGetValue(l1Key, out UserRole? l1Role))
+            return l1Role;
+
+        // L2 hit — single Redis round-trip
+        var redisKey = $"user_role:{userId}";
+        var cached   = await _cache.GetAsync<UserRole?>(redisKey);
+        if (cached is not null)
+        {
+            _memory.Set(l1Key, cached, L1UserTtl);
+            return cached;
+        }
+
+        // DB fallback
         var role = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == userId)
@@ -73,25 +89,38 @@ public class PermissionService : IPermissionService
             .FirstOrDefaultAsync();
 
         if (role is not null)
-            await _cache.SetAsync(key, role, UserPermissionCacheTtl);
+        {
+            _memory.Set(l1Key, role, L1UserTtl);
+            await _cache.SetAsync(redisKey, role, UserPermissionCacheTtl);
+        }
 
         return role;
     }
 
     /// <summary>
-    /// Returns the set of permission names currently assigned to <paramref name="role"/>.
-    /// Results are cached per role for 24 hours and invalidated whenever the admin
-    /// changes a role's permissions via <c>PATCH /api/admin/roles/{role}/permissions</c>.
+    /// Returns effective permissions for <paramref name="userId"/> under <paramref name="role"/>.
+    /// Read order: L1 memory → L2 Redis → DB (role baseline + user overrides).
     /// </summary>
-    private async Task<HashSet<string>> GetRolePermissionsAsync(UserRole role, Guid userId)
+    private async Task<HashSet<string>> GetEffectivePermissionsInternalAsync(UserRole role, Guid userId)
     {
-        // User-level cache prevents redundant role-permission lookups within the same
-        // 5-minute window (e.g. multiple permission checks in one request pipeline).
+        var l1Key = $"l1:permissions:{userId}";
+
+        // L1 hit
+        if (_memory.TryGetValue(l1Key, out HashSet<string>? l1Perms) && l1Perms is not null)
+            return l1Perms;
+
+        // L2 hit — full effective-permission set already computed and cached
         var userKey    = $"permissions:{userId}";
         var userCached = await _cache.GetAsync<HashSet<string>>(userKey);
         if (userCached is not null)
+        {
+            _memory.Set(l1Key, userCached, L1UserTtl);
             return userCached;
+        }
 
+        // DB path — build effective set from role baseline + user overrides
+
+        // Role permissions: try L2, else hit DB
         var roleKey    = $"role_permissions:{role}";
         var roleCached = await _cache.GetAsync<List<string>>(roleKey);
 
@@ -113,9 +142,7 @@ public class PermissionService : IPermissionService
 
         var effective = new HashSet<string>(names);
 
-        // Apply explicit user-level overrides on top of the role baseline.
-        // Granted=true  → force-add even if the role doesn't have it.
-        // Granted=false → force-remove even if the role has it.
+        // Apply explicit user-level overrides
         var overrides = await _db.UserPermissions
             .AsNoTracking()
             .Where(up => up.UserId == userId)
@@ -128,7 +155,10 @@ public class PermissionService : IPermissionService
             else           effective.Remove(o.Name);
         }
 
+        // Populate both layers
+        _memory.Set(l1Key, effective, L1UserTtl);
         await _cache.SetAsync(userKey, effective, UserPermissionCacheTtl);
+
         return effective;
     }
 }

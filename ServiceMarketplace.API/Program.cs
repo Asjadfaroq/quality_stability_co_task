@@ -89,6 +89,11 @@ builder.Services.AddAuthentication(options =>
 // 4. Authorization
 builder.Services.AddAuthorization();
 
+// In-process L1 cache — sits in front of Redis to avoid a network round-trip for
+// hot keys (user roles, effective permissions) that are read on every authenticated
+// request. Redis remains the L2 source-of-truth shared across instances.
+builder.Services.AddMemoryCache();
+
 // 4a. Response compression — shrinks JSON payloads over HTTPS (gzip + brotli)
 builder.Services.AddResponseCompression(options =>
 {
