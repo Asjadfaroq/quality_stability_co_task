@@ -72,13 +72,15 @@ public class AdminController : BaseController
     [HttpGet("users")]
     [ProducesResponseType(typeof(PagedResult<UserDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllUsers(
-        [FromQuery] int page     = 1,
-        [FromQuery] int pageSize = DefaultPageSize)
+        [FromQuery] int     page     = 1,
+        [FromQuery] int     pageSize = DefaultPageSize,
+        [FromQuery] string? role     = null,
+        [FromQuery] string? search   = null)
     {
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
         page     = Math.Max(1, page);
 
-        var result = await _adminService.GetAllUsersAsync(page, pageSize);
+        var result = await _adminService.GetAllUsersAsync(page, pageSize, role, search);
         return Ok(result);
     }
 

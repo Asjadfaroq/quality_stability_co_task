@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Users, CreditCard, ChevronDown, ChevronUp, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react'
+import {
+  Users, ChevronDown, ChevronUp, ShieldCheck,
+  Trash2, AlertTriangle, Search, X, TrendingUp, TrendingDown,
+} from 'lucide-react'
 
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
-import { Card, CardHeader, Badge, Button, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
+import { Card, Badge, EmptyState, SkeletonCard, Pagination } from '../../components/ui'
 import {
   PermissionToggleGrid,
   nextOverrideState,
@@ -32,6 +35,28 @@ interface RolePermissionsDto {
   permissions: PermissionDto[]
   roleAssignments: Record<string, string[]>
 }
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+interface RoleTab {
+  value: string
+  label: string
+}
+
+const ROLE_TABS: RoleTab[] = [
+  { value: '',                 label: 'All'               },
+  { value: 'Customer',         label: 'Customer'          },
+  { value: 'ProviderAdmin',    label: 'Provider Admin'    },
+  { value: 'ProviderEmployee', label: 'Provider Employee' },
+]
+
+const ROLE_AVATAR: Record<string, { bg: string; color: string }> = {
+  Customer:         { bg: '#EEF2FF', color: '#6366f1' },
+  ProviderAdmin:    { bg: '#ECFDF5', color: '#10b981' },
+  ProviderEmployee: { bg: '#FFFBEB', color: '#f59e0b' },
+  Admin:            { bg: '#FEF2F2', color: '#dc2626' },
+}
+const DEFAULT_AVATAR = { bg: '#F1F5F9', color: '#64748b' }
 
 // ── UserPermissionsPanel ──────────────────────────────────────────────────────
 
@@ -195,13 +220,32 @@ export default function AdminPanel() {
   const { userId }              = useAuthStore()
   const [page, setPage]         = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [roleFilter, setRoleFilter]               = useState('')
+  const [searchInput, setSearchInput]             = useState('')
+  const [search, setSearch]                       = useState('')
   const [updatingSubId, setUpdatingSubId]         = useState<string | null>(null)
   const [expandedUserId, setExpandedUserId]       = useState<string | null>(null)
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserDto | null>(null)
 
+  // Debounce search
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchInput.trim()), 350)
+    return () => clearTimeout(id)
+  }, [searchInput])
+
+  // Reset to page 1 on filter/search changes
+  useEffect(() => { setPage(1) }, [roleFilter, search])
+
   const { data, isLoading } = useQuery<PagedResult<UserDto>>({
-    queryKey: ['admin-users', page, pageSize],
-    queryFn:  () => api.get('/admin/users', { params: { page, pageSize } }).then((r) => r.data),
+    queryKey: ['admin-users', page, pageSize, roleFilter, search],
+    queryFn:  () => api.get('/admin/users', {
+      params: {
+        page,
+        pageSize,
+        ...(roleFilter ? { role: roleFilter } : {}),
+        ...(search     ? { search }           : {}),
+      },
+    }).then((r) => r.data),
     placeholderData: (prev) => prev,
   })
 
@@ -242,68 +286,142 @@ export default function AdminPanel() {
   const toggleExpand = (id: string) =>
     setExpandedUserId((prev) => (prev === id ? null : id))
 
+  const isFiltered = !!roleFilter || !!search
+
   return (
     <AppLayout title="User Management">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-900">User Management</h2>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Manage subscriptions and per-user permission overrides. Use{' '}
-          <span className="font-medium text-indigo-600">Roles &amp; Permissions</span> to control
-          role-level access.
-        </p>
+
+      {/* Page header */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">User Management</h2>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Manage subscriptions and per-user permission overrides.
+          </p>
+        </div>
       </div>
 
       <Card padding={false}>
-        <div className="px-6 py-5 border-b border-gray-100">
-          <CardHeader
-            title="All Users"
-            description={`${totalCount} registered user${totalCount !== 1 ? 's' : ''}`}
-          />
+
+        {/* ── Toolbar ───────────────────────────────────────────────────────── */}
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+
+          {/* Role filter tabs */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {ROLE_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setRoleFilter(tab.value)}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+                  roleFilter === tab.value
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Search input */}
+          <div className="relative w-full sm:w-64 shrink-0">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by email…"
+              className="w-full pl-8 pr-8 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-800
+                         placeholder:text-slate-400 bg-white
+                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                         transition-shadow"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
+        {/* ── Result count bar ───────────────────────────────────────────────── */}
+        {!isLoading && (
+          <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-100">
+            <span className="text-[11px] text-slate-500">
+              {totalCount === 0
+                ? isFiltered ? 'No users match the current filters.' : 'No users registered yet.'
+                : <>{totalCount} user{totalCount !== 1 ? 's' : ''}{isFiltered ? ' match the current filters' : ''}</>
+              }
+            </span>
+          </div>
+        )}
+
+        {/* ── Content ───────────────────────────────────────────────────────── */}
         {isLoading ? (
           <div className="p-4 space-y-3">
             {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
           </div>
+
         ) : users.length === 0 ? (
           <EmptyState
             icon={<Users size={22} />}
             title="No users found"
-            description="Users will appear here once they register."
+            description={isFiltered ? 'Try adjusting the filters or search term.' : 'Users will appear here once they register.'}
           />
+
         ) : (
           <>
             {/* Column headers */}
-            <div className="px-6 py-2.5 flex items-center gap-4 bg-slate-50 border-b border-slate-100">
-              <div className="w-9 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  User / Role
-                </span>
-              </div>
-              <div className="w-36 shrink-0 text-right">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Subscription
-                </span>
-              </div>
-              <div className="w-8 shrink-0" />
-              <div className="w-8 shrink-0" />
+            <div className="px-6 py-2.5 grid grid-cols-[36px_1fr_auto_32px_32px] gap-4 items-center bg-white border-b border-slate-100">
+              <div />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                User / Role
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-right pr-2">
+                Subscription
+              </span>
+              <div />
+              <div />
             </div>
 
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-slate-100">
               {users.map((user) => {
                 const isSelf     = user.id === userId
                 const isExpanded = expandedUserId === user.id
+                const avatar     = ROLE_AVATAR[user.role] ?? DEFAULT_AVATAR
+                const isPaid     = user.subTier === 'Paid'
 
                 return (
                   <li key={user.id} className={isSelf ? 'opacity-60' : ''}>
-                    {/* Main row */}
-                    <div className="px-6 py-3.5 flex items-center gap-4">
-                      <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold shrink-0">
+
+                    {/* ── Main row ── */}
+                    <div
+                      className={`px-6 py-4 grid grid-cols-[36px_1fr_auto_32px_32px] gap-4 items-center transition-colors ${
+                        isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 select-none"
+                        style={{ background: avatar.bg, color: avatar.color }}
+                      >
                         {user.email.slice(0, 2).toUpperCase()}
                       </div>
 
-                      <div className="flex-1 min-w-0">
+                      {/* Email + role badge */}
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium text-slate-800 truncate">{user.email}</p>
                           {isSelf && (
@@ -317,28 +435,40 @@ export default function AdminPanel() {
                         </div>
                       </div>
 
+                      {/* Subscription badge + upgrade/downgrade */}
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge label={user.subTier} variant={user.subTier.toLowerCase() as any} />
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          loading={updatingSubId === user.id}
-                          disabled={isSelf || updatingSubId !== null}
-                          icon={<CreditCard size={13} />}
-                          onClick={() => toggleSub(user)}
-                          title={isSelf ? 'Cannot modify your own subscription' : undefined}
-                        >
-                          {user.subTier === 'Paid' ? 'Downgrade' : 'Upgrade'}
-                        </Button>
+                        {!isSelf && (
+                          <button
+                            type="button"
+                            disabled={updatingSubId !== null}
+                            onClick={() => toggleSub(user)}
+                            title={isPaid ? 'Downgrade to Free' : 'Upgrade to Paid'}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                              isPaid
+                                ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
+                                : 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100'
+                            }`}
+                          >
+                            {updatingSubId === user.id ? (
+                              <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                            ) : isPaid ? (
+                              <TrendingDown size={11} />
+                            ) : (
+                              <TrendingUp size={11} />
+                            )}
+                            {isPaid ? 'Downgrade' : 'Upgrade'}
+                          </button>
+                        )}
                       </div>
 
-                      {/* Delete — hidden for self and Admin accounts */}
+                      {/* Delete button */}
                       {!isSelf && user.role !== 'Admin' ? (
                         <button
                           type="button"
                           onClick={() => setPendingDeleteUser(user)}
                           title="Delete user"
-                          className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-slate-300 hover:text-red-500 hover:bg-red-50"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg transition-all text-red-300 hover:text-red-500 hover:bg-red-50"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -346,17 +476,22 @@ export default function AdminPanel() {
                         <div className="w-8 h-8 shrink-0" />
                       )}
 
-                      {/* Expand toggle */}
+                      {/* Expand permissions toggle */}
                       <button
                         type="button"
                         onClick={() => toggleExpand(user.id)}
                         title={isExpanded ? 'Hide permissions' : 'Manage permissions'}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+                          isExpanded
+                            ? 'bg-indigo-100 text-indigo-600'
+                            : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                        }`}
                       >
                         {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                       </button>
                     </div>
 
+                    {/* Permissions panel */}
                     {isExpanded && <UserPermissionsPanel userId={user.id} isSelf={isSelf} />}
                   </li>
                 )
@@ -377,10 +512,10 @@ export default function AdminPanel() {
       </Card>
 
       {/* Legend */}
-      <div className="mt-4 flex items-start gap-2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200">
-        <ShieldCheck size={14} className="shrink-0 mt-0.5 text-slate-400" />
+      <div className="mt-4 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200">
+        <ShieldCheck size={14} className="shrink-0 mt-0.5 text-indigo-400" />
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          Click the <strong>chevron</strong> next to any user to manage per-user permission overrides.
+          Click the <strong className="text-slate-700">chevron</strong> next to any user to manage per-user permission overrides.
           Overrides take precedence over the role's default permissions — granting gives extra access,
           revoking removes access even if the role has it. Changes take effect immediately.
         </p>

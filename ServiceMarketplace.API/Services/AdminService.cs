@@ -166,9 +166,24 @@ public class AdminService : IAdminService
 
     // ── User list ─────────────────────────────────────────────────────────────
 
-    public async Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize)
+    public async Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize, string? role, string? search)
     {
-        var query      = _db.Users.AsNoTracking();
+        var query = _db.Users.AsNoTracking();
+
+        // ── Role filter ───────────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(role) &&
+            Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsedRole))
+        {
+            query = query.Where(u => u.Role == parsedRole);
+        }
+
+        // ── Text search (email) ───────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(u => u.Email != null && u.Email.Contains(term));
+        }
+
         var totalCount = await query.CountAsync();
 
         if (totalCount == 0)

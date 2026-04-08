@@ -6,7 +6,12 @@ namespace ServiceMarketplace.API.Services.Interfaces;
 
 public interface IAdminService
 {
-    Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize);
+    /// <summary>
+    /// Returns a paginated list of users.
+    /// Optional <paramref name="role"/> narrows by UserRole name (case-insensitive).
+    /// Optional <paramref name="search"/> applies a case-insensitive substring match against email.
+    /// </summary>
+    Task<PagedResult<UserDto>> GetAllUsersAsync(int page, int pageSize, string? role, string? search);
     Task UpdateSubscriptionAsync(Guid userId, SubscriptionTier subTier);
 
     /// <summary>
