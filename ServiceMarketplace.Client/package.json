@@ -1,5 +1,5 @@
 {
-  "name": "service-marketplace-client",
+  "name": "ServiceMarketplace.Client",
   "private": true,
   "version": "0.0.0",
   "type": "module",

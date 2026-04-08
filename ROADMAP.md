@@ -77,7 +77,7 @@ ServiceMarketplace/
 │   ├── appsettings.Development.json
 │   ├── Program.cs
 │   └── ServiceMarketplace.API.csproj
-├── service-marketplace-client/
+├── ServiceMarketplace.Client/
 │   ├── src/
 │   │   ├── api/
 │   │   ├── components/
@@ -374,7 +374,7 @@ Tasks:
 ## Phase 5 — Frontend: Auth + Customer Flow (Day 5)
 
 Tasks:
-1. Scaffold: npm create vite@latest service-marketplace-client -- --template react-ts
+1. Scaffold: npm create vite@latest ServiceMarketplace.Client -- --template react-ts
 2. Install packages: shadcn/ui, tailwindcss, react-router-dom, @tanstack/react-query, react-hook-form, zod, @hookform/resolvers, axios, zustand
 3. Create Axios instance (src/api/axios.ts):
    - baseURL from env var VITE_API_URL

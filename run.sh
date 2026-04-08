@@ -18,7 +18,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$REPO_ROOT/ServiceMarketplace.API"
-CLIENT_DIR="$REPO_ROOT/service-marketplace-client"
+CLIENT_DIR="$REPO_ROOT/ServiceMarketplace.Client"
 
 # ── 1. Free the ports ─────────────────────────────────────────────────────────
 

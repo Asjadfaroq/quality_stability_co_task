@@ -50,7 +50,7 @@ services:
 
   frontend:
     build:
-      context: ./service-marketplace-client
+      context: ./ServiceMarketplace.Client
       dockerfile: Dockerfile
     ports:
       - "3000:80"
