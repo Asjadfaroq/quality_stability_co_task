@@ -130,22 +130,22 @@ export default function ActiveJobs() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          variant="ghost" size="sm"
-                          icon={<MessageSquare size={13} />}
-                          className="relative"
+                        <button
+                          type="button"
                           onClick={() => {
                             setActiveChat({ id: req.id, title: req.title })
                             clearUnread(req.id)
                           }}
+                          className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
                         >
+                          <MessageSquare size={13} />
                           Chat
                           {(unreadCounts[req.id] ?? 0) > 0 && (
-                            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                               {unreadCounts[req.id] > 9 ? '9+' : unreadCounts[req.id]}
                             </span>
                           )}
-                        </Button>
+                        </button>
 
                         {req.status === 'Accepted' && canComplete && (
                           <Button
