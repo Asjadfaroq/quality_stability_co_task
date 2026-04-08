@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { AlertCircle, ShieldCheck } from 'lucide-react'
+import toast from 'react-hot-toast'
 import api from '../api/axios'
 import { useAuthStore } from '../store/authStore'
 import { getDashboardPath, AUTH_REDIRECT_KEY } from '../utils/auth'
@@ -83,6 +84,7 @@ export default function Login() {
     mutationFn: (data: FormData) => api.post('/auth/login', data).then((r) => r.data),
     onSuccess: (data) => {
       login(data)
+      toast.success(`Welcome back, ${data.email?.split('@')[0]}!`)
       const sessionFrom = sessionStorage.getItem(AUTH_REDIRECT_KEY)
       sessionStorage.removeItem(AUTH_REDIRECT_KEY)
       navigate(stateFrom ?? sessionFrom ?? getDashboardPath(data.role), { replace: true })
