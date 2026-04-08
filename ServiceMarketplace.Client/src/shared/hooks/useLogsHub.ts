@@ -3,8 +3,6 @@ import * as signalR from '@microsoft/signalr'
 import { useAuthStore } from '../store/authStore'
 import type { LogCategory, LogEntry } from '../types'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
 
 interface State {
@@ -28,7 +26,6 @@ function logsReducer(state: State, action: Action): State {
   switch (action.type) {
 
     case 'SET_HISTORY':
-      // Server sends entries oldest-first; reverse so newest appears at index 0.
       return {
         ...state,
         entries:    [...action.entries].reverse().slice(0, MAX_ENTRIES),
@@ -37,7 +34,6 @@ function logsReducer(state: State, action: Action): State {
 
     case 'ADD_ENTRY': {
       if (state.isPaused) {
-        // Buffer while paused without mutating the visible list.
         const queue = [action.entry, ...state.pauseQueue].slice(0, MAX_ENTRIES)
         return { ...state, pauseQueue: queue }
       }
@@ -47,7 +43,6 @@ function logsReducer(state: State, action: Action): State {
 
     case 'TOGGLE_PAUSE': {
       if (state.isPaused) {
-        // Flush queue into display list (queued entries are already newest-first).
         const merged = [...state.pauseQueue, ...state.entries].slice(0, MAX_ENTRIES)
         return { ...state, isPaused: false, entries: merged, pauseQueue: [] }
       }
@@ -65,14 +60,9 @@ function logsReducer(state: State, action: Action): State {
   }
 }
 
-// ── Hook options ──────────────────────────────────────────────────────────────
-
 export interface UseLogsHubOptions {
-  /** Hub path relative to base, e.g. "/hubs/admin-logs". */
   hubPath: string
-  /** SignalR event that delivers initial history, e.g. "RecentLogs". */
   historyEvent: string
-  /** SignalR event that delivers individual live entries, e.g. "LogEntry". */
   liveEvent: string
 }
 
@@ -85,15 +75,10 @@ export interface UseLogsHubResult {
   clear: () => void
 }
 
-// ── Normalization ─────────────────────────────────────────────────────────────
-
 const CATEGORY_MAP: Record<number, LogCategory> = { 0: 'System', 1: 'Audit' }
 
-/**
- * Guards against SignalR sending LogCategory as a numeric enum (0/1) when the
- * backend's SignalR JSON protocol isn't configured with JsonStringEnumConverter.
- * With the fix in place this is a no-op; without it the UI still works.
- */
+// Guards against SignalR sending LogCategory as a numeric enum when the backend
+// JSON converter isn't applied. With the fix in place this is a no-op.
 function normalizeEntry(raw: unknown): LogEntry {
   const e = raw as LogEntry & { category: string | number }
   if (typeof e.category === 'number') {
@@ -102,16 +87,9 @@ function normalizeEntry(raw: unknown): LogEntry {
   return e as LogEntry
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
-
 const BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:5132/api')
   .replace('/api', '')
 
-/**
- * Manages a dedicated SignalR hub connection for log streaming.
- * Supports pause/resume with an in-memory queue so fast log bursts
- * don't disrupt reading. The connection is torn down when the component unmounts.
- */
 export function useLogsHub({
   hubPath,
   historyEvent,
@@ -140,12 +118,10 @@ export function useLogsHub({
       .configureLogging(signalR.LogLevel.None)
       .build()
 
-    // History replay on (re)connect
     connection.on(historyEvent, (entries: unknown[]) => {
       dispatchRef.current({ type: 'SET_HISTORY', entries: entries.map(normalizeEntry) })
     })
 
-    // Live entries
     connection.on(liveEvent, (entry: unknown) => {
       dispatchRef.current({ type: 'ADD_ENTRY', entry: normalizeEntry(entry) })
     })
@@ -189,10 +165,10 @@ export function useLogsHub({
   const clear       = useCallback(() => dispatch({ type: 'CLEAR' }),        [])
 
   return {
-    entries:        state.entries,
+    entries:         state.entries,
     connectionState: state.connectionState,
-    isPaused:       state.isPaused,
-    pauseQueueSize: state.pauseQueue.length,
+    isPaused:        state.isPaused,
+    pauseQueueSize:  state.pauseQueue.length,
     togglePause,
     clear,
   }

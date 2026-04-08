@@ -3,11 +3,6 @@ using Serilog.Events;
 
 namespace ServiceMarketplace.API.Logging;
 
-/// <summary>
-/// Serilog sink that writes structured log events into <see cref="LogBuffer"/>.
-/// Reads the enriched <c>LogCategory</c>, <c>ActorUserId</c>, and <c>Action</c>
-/// properties set by <see cref="LoggerAuditExtensions.LogAudit"/> to classify entries.
-/// </summary>
 public sealed class SignalRLogSink : ILogEventSink
 {
     private readonly LogBuffer        _buffer;
@@ -51,6 +46,6 @@ public sealed class SignalRLogSink : ILogEventSink
 
     private static string? TryGetString(LogEvent logEvent, string property)
         => logEvent.Properties.TryGetValue(property, out var v)
-            ? v.ToString().Trim('"')
+            ? v.ToString().Trim('"')  // scalar values include surrounding quotes
             : null;
 }

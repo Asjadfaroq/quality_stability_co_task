@@ -27,7 +27,6 @@ public class RequestsController : BaseController
         _validator = validator;
     }
 
-    /// <summary>Create a service request.</summary>
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission(PermissionNames.RequestCreate)]
@@ -44,9 +43,6 @@ public class RequestsController : BaseController
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
-    /// <summary>
-    /// Returns paginated requests scoped by caller role.
-    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
@@ -62,7 +58,6 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Find pending requests within a radius.</summary>
     [HttpGet("nearby")]
     [EnableRateLimiting(RateLimitPolicies.Nearby)]
     [RequirePermission(PermissionNames.RequestViewAll)]
@@ -87,9 +82,6 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>
-    /// Get all completed jobs for the calling provider. Paginated.
-    /// </summary>
     [HttpGet("completed")]
     [RequirePermission(PermissionNames.RequestComplete)]
     [ProducesResponseType(typeof(PagedResult<ServiceRequestDto>), StatusCodes.Status200OK)]
@@ -106,9 +98,6 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>
-    /// Returns map-ready jobs scoped to caller role.
-    /// </summary>
     [HttpGet("map")]
     [ProducesResponseType(typeof(List<MapJobDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetForMap()
@@ -117,7 +106,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Get a single request by ID. Customers can only access their own.</summary>
+    // Customers can only access their own requests.
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -128,7 +117,7 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Accept a pending request. Returns 409 if already accepted.</summary>
+    // Returns 409 if already accepted by another provider.
     [HttpPatch("{id:guid}/accept")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission(PermissionNames.RequestAccept)]
@@ -142,7 +131,6 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Mark an accepted request as pending customer confirmation.</summary>
     [HttpPatch("{id:guid}/complete")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [RequirePermission(PermissionNames.RequestComplete)]
@@ -156,7 +144,6 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
-    /// <summary>Customer confirms completion of a request. Restricted to the Customer role.</summary>
     [HttpPatch("{id:guid}/confirm")]
     [EnableRateLimiting(RateLimitPolicies.Writes)]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]

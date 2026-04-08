@@ -2,26 +2,25 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Logging;
+using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Hubs;
 
-/// <summary>
-/// SignalR hub that streams the authenticated user's own audit activity in real-time.
-/// Any authenticated user may connect — they only ever receive their own events.
-/// </summary>
 [Authorize]
 public sealed class ActivityHub : Hub
 {
-    /// <summary>Prefix for per-user SignalR groups: <c>activity_{userId}</c>.</summary>
+    /// <summary>Prefix for per-user SignalR groups: activity_{userId}</summary>
     public const string GroupPrefix = "activity_";
 
-    private readonly LogBuffer           _buffer;
+    private readonly IAuditLogCache       _auditCache;
+    private readonly LogBuffer            _buffer;
     private readonly ILogger<ActivityHub> _logger;
 
-    public ActivityHub(LogBuffer buffer, ILogger<ActivityHub> logger)
+    public ActivityHub(IAuditLogCache auditCache, LogBuffer buffer, ILogger<ActivityHub> logger)
     {
-        _buffer = buffer;
-        _logger = logger;
+        _auditCache = auditCache;
+        _buffer     = buffer;
+        _logger     = logger;
     }
 
     public override async Task OnConnectedAsync()
@@ -35,8 +34,11 @@ public sealed class ActivityHub : Hub
 
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupPrefix + userId);
 
-        // Replay the user's recent audit history so they see context immediately
-        var recent = _buffer.GetRecentAudit(userId, 50);
+        // Redis preferred (survives restarts, 10-min window); fall back to in-memory buffer.
+        var recent = await _auditCache.GetUserLogsAsync(userId, 50);
+        if (recent.Count == 0)
+            recent = _buffer.GetRecentAudit(userId, 50);
+
         await Clients.Caller.SendAsync("RecentActivity", recent);
 
         await base.OnConnectedAsync();

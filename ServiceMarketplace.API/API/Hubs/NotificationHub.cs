@@ -58,13 +58,8 @@ public class NotificationHub : Hub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chat_{requestId}");
     }
 
-    /// <summary>
-    /// Saves and broadcasts a chat message.
-    ///
-    /// DB round-trips: 2 total (1 in SaveMessageAsync for participant+email, 1 for INSERT).
-    /// Previously: 3 (GetParticipants + GetSenderEmail + GetParticipants again for OtherPartyId).
-    /// OtherPartyId is now returned directly from SaveMessageAsync — no extra query.
-    /// </summary>
+    // 2 DB round-trips total: participant+email in SaveMessageAsync, then INSERT.
+    // OtherPartyId is returned directly — no extra query needed.
     public async Task SendMessage(string requestId, string content)
     {
         var userId = GetUserId();
@@ -85,11 +80,8 @@ public class NotificationHub : Hub
                 sentAt      = result.Message.SentAt
             };
 
-            // Broadcast to everyone in the chat group (both parties if both connected).
             await Clients.Group($"chat_{requestId}").SendAsync("ReceiveMessage", payload);
 
-            // Push an unread notification to the other party's personal group
-            // using OtherPartyId returned by SaveMessageAsync — zero extra DB queries.
             if (result.OtherPartyId.HasValue)
                 await Clients
                     .Group(result.OtherPartyId.Value.ToString())
@@ -116,10 +108,6 @@ public class NotificationHub : Hub
         return Guid.TryParse(raw, out var id) ? id : null;
     }
 
-    /// <summary>
-    /// Returns true for roles that should join the shared "providers" group.
-    /// Uses enum name comparison to avoid hardcoded string literals.
-    /// </summary>
     private static bool IsProvider(string? roleValue) =>
         roleValue is not null &&
         (roleValue == nameof(UserRole.ProviderEmployee) ||

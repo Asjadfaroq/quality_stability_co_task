@@ -6,15 +6,10 @@ using ServiceMarketplace.API.Models.Enums;
 
 namespace ServiceMarketplace.API.Hubs;
 
-/// <summary>
-/// SignalR hub that streams live log entries to connected Admin users.
-/// Only Admin-role users are permitted to connect; all others are immediately disconnected.
-/// On connection, the last 200 log entries are replayed to the client.
-/// </summary>
 [Authorize]
 public sealed class AdminLogsHub : Hub
 {
-    /// <summary>SignalR group name that receives every broadcast log entry.</summary>
+    /// <summary>SignalR group that receives every broadcast log entry.</summary>
     public const string AdminGroup = "admin_logs";
 
     private readonly LogBuffer            _buffer;
@@ -39,7 +34,7 @@ public sealed class AdminLogsHub : Hub
 
         await Groups.AddToGroupAsync(Context.ConnectionId, AdminGroup);
 
-        // Replay recent history so the admin sees context immediately
+        // Replay recent history so the admin sees context immediately.
         var recent = _buffer.GetRecent(200);
         await Clients.Caller.SendAsync("RecentLogs", recent);
 
@@ -55,8 +50,6 @@ public sealed class AdminLogsHub : Hub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, AdminGroup);
         await base.OnDisconnectedAsync(exception);
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private bool IsAdmin()
     {

@@ -20,10 +20,7 @@ public class OrgController : BaseController
         _orgService = orgService;
     }
 
-    /// <summary>
-    /// Returns the org the calling user belongs to (ProviderAdmin or ProviderEmployee).
-    /// Always 200; null body means not yet assigned to an org.
-    /// </summary>
+    // Returns null body when not yet assigned to an org.
     [HttpGet("mine")]
     [RequirePermission(PermissionNames.OrgView)]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
@@ -33,11 +30,7 @@ public class OrgController : BaseController
         return Ok(org);
     }
 
-    /// <summary>
-    /// Returns the calling ProviderAdmin's organization.
-    /// Always 200; null body means no org created yet.
-    /// Requires org.view — management operations within the page require org.manage.
-    /// </summary>
+    // Returns null body when no org created yet.
     [HttpGet]
     [RequirePermission(PermissionNames.OrgView)]
     [ProducesResponseType(typeof(OrgDto), StatusCodes.Status200OK)]
@@ -122,12 +115,6 @@ public class OrgController : BaseController
         return Ok(result);
     }
 
-    // ── Member permission overrides ───────────────────────────────────────────
-
-    /// <summary>
-    /// Returns all platform permissions (list only — no role assignments).
-    /// Used by ProviderAdmin to populate the member permission override UI.
-    /// </summary>
     [HttpGet("permissions")]
     [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(typeof(List<PermissionDto>), StatusCodes.Status200OK)]
@@ -137,9 +124,6 @@ public class OrgController : BaseController
         return Ok(result);
     }
 
-    /// <summary>
-    /// Returns explicit permission overrides for a member of the calling ProviderAdmin's org.
-    /// </summary>
     [HttpGet("members/{id:guid}/permissions")]
     [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(typeof(List<UserPermissionOverrideDto>), StatusCodes.Status200OK)]
@@ -157,10 +141,7 @@ public class OrgController : BaseController
         }
     }
 
-    /// <summary>
-    /// Sets or removes an explicit permission override for an org member.
-    /// granted=true → force-grant; false → force-revoke; null → remove override.
-    /// </summary>
+    // granted=true → force-grant; false → force-revoke; null → remove override.
     [HttpPatch("members/{id:guid}/permissions")]
     [RequirePermission(PermissionNames.OrgManage)]
     [ProducesResponseType(StatusCodes.Status200OK)]

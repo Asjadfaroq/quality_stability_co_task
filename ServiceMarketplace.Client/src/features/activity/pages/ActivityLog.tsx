@@ -3,14 +3,14 @@ import {
   KeyRound, LogIn, ShieldCheck, UserCheck,
   UserMinus, UserPlus, UserX, Zap,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 
 import AppLayout from '../../../shared/components/AppLayout'
 import { Card, EmptyState, Skeleton } from '../../../shared/components/ui'
 import { useLogsHub, type ConnectionState } from '../../../shared/hooks/useLogsHub'
 import { timeAgo, formatDate } from '../../../shared/utils/format'
+import api from '../../../shared/api/axios'
 import type { LogEntry } from '../../../shared/types'
-
-// ── Action metadata ───────────────────────────────────────────────────────────
 
 interface ActionMeta {
   icon:  React.ReactNode
@@ -52,8 +52,6 @@ function getActionMeta(action: string | null): ActionMeta {
   }
 }
 
-// ── Connection badge ──────────────────────────────────────────────────────────
-
 function ConnectionBadge({ state }: { state: ConnectionState }) {
   if (state === 'connected')
     return (
@@ -77,24 +75,17 @@ function ConnectionBadge({ state }: { state: ConnectionState }) {
   )
 }
 
-// ── Single activity card ──────────────────────────────────────────────────────
-
 function ActivityCard({ entry }: { entry: LogEntry }) {
   const meta = getActionMeta(entry.action)
 
   return (
-    <div
-      className="flex items-start gap-4 px-5 py-4 border-b border-slate-100 last:border-b-0 transition-colors hover:bg-slate-50/60"
-    >
-      {/* Icon */}
+    <div className="flex items-start gap-4 px-5 py-4 border-b border-slate-100 last:border-b-0 transition-colors hover:bg-slate-50/60">
       <div
         className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
         style={{ background: meta.bg, color: meta.color }}
       >
         {meta.icon}
       </div>
-
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-3">
           <p className="text-[13px] font-semibold text-slate-800 leading-snug">{meta.label}</p>
@@ -110,8 +101,6 @@ function ActivityCard({ entry }: { entry: LogEntry }) {
     </div>
   )
 }
-
-// ── Skeleton cards ────────────────────────────────────────────────────────────
 
 function ActivitySkeleton() {
   return (
@@ -129,8 +118,6 @@ function ActivitySkeleton() {
   )
 }
 
-// ── Date separator ────────────────────────────────────────────────────────────
-
 function dateBucket(iso: string): string {
   const d    = new Date(iso)
   const now  = new Date()
@@ -141,11 +128,9 @@ function dateBucket(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-// ── ActivityLog ───────────────────────────────────────────────────────────────
-
 export default function ActivityLog() {
   const {
-    entries,
+    entries: hubEntries,
     connectionState,
   } = useLogsHub({
     hubPath:      '/hubs/activity',
@@ -153,9 +138,17 @@ export default function ActivityLog() {
     liveEvent:    'ActivityEntry',
   })
 
-  const isLoading = connectionState === 'connecting' && entries.length === 0
+  // REST seed while SignalR is connecting. Replaced by hub history once RecentActivity fires.
+  const { data: restSeed = [], isLoading: isRestLoading } = useQuery<LogEntry[]>({
+    queryKey: ['activity-seed'],
+    queryFn:  () => api.get('/activity').then(r => r.data),
+    enabled:  connectionState !== 'connected' && hubEntries.length === 0,
+    staleTime: Infinity,
+  })
 
-  // Group entries by date bucket for the timeline separator
+  const entries = hubEntries.length > 0 ? hubEntries : restSeed
+  const isLoading = isRestLoading && entries.length === 0
+
   const grouped = (() => {
     if (entries.length === 0) return []
     const buckets: { bucket: string; items: LogEntry[] }[] = []
@@ -174,7 +167,6 @@ export default function ActivityLog() {
 
   return (
     <AppLayout title="My Activity">
-      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
           <h2 className="text-[17px] font-semibold text-slate-900">My Activity</h2>
@@ -207,7 +199,6 @@ export default function ActivityLog() {
           <div>
             {grouped.map(({ bucket, items }) => (
               <div key={bucket}>
-                {/* Date separator */}
                 <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
                     {bucket}
@@ -218,8 +209,6 @@ export default function ActivityLog() {
                 ))}
               </div>
             ))}
-
-            {/* Footer */}
             <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
               <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
                 <Zap size={11} />

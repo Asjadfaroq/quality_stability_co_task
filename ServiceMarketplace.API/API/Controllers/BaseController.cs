@@ -17,19 +17,10 @@ public abstract class BaseController : ControllerBase
 
     protected bool IsInRole(UserRole role) => CurrentUserRole == role;
 
-    // ── Typed error helpers ───────────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns a 403 Forbidden with a human-readable <c>{ "message": "..." }</c> body.
-    /// Use this instead of <c>Forbid()</c>, which produces an empty 403 response.
-    /// </summary>
+    // Use these instead of Forbid()/Unauthorized() to include a message body.
     protected IActionResult Forbidden(string message) =>
         new ObjectResult(new { message }) { StatusCode = StatusCodes.Status403Forbidden };
 
-    /// <summary>
-    /// Returns a 401 Unauthorized with a human-readable <c>{ "message": "..." }</c> body.
-    /// Use this instead of <c>Unauthorized()</c>, which produces an empty 401 response.
-    /// </summary>
     protected IActionResult Unauthorized(string message) =>
         new ObjectResult(new { message }) { StatusCode = StatusCodes.Status401Unauthorized };
 }

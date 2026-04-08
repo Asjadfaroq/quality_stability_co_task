@@ -35,7 +35,6 @@ public class AdminService : IAdminService
         string? status,
         string? search)
     {
-        // Join customer and optional provider.
         var query =
             from r  in _db.ServiceRequests.AsNoTracking()
             join cu in _db.Users.AsNoTracking() on r.CustomerId equals cu.Id
@@ -56,14 +55,12 @@ public class AdminService : IAdminService
                 r.UpdatedAt,
             };
 
-        // Status filter.
         if (!string.IsNullOrWhiteSpace(status) &&
             Enum.TryParse<RequestStatus>(status, ignoreCase: true, out var parsedStatus))
         {
             query = query.Where(x => x.Status == parsedStatus);
         }
 
-        // Text search.
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
@@ -108,7 +105,6 @@ public class AdminService : IAdminService
 
     public async Task<PagedResult<AdminOrgDto>> GetAllOrgsAsync(int page, int pageSize, string? search)
     {
-        // Join organization owner and compute member count.
         var query =
             from org   in _db.Organizations.AsNoTracking()
             join owner in _db.Users.AsNoTracking() on org.OwnerId equals owner.Id
@@ -122,7 +118,6 @@ public class AdminService : IAdminService
                 org.CreatedAt,
             };
 
-        // Optional text search.
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
@@ -164,21 +159,18 @@ public class AdminService : IAdminService
     {
         var query = _db.Users.AsNoTracking();
 
-        // Role filter.
         if (!string.IsNullOrWhiteSpace(role) &&
             Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsedRole))
         {
             query = query.Where(u => u.Role == parsedRole);
         }
 
-        // Email search.
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
             query = query.Where(u => u.Email != null && u.Email.Contains(term));
         }
 
-        // DbContext is not thread-safe; run sequentially.
         var totalCount = await query.CountAsync();
 
         if (totalCount == 0)
@@ -219,7 +211,7 @@ public class AdminService : IAdminService
         user.Role = role;
         await _db.SaveChangesAsync();
 
-        // Invalidate role and permission caches.
+        // Invalidate both cache layers so the new role takes effect immediately.
         await _cache.RemoveAsync($"user_role:{userId}");
         await _cache.RemoveAsync($"permissions:{userId}");
         _memory.Remove($"l1:user_role:{userId}");
@@ -247,7 +239,7 @@ public class AdminService : IAdminService
             .Select(p => new PermissionDto { Id = p.Id, Name = p.Name })
             .ToListAsync();
 
-        // Admin has no role-permission rows.
+        // Admin has no role-permission rows — it is always short-circuited in PermissionService.
         var rows = await _db.RolePermissions
             .AsNoTracking()
             .Where(rp => rp.Role != UserRole.Admin)
@@ -258,7 +250,6 @@ public class AdminService : IAdminService
             .GroupBy(r => r.Role)
             .ToDictionary(g => g.Key, g => g.Select(x => x.Name).ToList());
 
-        // Ensure all non-admin roles are present.
         foreach (var role in Enum.GetValues<UserRole>().Where(r => r != UserRole.Admin))
             assignments.TryAdd(role.ToString(), []);
 
@@ -289,16 +280,14 @@ public class AdminService : IAdminService
         }
         else
         {
-            // Already in desired state.
-            return;
+            return; // Already in desired state.
         }
 
         await _db.SaveChangesAsync();
 
-        // Invalidate role-permission cache.
+        // Invalidate role cache and all per-user caches for users in this role.
         await _cache.RemoveAsync($"role_permissions:{role}");
 
-        // Invalidate per-user permissions for users in this role.
         var affectedUserIds = await _db.Users
             .AsNoTracking()
             .Where(u => u.Role == role)
@@ -308,7 +297,6 @@ public class AdminService : IAdminService
         await Task.WhenAll(affectedUserIds.Select(uid =>
             _cache.RemoveAsync($"permissions:{uid}")));
 
-        // Evict L1 permission cache for affected users.
         foreach (var uid in affectedUserIds)
             _memory.Remove($"l1:permissions:{uid}");
     }
@@ -318,18 +306,15 @@ public class AdminService : IAdminService
         var target = await _db.Users.FindAsync(targetUserId)
             ?? throw new KeyNotFoundException("User not found.");
 
-        // Admin accounts are protected.
         if (target.Role == UserRole.Admin)
             throw new UnauthorizedAccessException("Admin accounts cannot be deleted.");
 
-        // Run transaction under execution strategy for transient retries.
         var strategy = _db.Database.CreateExecutionStrategy();
 
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync();
 
-            // Step 1: remove customer requests and related messages.
             var customerRequestIds = await _db.ServiceRequests
                 .Where(r => r.CustomerId == targetUserId)
                 .Select(r => r.Id)
@@ -337,7 +322,6 @@ public class AdminService : IAdminService
 
             if (customerRequestIds.Count > 0)
             {
-                // Bulk delete without loading entities.
                 await _db.ChatMessages
                     .Where(m => customerRequestIds.Contains(m.RequestId))
                     .ExecuteDeleteAsync();
@@ -347,7 +331,6 @@ public class AdminService : IAdminService
                     .ExecuteDeleteAsync();
             }
 
-            // Step 2: remove organization owned by this user.
             var ownedOrg = await _db.Organizations
                 .FirstOrDefaultAsync(o => o.OwnerId == targetUserId);
 
@@ -357,14 +340,12 @@ public class AdminService : IAdminService
                 await _db.SaveChangesAsync();
             }
 
-            // Step 3: remove user row (remaining dependencies are cascaded).
             _db.Users.Remove(target);
             await _db.SaveChangesAsync();
 
             await tx.CommitAsync();
         });
 
-        // Step 4: evict permission cache after commit.
         await _cache.RemoveAsync($"permissions:{targetUserId}");
         _memory.Remove($"l1:permissions:{targetUserId}");
         _memory.Remove($"l1:user_role:{targetUserId}");
@@ -395,9 +376,8 @@ public class AdminService : IAdminService
 
         if (granted is null)
         {
-            // Remove override (fallback to role default).
             if (existing is null) return;
-            _db.UserPermissions.Remove(existing);
+            _db.UserPermissions.Remove(existing); // Remove override → fall back to role default.
         }
         else if (existing is null)
         {
@@ -419,7 +399,6 @@ public class AdminService : IAdminService
 
         await _db.SaveChangesAsync();
 
-        // Invalidate per-user effective permission cache.
         await _cache.RemoveAsync($"permissions:{userId}");
         _memory.Remove($"l1:permissions:{userId}");
     }

@@ -21,10 +21,6 @@ public class BillingController : BaseController
         _logger        = logger;
     }
 
-    /// <summary>
-    /// Creates a Stripe Checkout session and returns the redirect URL.
-    /// Customers only — redirects to Stripe-hosted payment page.
-    /// </summary>
     [HttpPost("checkout")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -59,9 +55,6 @@ public class BillingController : BaseController
         }
     }
 
-    /// <summary>
-    /// Opens the Stripe Customer Portal so customers can manage or cancel their subscription.
-    /// </summary>
     [HttpPost("portal")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -87,9 +80,6 @@ public class BillingController : BaseController
         }
     }
 
-    /// <summary>
-    /// Returns the current subscription status for the authenticated customer.
-    /// </summary>
     [HttpGet("status")]
     [ProducesResponseType(typeof(SubscriptionStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -102,11 +92,8 @@ public class BillingController : BaseController
         return Ok(status);
     }
 
-    /// <summary>
-    /// Stripe webhook endpoint — receives payment/subscription lifecycle events.
-    /// No authentication; verified via Stripe-Signature header.
-    /// Raw body buffering is enabled globally for this path in Program.cs.
-    /// </summary>
+    // No authentication — verified via Stripe-Signature header.
+    // Raw body buffering is enabled for this path in Program.cs.
     [HttpPost("webhook")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]

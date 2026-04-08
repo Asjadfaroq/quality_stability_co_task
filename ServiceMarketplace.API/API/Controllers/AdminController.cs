@@ -27,13 +27,6 @@ public class AdminController : BaseController
         _logger       = logger;
     }
 
-    // ── Organisations overview ────────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns all organisations on the platform.
-    /// Each row includes only the owner's email and a member COUNT — no heavy payloads.
-    /// Optional <c>search</c> matches against organisation name or owner email.
-    /// </summary>
     [HttpGet("orgs")]
     [ProducesResponseType(typeof(PagedResult<AdminOrgDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllOrgs(
@@ -48,14 +41,6 @@ public class AdminController : BaseController
         return Ok(result);
     }
 
-    // ── Jobs overview ─────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns all service requests across the platform.
-    /// Supports optional <c>status</c> (Pending | Accepted | PendingConfirmation | Completed)
-    /// and free-text <c>search</c> (matches title, category, or customer email) filters.
-    /// Results are paginated — use <c>page</c> and <c>pageSize</c> (max 200).
-    /// </summary>
     [HttpGet("jobs")]
     [ProducesResponseType(typeof(PagedResult<AdminJobDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllJobs(
@@ -70,8 +55,6 @@ public class AdminController : BaseController
         var result = await _adminService.GetAllJobsAsync(page, pageSize, status, search);
         return Ok(result);
     }
-
-    // ── User management ───────────────────────────────────────────────────────
 
     [HttpGet("users")]
     [ProducesResponseType(typeof(PagedResult<UserDto>), StatusCodes.Status200OK)]
@@ -88,20 +71,14 @@ public class AdminController : BaseController
         return Ok(result);
     }
 
-    /// <summary>
-    /// Permanently deletes a user account and all associated data.
-    /// Cascades: service requests (+ chat messages), owned organization (members are detached),
-    /// permission overrides, stripe info, and all ASP.NET Identity satellite rows.
-    /// Guards: an admin cannot delete their own account or another Admin account.
-    /// </summary>
+    // Cascades: service requests + chat messages, owned org (members detached),
+    // permission overrides, stripe info, and ASP.NET Identity rows.
     [HttpDelete("users/{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUser(Guid id)
     {
-        // Controller-level guard: self-deletion is caught here before hitting the service,
-        // consistent with how UpdateSubscription handles it.
         if (id == CurrentUserId)
             return Forbidden("You cannot delete your own account.");
 
@@ -172,12 +149,6 @@ public class AdminController : BaseController
         }
     }
 
-    // ── User permission overrides ─────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns all explicit per-user permission overrides for the given user.
-    /// Does not include role-inherited permissions — only explicit overrides.
-    /// </summary>
     [HttpGet("users/{id:guid}/permissions")]
     [ProducesResponseType(typeof(List<UserPermissionOverrideDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserPermissions(Guid id)
@@ -186,10 +157,7 @@ public class AdminController : BaseController
         return Ok(result);
     }
 
-    /// <summary>
-    /// Sets or removes an explicit permission override for a user.
-    /// granted=true → force-grant; false → force-revoke; null → remove override (inherit from role).
-    /// </summary>
+    // granted=true → force-grant; false → force-revoke; null → remove override.
     [HttpPatch("users/{id:guid}/permissions")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -214,12 +182,6 @@ public class AdminController : BaseController
         }
     }
 
-    // ── Role permission management ────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns all platform permissions and the current role → permission matrix.
-    /// The Admin role is excluded — it always has unrestricted access.
-    /// </summary>
     [HttpGet("roles/permissions")]
     [ProducesResponseType(typeof(RolePermissionsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRolePermissions()
@@ -228,39 +190,41 @@ public class AdminController : BaseController
         return Ok(result);
     }
 
-    // ── Admin logs ────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns the most-recent in-memory log entries (up to 500).
-    /// Use <c>count</c> to control page size (default 100) and <c>category</c> to filter
-    /// by <c>System</c> or <c>Audit</c>. Omit <c>category</c> to return all entries.
-    /// For a live stream connect to <c>/hubs/admin-logs</c> via SignalR.
-    /// </summary>
+    // REST seed for the admin logs tab. System entries come from the in-memory buffer;
+    // audit entries are merged from Redis (10-min window) to survive restarts.
     [HttpGet("logs")]
     [ProducesResponseType(typeof(IReadOnlyList<LogEntry>), StatusCodes.Status200OK)]
-    public IActionResult GetLogs(
-        [FromServices] LogBuffer  buffer,
-        [FromQuery]    int        count    = 100,
-        [FromQuery]    string?    category = null)
+    public async Task<IActionResult> GetLogs(
+        [FromServices] LogBuffer       buffer,
+        [FromServices] IAuditLogCache  auditCache,
+        [FromQuery]    int             count    = 100,
+        [FromQuery]    string?         category = null)
     {
-        var entries = buffer.GetRecent(count);
+        count = Math.Clamp(count, 1, 500);
 
-        if (!string.IsNullOrWhiteSpace(category) &&
-            Enum.TryParse<LogCategory>(category, ignoreCase: true, out var cat))
-        {
-            entries = entries.Where(e => e.Category == cat).ToList();
-        }
+        var wantAudit  = category is null || string.Equals(category, "Audit",  StringComparison.OrdinalIgnoreCase);
+        var wantSystem = category is null || string.Equals(category, "System", StringComparison.OrdinalIgnoreCase);
 
-        return Ok(entries);
+        var bufferEntries = buffer.GetRecent(count)
+            .Where(e => wantSystem && e.Category == LogCategory.System ||
+                        wantAudit  && e.Category == LogCategory.Audit)
+            .ToList();
+
+        IReadOnlyList<LogEntry> redisAudit = wantAudit
+            ? await auditCache.GetAllAuditLogsAsync(count)
+            : [];
+
+        // Union by (Timestamp, Action, ActorUserId) to dedupe entries present in both sources.
+        var merged = bufferEntries
+            .UnionBy(redisAudit, e => (e.Timestamp, e.Action, e.ActorUserId))
+            .OrderByDescending(e => e.Timestamp)
+            .Take(count)
+            .ToList();
+
+        return Ok(merged);
     }
 
-    // ── Role permission management ────────────────────────────────────────────
-
-    /// <summary>
-    /// Grants or revokes a permission for an entire role.
-    /// Invalidates the Redis cache so changes propagate within 5 minutes.
-    /// The Admin role cannot be edited — it always has unrestricted access.
-    /// </summary>
+    // The Admin role cannot be edited — it always has unrestricted access.
     [HttpPatch("roles/{role}/permissions")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

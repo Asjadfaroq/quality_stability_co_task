@@ -513,6 +513,16 @@ builder.Services.AddRateLimiter(options =>
     }
 });
 
+// Audit log Redis cache — singleton because IConnectionMultiplexer is singleton.
+// Resolves IConnectionMultiplexer optionally: AuditLogCache handles null gracefully
+// (falls back to the in-memory LogBuffer) when Redis is not configured.
+builder.Services.AddSingleton<IAuditLogCache>(sp =>
+{
+    var mux    = sp.GetService<IConnectionMultiplexer>();   // null when Redis is off
+    var logger = sp.GetRequiredService<ILogger<AuditLogCache>>();
+    return new AuditLogCache(mux, logger);
+});
+
 // Register services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
