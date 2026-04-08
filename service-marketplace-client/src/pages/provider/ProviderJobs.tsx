@@ -278,7 +278,7 @@ export default function ProviderJobs() {
             <div className="relative w-full sm:w-56 shrink-0">
               <Search
                 size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"
               />
               <input
                 type="text"
@@ -314,7 +314,7 @@ export default function ProviderJobs() {
                       : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  <MapPin size={13} />
+                  <MapPin size={13} className={showNearby || nearbyResults ? 'text-white' : 'text-indigo-500'} />
                   Nearby
                   {nearbyResults && !showNearby && (
                     <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-white/80 inline-block" />

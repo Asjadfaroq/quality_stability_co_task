@@ -207,7 +207,7 @@ export default function AdminJobs() {
           <div className="relative w-full sm:w-64 shrink-0">
             <Search
               size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"
             />
             <input
               type="text"
