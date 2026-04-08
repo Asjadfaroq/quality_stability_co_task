@@ -207,6 +207,90 @@ public class RequestService : IRequestService
             .ToList();
     }
 
+    public async Task<List<MapJobDto>> GetForMapAsync(Guid userId, UserRole role)
+    {
+        // ── Admin: all jobs with denormalised customer/provider emails ────────
+        if (role == UserRole.Admin)
+        {
+            return await (
+                from r  in _db.ServiceRequests.AsNoTracking()
+                join cu in _db.Users.AsNoTracking() on r.CustomerId equals cu.Id
+                join pr in _db.Users.AsNoTracking() on r.AcceptedByProviderId equals pr.Id
+                    into providerGroup
+                from pr in providerGroup.DefaultIfEmpty()
+                select new MapJobDto
+                {
+                    Id            = r.Id,
+                    Title         = r.Title,
+                    Category      = r.Category,
+                    Status        = r.Status.ToString(),
+                    Latitude      = r.Latitude,
+                    Longitude     = r.Longitude,
+                    CustomerEmail = (string?)cu.Email,
+                    ProviderEmail = (string?)pr.Email,
+                    CreatedAt     = r.CreatedAt,
+                }
+            ).ToListAsync();
+        }
+
+        // ── Customer: only their own requests ────────────────────────────────
+        if (role == UserRole.Customer)
+        {
+            return await _db.ServiceRequests
+                .AsNoTracking()
+                .Where(r => r.CustomerId == userId)
+                .Select(r => new MapJobDto
+                {
+                    Id        = r.Id,
+                    Title     = r.Title,
+                    Category  = r.Category,
+                    Status    = r.Status.ToString(),
+                    Latitude  = r.Latitude,
+                    Longitude = r.Longitude,
+                    CreatedAt = r.CreatedAt,
+                })
+                .ToListAsync();
+        }
+
+        // ── Provider: jobs accepted/completed by themselves or org members ───
+        // Step 1: resolve the caller's org membership (two-query approach avoids
+        //         correlated sub-queries that SQL Server may not optimise well).
+        var orgId = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => u.OrganizationId)
+            .FirstOrDefaultAsync();
+
+        List<Guid> providerIds = orgId.HasValue
+            ? await _db.Users
+                .AsNoTracking()
+                .Where(u => u.OrganizationId == orgId)
+                .Select(u => u.Id)
+                .ToListAsync()
+            : [userId];
+
+        // Step 2: fetch jobs accepted by any of those provider IDs.
+        return await _db.ServiceRequests
+            .AsNoTracking()
+            .Where(r =>
+                r.AcceptedByProviderId.HasValue &&
+                providerIds.Contains(r.AcceptedByProviderId.Value) &&
+                (r.Status == RequestStatus.Accepted         ||
+                 r.Status == RequestStatus.PendingConfirmation ||
+                 r.Status == RequestStatus.Completed))
+            .Select(r => new MapJobDto
+            {
+                Id        = r.Id,
+                Title     = r.Title,
+                Category  = r.Category,
+                Status    = r.Status.ToString(),
+                Latitude  = r.Latitude,
+                Longitude = r.Longitude,
+                CreatedAt = r.CreatedAt,
+            })
+            .ToListAsync();
+    }
+
     public async Task<ServiceRequestDto> AcceptAsync(Guid requestId, Guid providerId)
     {
         var request = await _db.ServiceRequests

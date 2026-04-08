@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Briefcase, Search, X } from 'lucide-react'
+import { Briefcase, Search, X, Map, List } from 'lucide-react'
 
 import api from '../../api/axios'
 import AppLayout from '../../components/AppLayout'
+import JobsMap from '../../components/JobsMap'
 import {
   Card, Badge, EmptyState, Skeleton, Pagination,
 } from '../../components/ui'
-import type { PagedResult } from '../../types'
+import type { PagedResult, MapJobDto } from '../../types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,10 +81,13 @@ function TableSkeleton() {
 
 // ── AdminJobs ─────────────────────────────────────────────────────────────────
 
+type ViewMode = 'table' | 'map'
+
 export default function AdminJobs() {
   const [page, setPage]         = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [statusFilter, setStatusFilter] = useState('')
+  const [viewMode, setViewMode] = useState<ViewMode>('table')
 
   // Two-state debounce: `searchInput` is the raw controlled value of the text
   // field; `search` is the debounced value that actually drives the query.
@@ -113,6 +117,15 @@ export default function AdminJobs() {
     // Keep the previous page's data visible while the next page loads
     // so the table doesn't flash empty on every page turn.
     placeholderData: prev => prev,
+    enabled: viewMode === 'table',
+  })
+
+  // Map data — fetched only when map view is active
+  const { data: mapJobs, isLoading: mapLoading } = useQuery<MapJobDto[]>({
+    queryKey: ['admin-jobs-map'],
+    queryFn: () => api.get('/requests/map').then(r => r.data),
+    enabled: viewMode === 'map',
+    staleTime: 60_000,
   })
 
   const jobs       = data?.items      ?? []
@@ -123,13 +136,48 @@ export default function AdminJobs() {
 
   return (
     <AppLayout title="All Jobs">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-900">All Jobs</h2>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Platform-wide view of every service request across all statuses.
-        </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">All Jobs</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Platform-wide view of every service request across all statuses.
+          </p>
+        </div>
+        {/* View mode toggle */}
+        <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
+              viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <List size={13} /> Table
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
+              viewMode === 'map' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <Map size={13} /> Map
+          </button>
+        </div>
       </div>
 
+      {/* ── Map view ──────────────────────────────────────────────────────── */}
+      {viewMode === 'map' && (
+        <Card className="p-4">
+          <p className="text-xs text-slate-500 mb-3">
+            Showing all {mapJobs?.length ?? 0} jobs on the map. Click a marker for details.
+          </p>
+          <JobsMap jobs={mapJobs ?? []} loading={mapLoading} height="h-[560px]" showEmails />
+        </Card>
+      )}
+
+      {/* ── Table view ────────────────────────────────────────────────────── */}
+      {viewMode === 'table' && (
       <Card padding={false}>
         {/* ── Toolbar ───────────────────────────────────────────────────── */}
         <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -314,6 +362,7 @@ export default function AdminJobs() {
           onPageSizeChange={s => { setPageSize(s); setPage(1) }}
         />
       </Card>
+      )}
     </AppLayout>
   )
 }

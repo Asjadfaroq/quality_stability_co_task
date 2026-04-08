@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Plus, Sparkles, MessageSquare, ClipboardList,
-  Clock, Loader2, X, Zap, CheckCircle2, ArrowRight, MapPin,
+  Clock, Loader2, X, Zap, CheckCircle2, ArrowRight, MapPin, Map, List,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useUnreadStore } from '../../store/unreadStore'
@@ -18,11 +18,12 @@ import { useAiEnhance } from '../../hooks/useAiEnhance'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import AppLayout from '../../components/AppLayout'
 import ChatPanel from '../../components/ChatPanel'
+import JobsMap from '../../components/JobsMap'
 import {
   Button, Badge, Card,
   Input, Textarea, Select, EmptyState, SkeletonCard, Pagination,
 } from '../../components/ui'
-import type { PagedResult, ServiceRequest } from '../../types'
+import type { PagedResult, ServiceRequest, MapJobDto } from '../../types'
 
 const schema = z.object({
   title:       z.string().min(1, 'Title is required').max(200),
@@ -305,6 +306,8 @@ function NewRequestModal({ open, onClose }: NewRequestModalProps) {
 
 const DEFAULT_PAGE_SIZE = 10
 
+type ViewMode = 'list' | 'map'
+
 export default function CustomerRequests() {
   const queryClient = useQueryClient()
   const { email }   = useAuthStore()
@@ -312,6 +315,7 @@ export default function CustomerRequests() {
   const [pageSize, setPageSize]       = useState(DEFAULT_PAGE_SIZE)
   const [showModal, setShowModal]     = useState(false)
   const [activeChat, setActiveChat]   = useState<{ id: string; title: string } | null>(null)
+  const [viewMode, setViewMode]       = useState<ViewMode>('list')
   const unreadCounts = useUnreadStore((s) => s.counts)
   const clearUnread  = useUnreadStore((s) => s.clear)
 
@@ -331,6 +335,14 @@ export default function CustomerRequests() {
     queryKey: ['requests', page, pageSize],
     queryFn: () => api.get('/requests', { params: { page, pageSize } }).then((r) => r.data),
     placeholderData: (prev) => prev,
+    enabled: viewMode === 'list',
+  })
+
+  const { data: mapJobs, isLoading: mapLoading } = useQuery<MapJobDto[]>({
+    queryKey: ['requests-map-customer'],
+    queryFn: () => api.get('/requests/map').then((r) => r.data),
+    enabled: viewMode === 'map',
+    staleTime: 60_000,
   })
 
   const requests   = data?.items      ?? []
@@ -345,10 +357,43 @@ export default function CustomerRequests() {
             <h2 className="text-xl font-bold text-slate-900">My Requests</h2>
             <p className="text-sm text-slate-500 mt-0.5">Welcome back, {email?.split('@')[0]}</p>
           </div>
-          <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
-            New Request
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* View mode toggle */}
+            <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
+                  viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                <List size={13} /> List
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('map')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
+                  viewMode === 'map' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                <Map size={13} /> Map
+              </button>
+            </div>
+            <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
+              New Request
+            </Button>
+          </div>
         </div>
+
+        {/* ── Map view ──────────────────────────────────────────────────────── */}
+        {viewMode === 'map' && (
+          <Card className="p-4 mb-6">
+            <p className="text-xs text-slate-500 mb-3">
+              Showing all your requests on the map. Click a marker for details.
+            </p>
+            <JobsMap jobs={mapJobs ?? []} loading={mapLoading} height="h-[480px]" />
+          </Card>
+        )}
 
         {/* Subscription banner */}
         <div

@@ -104,6 +104,20 @@ public class RequestsController : BaseController
         return Ok(result);
     }
 
+    /// <summary>
+    /// Returns a flat list of map-ready jobs scoped to the caller's role.
+    /// Admin = all jobs; Customer = own jobs; Provider = jobs accepted by the
+    /// provider or any member of their organisation (accepted / in-progress /
+    /// completed).  No pagination — intended for map rendering.
+    /// </summary>
+    [HttpGet("map")]
+    [ProducesResponseType(typeof(List<MapJobDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetForMap()
+    {
+        var result = await _requestService.GetForMapAsync(CurrentUserId, CurrentUserRole);
+        return Ok(result);
+    }
+
     /// <summary>Get a single request by ID. Customers can only access their own.</summary>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]

@@ -16,6 +16,12 @@ public interface IRequestService
     Task<PagedResult<ServiceRequestDto>> GetCompletedAsync(Guid providerId, int page, int pageSize);
     Task<ServiceRequestDto>              GetByIdAsync(Guid requestId, Guid userId, UserRole role);
     Task<List<ServiceRequestDto>>        GetNearbyAsync(double lat, double lng, double radiusKm);
+    /// <summary>
+    /// Returns a flat list of jobs scoped to the caller's role for map rendering.
+    /// Admin = all jobs; Customer = own jobs; Provider = jobs accepted by the provider
+    /// or any member of their organisation.
+    /// </summary>
+    Task<List<MapJobDto>>                GetForMapAsync(Guid userId, UserRole role);
     Task<ServiceRequestDto>              AcceptAsync(Guid requestId, Guid providerId);
     Task<ServiceRequestDto>              CompleteAsync(Guid requestId, Guid providerId);
     Task<ServiceRequestDto>              ConfirmAsync(Guid requestId, Guid customerId);
