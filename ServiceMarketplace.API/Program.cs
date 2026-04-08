@@ -1,5 +1,8 @@
 using System.Text;
 using System.Threading.RateLimiting;
+using Serilog;
+using Serilog.Events;
+using ServiceMarketplace.API.Logging;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -28,7 +31,51 @@ using ServiceMarketplace.API.Services;
 using ServiceMarketplace.API.Services.Interfaces;
 using StackExchange.Redis;
 
+// ── Bootstrap logger (captures startup errors before full config loads) ───────
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Logging infrastructure ────────────────────────────────────────────────────
+// LogBuffer is instantiated here (before UseSerilog) so the SignalRLogSink can
+// capture it in a closure. It is also registered as a singleton for DI consumers.
+var logBuffer = new LogBuffer();
+builder.Services.AddSingleton(logBuffer);
+builder.Services.AddHostedService<LogBroadcastService>();
+
+builder.Host.UseSerilog((ctx, _, cfg) =>
+{
+    // In dev: stream Debug+ to the admin tab; in prod: Warning+ only (reduces noise/cost)
+    var uiLevel = ctx.HostingEnvironment.IsDevelopment()
+        ? LogEventLevel.Debug
+        : LogEventLevel.Warning;
+
+    cfg
+        .MinimumLevel.Debug()
+        .MinimumLevel.Override("Microsoft",                   LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.Hosting.Lifetime",  LogEventLevel.Information)
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+        .MinimumLevel.Override("System",                      LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .Enrich.WithMachineName()
+        .Enrich.WithThreadId()
+        .WriteTo.Console(
+            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+        .WriteTo.Sink(new SignalRLogSink(logBuffer, null, uiLevel));
+
+    var aiCs = ctx.Configuration["ApplicationInsights:ConnectionString"];
+    if (!string.IsNullOrWhiteSpace(aiCs))
+    {
+        cfg.WriteTo.ApplicationInsights(
+            connectionString:          aiCs,
+            telemetryConverter:        TelemetryConverter.Traces,
+            restrictedToMinimumLevel:  LogEventLevel.Information);
+    }
+});
 
 // Typed configuration
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
@@ -521,6 +568,8 @@ app.UseRateLimiter();
 app.MapControllers();
 
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<AdminLogsHub>("/hubs/admin-logs");
+app.MapHub<ActivityHub>("/hubs/activity");
 
 // Liveness probe.
 app.MapHealthChecks("/health/live", new HealthCheckOptions

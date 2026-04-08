@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Hubs;
+using ServiceMarketplace.API.Logging;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
 using ServiceMarketplace.API.Models.DTOs.Org;
@@ -14,21 +15,24 @@ namespace ServiceMarketplace.API.Services;
 
 public class OrgService : IOrgService
 {
-    private readonly AppDbContext _db;
-    private readonly ICacheService _cache;
-    private readonly IMemoryCache _memory;
+    private readonly AppDbContext                _db;
+    private readonly ICacheService               _cache;
+    private readonly IMemoryCache                _memory;
     private readonly IHubContext<NotificationHub> _hub;
+    private readonly ILogger<OrgService>          _logger;
 
     public OrgService(
-        AppDbContext db,
-        ICacheService cache,
-        IMemoryCache memory,
-        IHubContext<NotificationHub> hub)
+        AppDbContext                  db,
+        ICacheService                 cache,
+        IMemoryCache                  memory,
+        IHubContext<NotificationHub>  hub,
+        ILogger<OrgService>           logger)
     {
         _db     = db;
         _cache  = cache;
         _memory = memory;
         _hub    = hub;
+        _logger = logger;
     }
 
     public async Task<OrgDto?> GetOrgForUserAsync(Guid userId)
@@ -102,6 +106,11 @@ public class OrgService : IOrgService
             await tx.CommitAsync();
         });
 
+        _logger.LogAudit(
+            providerAdminId.ToString(), "OrgCreated",
+            "ProviderAdmin {AdminId} created organisation \"{OrgName}\" ({OrgId})",
+            providerAdminId, org.Name, org.Id);
+
         return new OrgDto
         {
             Id        = org.Id,
@@ -148,6 +157,11 @@ public class OrgService : IOrgService
         target.OrganizationId = orgId;
         await _db.SaveChangesAsync();
 
+        _logger.LogAudit(
+            providerAdminId.ToString(), "OrgMemberAdded",
+            "ProviderAdmin {AdminId} added user {MemberId} ({Email}) to organisation {OrgId}",
+            providerAdminId, target.Id, target.Email, orgId);
+
         await _hub.Clients
             .Group(target.Id.ToString())
             .SendAsync("OrgMemberAdded", new { organizationId = orgId, organizationName = orgName });
@@ -182,6 +196,11 @@ public class OrgService : IOrgService
 
         member.OrganizationId = null;
         await _db.SaveChangesAsync();
+
+        _logger.LogAudit(
+            providerAdminId.ToString(), "OrgMemberRemoved",
+            "ProviderAdmin {AdminId} removed user {MemberId} from organisation {OrgId}",
+            providerAdminId, memberId, orgId);
 
         await _hub.Clients
             .Group(memberId.ToString())

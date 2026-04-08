@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using ServiceMarketplace.API.Helpers;
+using ServiceMarketplace.API.Logging;
 using ServiceMarketplace.API.Models.Config;
 using ServiceMarketplace.API.Models.DTOs.Auth;
 using ServiceMarketplace.API.Models.Entities;
@@ -14,13 +15,18 @@ namespace ServiceMarketplace.API.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly UserManager<User> _userManager;
-    private readonly JwtSettings _jwtSettings;
+    private readonly UserManager<User>  _userManager;
+    private readonly JwtSettings        _jwtSettings;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(UserManager<User> userManager, IOptions<JwtSettings> jwtSettings)
+    public AuthService(
+        UserManager<User>     userManager,
+        IOptions<JwtSettings> jwtSettings,
+        ILogger<AuthService>  logger)
     {
         _userManager = userManager;
         _jwtSettings = jwtSettings.Value;
+        _logger      = logger;
     }
 
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
@@ -45,6 +51,11 @@ public class AuthService : IAuthService
             throw new InvalidOperationException(errors);
         }
 
+        _logger.LogAudit(
+            user.Id.ToString(), "UserRegistered",
+            "User {UserId} registered with email {Email} as {Role}",
+            user.Id, user.Email, user.Role);
+
         return new LoginResponse
         {
             Token  = GenerateJwt(user),
@@ -60,7 +71,15 @@ public class AuthService : IAuthService
 
         var valid = await _userManager.CheckPasswordAsync(user, request.Password);
         if (!valid)
+        {
+            _logger.LogWarning("Failed login attempt for email {Email}", request.Email);
             throw new UnauthorizedAccessException("Invalid credentials.");
+        }
+
+        _logger.LogAudit(
+            user.Id.ToString(), "UserLoggedIn",
+            "User {UserId} ({Email}) logged in",
+            user.Id, user.Email);
 
         return new LoginResponse
         {

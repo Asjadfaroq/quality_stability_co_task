@@ -5,6 +5,7 @@ using ServiceMarketplace.API.Data;
 using ServiceMarketplace.API.Domain.Exceptions;
 using ServiceMarketplace.API.Helpers;
 using ServiceMarketplace.API.Hubs;
+using ServiceMarketplace.API.Logging;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
@@ -81,7 +82,10 @@ public class RequestService : IRequestService
         _db.ServiceRequests.Add(request);
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("Request {RequestId} created by customer {CustomerId}", request.Id, customerId);
+        _logger.LogAudit(
+            customerId.ToString(), "RequestCreated",
+            "Customer {CustomerId} created request {RequestId} — \"{Title}\" [{Category}]",
+            customerId, request.Id, request.Title, request.Category);
 
         await _hub.Clients
             .Group("providers")
@@ -332,8 +336,10 @@ public class RequestService : IRequestService
             throw new ConflictException("Request was accepted by another provider. Please refresh.");
         }
 
-        _logger.LogInformation(
-            "Request {RequestId} accepted by provider {ProviderId}", requestId, providerId);
+        _logger.LogAudit(
+            providerId.ToString(), "RequestAccepted",
+            "Provider {ProviderId} accepted request {RequestId}",
+            providerId, requestId);
 
         await _hub.Clients
             .Group("providers")
@@ -370,9 +376,10 @@ public class RequestService : IRequestService
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation(
-            "Request {RequestId} marked PendingConfirmation by provider {ProviderId}",
-            requestId, providerId);
+        _logger.LogAudit(
+            providerId.ToString(), "RequestMarkedComplete",
+            "Provider {ProviderId} marked request {RequestId} as complete — awaiting customer confirmation",
+            providerId, requestId);
 
         await _hub.Clients
             .Group(request.CustomerId.ToString())
@@ -403,8 +410,10 @@ public class RequestService : IRequestService
 
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation(
-            "Request {RequestId} confirmed completed by customer {CustomerId}", requestId, customerId);
+        _logger.LogAudit(
+            customerId.ToString(), "RequestConfirmed",
+            "Customer {CustomerId} confirmed completion of request {RequestId}",
+            customerId, requestId);
 
         if (request.AcceptedByProviderId.HasValue)
             await _hub.Clients

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceMarketplace.API.Helpers;
+using ServiceMarketplace.API.Logging;
 using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.DTOs;
 using ServiceMarketplace.API.Models.DTOs.Admin;
@@ -17,11 +18,13 @@ public class AdminController : BaseController
     private const int DefaultPageSize = 50;
     private const int MaxPageSize     = 200;
 
-    private readonly IAdminService _adminService;
+    private readonly IAdminService       _adminService;
+    private readonly ILogger<AdminController> _logger;
 
-    public AdminController(IAdminService adminService)
+    public AdminController(IAdminService adminService, ILogger<AdminController> logger)
     {
         _adminService = adminService;
+        _logger       = logger;
     }
 
     // ── Organisations overview ────────────────────────────────────────────────
@@ -105,6 +108,10 @@ public class AdminController : BaseController
         try
         {
             await _adminService.DeleteUserAsync(id);
+            _logger.LogAudit(
+                CurrentUserId.ToString(), "AdminUserDeleted",
+                "Admin {AdminId} deleted user {TargetUserId}",
+                CurrentUserId, id);
             return NoContent();
         }
         catch (UnauthorizedAccessException ex)
@@ -129,6 +136,10 @@ public class AdminController : BaseController
         try
         {
             await _adminService.UpdateSubscriptionAsync(id, request.SubTier);
+            _logger.LogAudit(
+                CurrentUserId.ToString(), "AdminSubscriptionUpdated",
+                "Admin {AdminId} changed subscription of user {TargetUserId} to {Tier}",
+                CurrentUserId, id, request.SubTier);
             return Ok(new { message = "Subscription updated." });
         }
         catch (KeyNotFoundException ex)
@@ -149,6 +160,10 @@ public class AdminController : BaseController
         try
         {
             await _adminService.UpdateUserRoleAsync(id, request.Role);
+            _logger.LogAudit(
+                CurrentUserId.ToString(), "AdminRoleUpdated",
+                "Admin {AdminId} changed role of user {TargetUserId} to {Role}",
+                CurrentUserId, id, request.Role);
             return Ok(new { message = "User role updated." });
         }
         catch (KeyNotFoundException ex)
@@ -187,6 +202,10 @@ public class AdminController : BaseController
         try
         {
             await _adminService.UpdateUserPermissionAsync(id, request.PermissionName, request.Granted);
+            _logger.LogAudit(
+                CurrentUserId.ToString(), "AdminPermissionUpdated",
+                "Admin {AdminId} set permission {Permission} = {Granted} for user {TargetUserId}",
+                CurrentUserId, request.PermissionName, request.Granted, id);
             return Ok(new { message = "User permission updated." });
         }
         catch (KeyNotFoundException ex)
@@ -208,6 +227,34 @@ public class AdminController : BaseController
         var result = await _adminService.GetRolePermissionsAsync();
         return Ok(result);
     }
+
+    // ── Admin logs ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the most-recent in-memory log entries (up to 500).
+    /// Use <c>count</c> to control page size (default 100) and <c>category</c> to filter
+    /// by <c>System</c> or <c>Audit</c>. Omit <c>category</c> to return all entries.
+    /// For a live stream connect to <c>/hubs/admin-logs</c> via SignalR.
+    /// </summary>
+    [HttpGet("logs")]
+    [ProducesResponseType(typeof(IReadOnlyList<LogEntry>), StatusCodes.Status200OK)]
+    public IActionResult GetLogs(
+        [FromServices] LogBuffer  buffer,
+        [FromQuery]    int        count    = 100,
+        [FromQuery]    string?    category = null)
+    {
+        var entries = buffer.GetRecent(count);
+
+        if (!string.IsNullOrWhiteSpace(category) &&
+            Enum.TryParse<LogCategory>(category, ignoreCase: true, out var cat))
+        {
+            entries = entries.Where(e => e.Category == cat).ToList();
+        }
+
+        return Ok(entries);
+    }
+
+    // ── Role permission management ────────────────────────────────────────────
 
     /// <summary>
     /// Grants or revokes a permission for an entire role.
