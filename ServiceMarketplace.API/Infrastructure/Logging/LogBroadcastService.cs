@@ -44,7 +44,6 @@ public sealed class LogBroadcastService : BackgroundService
                         .Group(ActivityHub.GroupPrefix + entry.ActorUserId)
                         .SendAsync("ActivityEntry", entry, stoppingToken);
 
-                    // Persist to Redis (10-min sliding window) for history replay on reconnect.
                     await _auditCache.WriteAsync(entry);
                 }
             }

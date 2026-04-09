@@ -205,18 +205,15 @@ public class AdminController : BaseController
         var wantAudit  = category is null || string.Equals(category, "Audit",  StringComparison.OrdinalIgnoreCase);
         var wantSystem = category is null || string.Equals(category, "System", StringComparison.OrdinalIgnoreCase);
 
-        var bufferEntries = buffer.GetRecent(count)
-            .Where(e => wantSystem && e.Category == LogCategory.System ||
-                        wantAudit  && e.Category == LogCategory.Audit)
-            .ToList();
+        var bufferEntries = buffer.GetRecent(count);
+        var redisEntries  = await auditCache.GetAllLogsAsync(count);
 
-        IReadOnlyList<LogEntry> redisAudit = wantAudit
-            ? await auditCache.GetAllAuditLogsAsync(count)
-            : [];
-
-        // Union by (Timestamp, Action, ActorUserId) to dedupe entries present in both sources.
+        // Union by (Timestamp, Action, ActorUserId) to dedupe entries present in both sources,
+        // then filter by the requested category.
         var merged = bufferEntries
-            .UnionBy(redisAudit, e => (e.Timestamp, e.Action, e.ActorUserId))
+            .UnionBy(redisEntries, e => (e.Timestamp, e.Action, e.ActorUserId))
+            .Where(e => (wantSystem && e.Category == LogCategory.System) ||
+                        (wantAudit  && e.Category == LogCategory.Audit))
             .OrderByDescending(e => e.Timestamp)
             .Take(count)
             .ToList();

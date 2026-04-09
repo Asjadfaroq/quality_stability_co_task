@@ -21,13 +21,15 @@ public sealed class SignalRLogSink : ILogEventSink
 
     public void Emit(LogEvent logEvent)
     {
-        if (logEvent.Level < _minimumLevel)
+        var categoryStr = TryGetString(logEvent, "LogCategory");
+        var isAudit     = categoryStr == nameof(LogCategory.Audit);
+
+        // Audit events always pass through — they are explicit user actions.
+        // System events are filtered by the configured minimum level (Warning in prod).
+        if (!isAudit && logEvent.Level < _minimumLevel)
             return;
 
-        var categoryStr = TryGetString(logEvent, "LogCategory");
-        var category    = categoryStr == nameof(LogCategory.Audit)
-            ? LogCategory.Audit
-            : LogCategory.System;
+        var category = isAudit ? LogCategory.Audit : LogCategory.System;
 
         var entry = new LogEntry(
             Level:         logEvent.Level.ToString(),

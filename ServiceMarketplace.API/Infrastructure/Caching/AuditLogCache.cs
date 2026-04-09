@@ -7,15 +7,15 @@ using StackExchange.Redis;
 namespace ServiceMarketplace.API.Services;
 
 /// <summary>
-/// Stores audit entries in Redis sorted sets scored by Unix timestamp (seconds).
-/// Keys: sm:audit:user:{userId} (per-user) and sm:audit:all (global admin view).
+/// Stores log entries in Redis sorted sets scored by Unix timestamp (seconds).
+/// Keys: sm:logs:all (global, system+audit), sm:audit:user:{userId} (per-user audit only).
 /// On every write: ZADD + ZREMRANGEBYSCORE (prune >10 min old) + EXPIRE 600s.
 /// </summary>
 public sealed class AuditLogCache : IAuditLogCache
 {
     private const int    TtlSeconds    = 600;
     private const string UserKeyPrefix = "sm:audit:user:";
-    private const string AllKey        = "sm:audit:all";
+    private const string AllKey        = "sm:logs:all";
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -88,7 +88,7 @@ public sealed class AuditLogCache : IAuditLogCache
         }
     }
 
-    public async Task<IReadOnlyList<LogEntry>> GetAllAuditLogsAsync(int count = 200)
+    public async Task<IReadOnlyList<LogEntry>> GetAllLogsAsync(int count = 200)
     {
         if (_redis is null) return [];
 
