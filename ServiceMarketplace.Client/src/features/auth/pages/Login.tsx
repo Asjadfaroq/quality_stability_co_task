@@ -160,7 +160,7 @@ export default function Login() {
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-slate-400 w-14">Email</span>
               <span className="text-[11px] font-medium text-slate-700 font-mono select-all">
-                admin@qualitco.com
+                admin@qualityco.com
               </span>
             </div>
             <div className="flex items-center gap-1.5">
