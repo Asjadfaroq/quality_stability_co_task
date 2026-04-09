@@ -267,7 +267,7 @@ export default function AdminLogs() {
   const [search,         setSearch]         = useState('')
 
   const {
-    entries,
+    entries: hubEntries,
     connectionState,
     isPaused,
     pauseQueueSize,
@@ -279,18 +279,19 @@ export default function AdminLogs() {
     liveEvent:    'LogEntry',
   })
 
-  // REST fallback — seeds the view when SignalR hasn't connected yet.
-  // Once SignalR fires 'RecentLogs' it replaces these entries in the reducer.
-  const { isLoading: isRestLoading } = useQuery<LogEntry[]>({
+  // REST seed — active whenever the hub has no entries yet.
+  // Covers two cases: SignalR still connecting, OR connected but server buffer was
+  // empty (e.g. production restart). Once hubEntries is non-empty it takes over.
+  const { data: restSeed = [], isLoading: isRestLoading } = useQuery<LogEntry[]>({
     queryKey: ['admin-logs-seed'],
     queryFn:  () => api.get('/admin/logs', { params: { count: 200 } }).then(r => r.data),
-    enabled:  connectionState !== 'connected' && entries.length === 0,
+    enabled:  hubEntries.length === 0,
     staleTime: Infinity,
+    refetchOnWindowFocus: false,
   })
 
+  const entries   = hubEntries.length > 0 ? hubEntries : restSeed
   const isLoading = isRestLoading && entries.length === 0
-
-  // ── Client-side filtering (all filtering is local — no round-trips) ───────
 
   const filtered = useMemo(() => {
     let list = entries
