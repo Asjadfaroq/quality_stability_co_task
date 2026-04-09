@@ -53,7 +53,7 @@ builder.Host.UseSerilog((ctx, _, cfg) =>
     // In dev: stream Debug+ to the admin tab; in prod: Warning+ only (reduces noise/cost)
     var uiLevel = ctx.HostingEnvironment.IsDevelopment()
         ? LogEventLevel.Debug
-        : LogEventLevel.Warning;
+        : LogEventLevel.Information;
 
     cfg
         .MinimumLevel.Debug()
