@@ -1,0 +1,17 @@
+# Build output must never enter the image. obj/project.assets.json is written by the
+# host's `dotnet restore` and points at host-specific NuGet paths; copying it over the
+# container's own restore output makes `dotnet publish --no-restore` fail with
+# NETSDK1064 "package was not found".
+bin/
+obj/
+
+# Local configuration and secrets — supplied as environment variables in deployment.
+appsettings.Development.json
+appsettings.Production.json
+*.user
+
+# Noise
+.vs/
+.vscode/
+.idea/
+**/.DS_Store

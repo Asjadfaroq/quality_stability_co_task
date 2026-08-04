@@ -21,13 +21,15 @@ RUN dotnet publish ServiceMarketplace.API.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Non-root user for security
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-USER appuser
-
+# Non-root user for security. The Microsoft runtime images already ship a dedicated
+# "app" user (uid 1654) exposed as $APP_UID — use it instead of creating one. The base
+# image is Ubuntu 24.04 and does not include adduser/addgroup, so creating a user here
+# fails the build outright.
 COPY --from=publish /app/publish .
+USER $APP_UID
 
-ENV ASPNETCORE_URLS=http://+:8080
+# Honour the PORT injected by container platforms (Render, Cloud Run, Heroku) and fall
+# back to 8080 locally. ENV cannot expand variables at runtime, so bind in the entrypoint.
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "ServiceMarketplace.API.dll"]
+ENTRYPOINT ["sh", "-c", "exec dotnet ServiceMarketplace.API.dll --urls http://+:${PORT:-8080}"]

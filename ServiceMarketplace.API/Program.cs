@@ -86,9 +86,13 @@ var stripeOptionsBuilder = builder.Services
     .AddOptions<StripeSettings>()
     .Bind(builder.Configuration.GetSection("Stripe"));
 
-// Production should fail-fast on missing Stripe configuration.
-// Local/dev environments can boot without Stripe and only billing calls will be rejected.
-if (!builder.Environment.IsDevelopment())
+// Production should fail-fast on missing Stripe configuration, so a billing-enabled
+// deployment never starts half-configured. Deployments that intentionally ship without
+// billing (demo/staging environments) set Stripe:Enabled=false; billing endpoints then
+// reject calls at runtime instead of preventing the whole API from starting.
+var stripeEnabled = builder.Configuration.GetValue("Stripe:Enabled", true);
+
+if (!builder.Environment.IsDevelopment() && stripeEnabled)
 {
     stripeOptionsBuilder
         .ValidateDataAnnotations()

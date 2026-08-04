@@ -1,0 +1,13 @@
+# Host-installed dependencies are platform-specific; the image runs its own npm ci.
+node_modules/
+dist/
+
+# Local env files — build-time values are passed as build args / env vars instead.
+.env
+.env.*
+!.env.example
+
+# Noise
+.vscode/
+.idea/
+**/.DS_Store
