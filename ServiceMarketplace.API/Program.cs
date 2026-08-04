@@ -27,6 +27,7 @@ using ServiceMarketplace.API.Middleware;
 using ServiceMarketplace.API.Models.Config;
 using ServiceMarketplace.API.Models.DTOs.Requests;
 using ServiceMarketplace.API.Models.Entities;
+using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Resilience;
 using ServiceMarketplace.API.Services;
 using ServiceMarketplace.API.Services.Interfaces;
@@ -99,12 +100,12 @@ if (!builder.Environment.IsDevelopment())
 
 // DbContext with transient retry
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(
+    options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sql => sql.EnableRetryOnFailure(
+        npgsql => npgsql.EnableRetryOnFailure(
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorNumbersToAdd: null)));
+            errorCodesToAdd: null)));
 
 // 2. Identity
 builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
@@ -170,7 +171,7 @@ builder.Services.AddResponseCompression(options =>
 
 // Health checks (Redis check added later if enabled).
 builder.Services.AddHealthChecks()
-    .AddSqlServer(
+    .AddNpgSql(
         connectionString: builder.Configuration.GetConnectionString("DefaultConnection")!,
         name:             "sql",
         failureStatus:    HealthStatus.Unhealthy,
@@ -332,6 +333,13 @@ builder.Services.AddResiliencePipeline(ResilienceKeys.Redis, pipeline =>
 });
 
 // Rate limiting (Redis preferred, in-memory fallback).
+// Login/register throttle. Defaults to 10 requests per 15 minutes per IP; override via
+// "RateLimiting:Auth" so local development (where one machine drives every request) is not
+// locked out by the production-grade limit.
+var authRateLimit  = builder.Configuration.GetValue("RateLimiting:Auth:PermitLimit", 10);
+var authRateWindow = TimeSpan.FromMinutes(
+    builder.Configuration.GetValue("RateLimiting:Auth:WindowMinutes", 15.0));
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -358,7 +366,7 @@ builder.Services.AddRateLimiter(options =>
 
     if (redisAvailable)
     {
-        // Login & Register — fixed window per IP, 10 requests per 15 minutes
+        // Login & Register — fixed window per IP (see RateLimiting:Auth configuration).
         options.AddPolicy(RateLimitPolicies.Auth, httpContext =>
         {
             var mux = httpContext.RequestServices.GetRequiredService<IConnectionMultiplexer>();
@@ -367,8 +375,8 @@ builder.Services.AddRateLimiter(options =>
                 partitionKey: $"sm:rl:auth:{ip}",
                 factory: _ => new RedisFixedWindowRateLimiterOptions
                 {
-                    PermitLimit               = 10,
-                    Window                    = TimeSpan.FromMinutes(15),
+                    PermitLimit               = authRateLimit,
+                    Window                    = authRateWindow,
                     ConnectionMultiplexerFactory = () => mux
                 });
         });
@@ -450,8 +458,8 @@ builder.Services.AddRateLimiter(options =>
                 partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 factory: _ => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit           = 10,
-                    Window                = TimeSpan.FromMinutes(15),
+                    PermitLimit           = authRateLimit,
+                    Window                = authRateWindow,
                     QueueProcessingOrder  = QueueProcessingOrder.OldestFirst,
                     QueueLimit            = 0
                 }));
@@ -549,6 +557,41 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    // Seed the platform administrator. Admin cannot be created through /api/auth/register,
+    // so without this a fresh database has no way to reach any /api/admin endpoint.
+    // Credentials come from the "SeedAdmin" configuration section; the defaults match the
+    // credentials shown on the login page. Override them in any real deployment.
+    var seedSection = app.Configuration.GetSection("SeedAdmin");
+    var adminEmail = seedSection["Email"] is { Length: > 0 } e ? e : "admin@qualityco.com";
+    var adminPassword = seedSection["Password"] is { Length: > 0 } p ? p : "Quality123!";
+
+    if (seedSection.GetValue("Enabled", true))
+    {
+        var users  = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+        if (await users.FindByEmailAsync(adminEmail) is null)
+        {
+            var admin = new User
+            {
+                UserName       = adminEmail,
+                Email          = adminEmail,
+                EmailConfirmed = true,
+                Role           = UserRole.Admin,
+                SubTier        = SubscriptionTier.Paid
+            };
+
+            var created = await users.CreateAsync(admin, adminPassword);
+            if (created.Succeeded)
+                logger.LogInformation("Seeded platform administrator {Email}.", adminEmail);
+            else
+                logger.LogError(
+                    "Failed to seed administrator {Email}: {Errors}",
+                    adminEmail,
+                    string.Join("; ", created.Errors.Select(e => e.Description)));
+        }
+    }
 }
 
 // Stripe webhook needs raw request body for signature checks.

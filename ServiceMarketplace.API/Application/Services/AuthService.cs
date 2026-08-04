@@ -9,6 +9,7 @@ using ServiceMarketplace.API.Logging;
 using ServiceMarketplace.API.Models.Config;
 using ServiceMarketplace.API.Models.DTOs.Auth;
 using ServiceMarketplace.API.Models.Entities;
+using ServiceMarketplace.API.Models.Enums;
 using ServiceMarketplace.API.Services.Interfaces;
 
 namespace ServiceMarketplace.API.Services;
@@ -31,6 +32,13 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
     {
+        // Self-service signup must never mint a platform administrator. Admin bypasses every
+        // permission check (see PermissionService), so accepting this role from an anonymous
+        // request body would let anyone take over the platform. Admins are seeded at startup
+        // or promoted by an existing Admin via PATCH /api/admin/users/{id}/role.
+        if (request.Role == UserRole.Admin)
+            throw new InvalidOperationException("The Admin role cannot be self-assigned.");
+
         var existing = await _userManager.FindByEmailAsync(request.Email);
         if (existing is not null)
             throw new InvalidOperationException("Email is already registered.");

@@ -79,7 +79,7 @@ public class OrgService : IOrgService
         if (alreadyOwns)
             throw new InvalidOperationException("You already have an organization.");
 
-        // The SQL Server retry strategy requires that any user-initiated transaction
+        // The connection retry strategy requires that any user-initiated transaction
         // is executed via the execution strategy so the entire block (including the
         // BEGIN/COMMIT) can be retried on transient failures.
         var strategy = _db.Database.CreateExecutionStrategy();

@@ -55,7 +55,12 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
             e.Property(r => r.Category).HasMaxLength(100);
             e.Property(r => r.Latitude).HasColumnType("decimal(9,6)");
             e.Property(r => r.Longitude).HasColumnType("decimal(9,6)");
-            e.Property(r => r.RowVersion).IsRowVersion();
+            // Optimistic concurrency via PostgreSQL's built-in "xmin" system column.
+            // Postgres has no SQL Server "rowversion" type; xmin is the direct equivalent
+            // and is bumped by the database on every UPDATE. Npgsql's concurrency-token
+            // convention maps any uint OnAddOrUpdate concurrency token onto xmin, so this
+            // shadow property adds no real column and produces no migration operation.
+            e.Property<uint>("xmin").IsRowVersion();
             e.HasOne(r => r.Customer)
              .WithMany(u => u.ServiceRequests)
              .HasForeignKey(r => r.CustomerId)

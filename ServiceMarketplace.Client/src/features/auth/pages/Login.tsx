@@ -58,7 +58,12 @@ export default function Login() {
     mutationFn: (data: FormData) => api.post('/auth/login', data).then((r) => r.data),
     onSuccess: (data) => {
       login(data)
-      toast.success(`Welcome back, ${data.email?.split('@')[0]}!`)
+      // Read the email back from the store rather than from the raw response: /auth/login
+      // returns only { token, role, userId }, so data.email is undefined and the greeting
+      // rendered "Welcome back, undefined!". The store resolves it from the JWT claim and
+      // is the single source of truth the dashboards already read.
+      const displayName = useAuthStore.getState().email?.split('@')[0]
+      toast.success(displayName ? `Welcome back, ${displayName}!` : 'Welcome back!')
       const sessionFrom = sessionStorage.getItem(AUTH_REDIRECT_KEY)
       sessionStorage.removeItem(AUTH_REDIRECT_KEY)
       navigate(stateFrom ?? sessionFrom ?? getDashboardPath(data.role), { replace: true })

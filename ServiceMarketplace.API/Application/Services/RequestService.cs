@@ -296,7 +296,7 @@ public class RequestService : IRequestService
 
         // ── Provider: jobs accepted/completed by themselves or org members ───
         // Step 1: resolve the caller's org membership (two-query approach avoids
-        //         correlated sub-queries that SQL Server may not optimise well).
+        //         correlated sub-queries the query planner may not optimise well).
         var orgId = await _db.Users
             .AsNoTracking()
             .Where(u => u.Id == userId)

@@ -19,6 +19,7 @@ public class ServiceRequest
     public User? Customer { get; set; }
     public User? AcceptedByProvider { get; set; }
 
-    // Optimistic concurrency — EF throws DbUpdateConcurrencyException on double-accept
-    public byte[]? RowVersion { get; set; }
+    // Optimistic concurrency — EF throws DbUpdateConcurrencyException on double-accept.
+    // Backed by PostgreSQL's system "xmin" column (see AppDbContext), which changes on
+    // every UPDATE. Mapped as a shadow property, so no column is stored on the entity.
 }

@@ -3,7 +3,7 @@
 #
 # What this script does:
 #   1. Kills anything already bound to the API / frontend ports
-#   2. Ensures the sql-marketplace SQL Server container is running (port 1433)
+#   2. Ensures the pg-marketplace PostgreSQL container is running (port 5433)
 #   3. Ensures the Redis container is running
 #   4. Applies any pending EF Core migrations
 #   5. Starts the Vite dev server and the .NET API in parallel
@@ -23,38 +23,69 @@ CLIENT_DIR="$REPO_ROOT/ServiceMarketplace.Client"
 # ── 1. Free the ports ─────────────────────────────────────────────────────────
 
 for PORT in 5132 7132 5173; do
-  PID=$(lsof -ti tcp:"$PORT" 2>/dev/null) || true
-  if [ -n "$PID" ]; then
-    echo "==> Killing process on port $PORT (PID $PID)..."
-    kill -9 "$PID" 2>/dev/null || true
+  # -sTCP:LISTEN matters: without it lsof also reports processes that merely hold a
+  # *client* connection to the port (VS Code, browsers). Those extra PIDs turned the
+  # result into a multi-line string, which `kill` rejects as an illegal pid — so the
+  # real listener survived and the port stayed busy.
+  PIDS=$(lsof -ti tcp:"$PORT" -sTCP:LISTEN 2>/dev/null) || true
+  if [ -n "$PIDS" ]; then
+    echo "==> Killing listener(s) on port $PORT: $(echo "$PIDS" | tr '\n' ' ')"
+    # Kill the parent shell/npm wrapper too, otherwise `npm run dev` respawns Vite.
+    for PID in $PIDS; do
+      PPID_OF=$(ps -o ppid= -p "$PID" 2>/dev/null | tr -d ' ')
+      kill -9 "$PID" 2>/dev/null || true
+      if [ -n "${PPID_OF:-}" ] && ps -p "$PPID_OF" -o command= 2>/dev/null | grep -q "npm run dev"; then
+        kill -9 "$PPID_OF" 2>/dev/null || true
+      fi
+    done
+
+    # The port is not free the instant kill returns; wait for it to actually release
+    # so the dev server does not race the teardown and fail on strictPort.
+    ELAPSED=0
+    while lsof -ti tcp:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; do
+      if [ "$ELAPSED" -ge 10 ]; then
+        echo "ERROR: port $PORT is still in use after 10s." >&2
+        exit 1
+      fi
+      sleep 1
+      ELAPSED=$((ELAPSED + 1))
+    done
   fi
 done
 
-# ── 2. Ensure SQL Server is running (sql-marketplace on port 1433) ─────────────
-# Start the container if it is stopped; do nothing if already running.
+# ── 2. Ensure PostgreSQL is running (pg-marketplace on port 5433) ──────────────
+# Create the container on first run, start it if stopped, do nothing if running.
 
-SQL_CONTAINER="sql-marketplace"
-SQL_STATE=$(docker inspect -f '{{.State.Status}}' "$SQL_CONTAINER" 2>/dev/null || echo "missing")
+PG_CONTAINER="pg-marketplace"
+PG_PASSWORD="Marketplace2026!"
+PG_STATE=$(docker inspect -f '{{.State.Status}}' "$PG_CONTAINER" 2>/dev/null || echo "missing")
 
-if [ "$SQL_STATE" = "running" ]; then
-  echo "==> SQL Server ($SQL_CONTAINER) is already running."
+if [ "$PG_STATE" = "running" ]; then
+  echo "==> PostgreSQL ($PG_CONTAINER) is already running."
 else
-  echo "==> Starting SQL Server container ($SQL_CONTAINER)..."
-  docker start "$SQL_CONTAINER"
+  if [ "$PG_STATE" = "missing" ]; then
+    echo "==> Creating PostgreSQL container ($PG_CONTAINER)..."
+    docker run -d --name "$PG_CONTAINER" \
+      -e POSTGRES_PASSWORD="$PG_PASSWORD" \
+      -e POSTGRES_DB=ServiceMarketplaceDb \
+      -p 5433:5432 \
+      postgres:16
+  else
+    echo "==> Starting PostgreSQL container ($PG_CONTAINER)..."
+    docker start "$PG_CONTAINER"
+  fi
 
-  echo "==> Waiting for SQL Server to accept connections..."
+  echo "==> Waiting for PostgreSQL to accept connections..."
   ELAPSED=0
-  until docker exec "$SQL_CONTAINER" /opt/mssql-tools/bin/sqlcmd \
-        -S localhost -U sa -P 'Marketplace2026!' \
-        -Q "SELECT 1" -h -1 &>/dev/null; do
+  until docker exec "$PG_CONTAINER" pg_isready -U postgres -d ServiceMarketplaceDb &>/dev/null; do
     if [ "$ELAPSED" -ge 60 ]; then
-      echo "ERROR: SQL Server did not become ready within 60 seconds." >&2
+      echo "ERROR: PostgreSQL did not become ready within 60 seconds." >&2
       exit 1
     fi
     sleep 3
     ELAPSED=$((ELAPSED + 3))
   done
-  echo "==> SQL Server is ready."
+  echo "==> PostgreSQL is ready."
 fi
 
 # ── 3. Ensure Redis is running ────────────────────────────────────────────────
@@ -72,7 +103,7 @@ fi
 
 # ── 4. Apply EF Core migrations ───────────────────────────────────────────────
 # ASPNETCORE_ENVIRONMENT=Development loads appsettings.Development.json which
-# points to the sql-marketplace container on localhost:1433.
+# points to the pg-marketplace container on localhost:5433.
 
 echo "==> Applying EF migrations..."
 ASPNETCORE_ENVIRONMENT=Development \
@@ -106,7 +137,7 @@ cleanup() {
   echo ""
   echo "==> Shutting down API and frontend..."
   kill "$FRONTEND_PID" "$API_PID" 2>/dev/null || true
-  echo "==> Done. SQL Server and Redis containers are still running."
+  echo "==> Done. PostgreSQL and Redis containers are still running."
 }
 
 trap cleanup EXIT INT TERM

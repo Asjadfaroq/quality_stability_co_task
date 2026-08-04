@@ -16,7 +16,7 @@
 
 The platform allows customers to create service requests and providers to discover, accept, and complete nearby work, with permission-based access control enforced at the API layer.
 
-**Stack:** ASP.NET Core 10, Entity Framework Core, SQL Server, React + TypeScript (Vite), SignalR, Redis, Stripe, Serilog, Azure Application Insights.
+**Stack:** ASP.NET Core 10, Entity Framework Core, PostgreSQL, React + TypeScript (Vite), SignalR, Redis, Stripe, Serilog, Azure Application Insights.
 
 ---
 
@@ -143,15 +143,26 @@ Endpoints:
 ### Prerequisites
 - .NET 10 SDK
 - Node.js 20+
-- SQL Server
+- PostgreSQL 16
 - Redis (optional but recommended)
 
-Create `ServiceMarketplace.API/appsettings.Development.json`:
+Start PostgreSQL (skip if you already run it locally):
+
+```bash
+docker run -d --name pg-marketplace \
+  -e POSTGRES_PASSWORD=Marketplace2026! \
+  -e POSTGRES_DB=ServiceMarketplaceDb \
+  -p 5433:5432 postgres:16
+```
+
+Both `appsettings.json` and `appsettings.Development.json` are gitignored, so a fresh
+clone has no configuration and the API will not start until you create them. Create
+`ServiceMarketplace.API/appsettings.Development.json`:
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost,1433;Database=ServiceMarketplaceDb;User Id=sa;Password=YourPassword;TrustServerCertificate=True;",
+    "DefaultConnection": "Host=localhost;Port=5433;Database=ServiceMarketplaceDb;Username=postgres;Password=YourPassword;",
     "Redis": "localhost:6379"
   },
   "Jwt": {
