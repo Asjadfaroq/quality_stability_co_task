@@ -4,7 +4,6 @@
 
 **Senior Fullstack Engineer Take-Home (MVP) — API-level RBAC, geolocation requests, subscription gating, AI assistance, and real-time updates.**
 
-[![Live App](https://img.shields.io/badge/Live_App-Azure_Static_Web_Apps-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=fff)](https://yellow-sand-0fab52c03.4.azurestaticapps.net/)
 [![API](https://img.shields.io/badge/API-ASP.NET_Core_10-512BD4?style=for-the-badge&logo=dotnet&logoColor=fff)](./ServiceMarketplace.API)
 [![Frontend](https://img.shields.io/badge/Frontend-React_%2B_TS-61DAFB?style=for-the-badge&logo=react&logoColor=000)](./ServiceMarketplace.Client)
 
@@ -106,9 +105,8 @@ The platform allows customers to create service requests and providers to discov
 .
 ├── ServiceMarketplace.API/      # ASP.NET Core backend
 ├── ServiceMarketplace.Client/   # React + TypeScript frontend
-├── Documentation.md             # Full technical documentation
-├── docker-compose.yml
-└── run.sh
+├── docker-compose.yml           # Postgres + Redis + API + frontend
+└── run.sh                       # Local development launcher
 ```
 
 ---
@@ -239,9 +237,9 @@ npm run dev
 ## Bonus Items Implemented
 
 - Dockerized setup
-- CI/CD pipeline
 - Background jobs
 - Caching
+- Durable audit logging with automatic retention cleanup
 - Logging and error handling strategy
 - Real-time updates (SignalR/WebSockets)
 
@@ -268,6 +266,5 @@ npm run dev
 
 [![GitHub](https://img.shields.io/badge/GitHub-Asjadfaroq-181717?style=flat-square&logo=github)](https://github.com/Asjadfaroq/quality_stability_co_task)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Asjad_Farooq-0A66C2?style=flat-square&logo=linkedin&logoColor=fff)](https://www.linkedin.com/in/asjadfarooqconnect)
-[![Live App](https://img.shields.io/badge/Live_App-Service_Marketplace-0078D4?style=flat-square&logo=microsoftazure&logoColor=fff)](https://yellow-sand-0fab52c03.4.azurestaticapps.net/)
 
 </div>
