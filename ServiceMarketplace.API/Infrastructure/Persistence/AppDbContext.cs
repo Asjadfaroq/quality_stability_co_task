@@ -18,6 +18,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<UserStripeInfo> UserStripeInfos => Set<UserStripeInfo>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -128,6 +129,26 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
             e.Property(s => s.StripeCustomerId).IsRequired().HasMaxLength(100);
             e.Property(s => s.StripeSubscriptionId).HasMaxLength(100);
             e.Property(s => s.SubscriptionStatus).HasMaxLength(50);
+        });
+
+        builder.Entity<AuditLog>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.Property(a => a.ActorUserId).IsRequired().HasMaxLength(64);
+            e.Property(a => a.Action).IsRequired().HasMaxLength(100);
+            e.Property(a => a.Message).IsRequired().HasMaxLength(2000);
+            e.Property(a => a.Level).IsRequired().HasMaxLength(20);
+            e.Property(a => a.TraceId).HasMaxLength(64);
+
+            // Descending timestamp index serves both hot paths: the admin view reads the
+            // newest N rows, and the retention job deletes everything below a cutoff.
+            e.HasIndex(a => a.Timestamp)
+             .IsDescending()
+             .HasDatabaseName("IX_AuditLogs_Timestamp");
+
+            // Per-actor activity feed: WHERE ActorUserId = @id ORDER BY Timestamp DESC.
+            e.HasIndex(a => new { a.ActorUserId, a.Timestamp })
+             .HasDatabaseName("IX_AuditLogs_ActorUserId_Timestamp");
         });
 
         SeedPermissions(builder);

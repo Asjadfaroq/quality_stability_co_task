@@ -197,6 +197,7 @@ public class AdminController : BaseController
     public async Task<IActionResult> GetLogs(
         [FromServices] LogBuffer       buffer,
         [FromServices] IAuditLogCache  auditCache,
+        [FromServices] IAuditLogStore  auditStore,
         [FromQuery]    int             count    = 100,
         [FromQuery]    string?         category = null)
     {
@@ -208,10 +209,17 @@ public class AdminController : BaseController
         var bufferEntries = buffer.GetRecent(count);
         var redisEntries  = await auditCache.GetAllLogsAsync(count);
 
+        // Durable audit history. The buffer holds only this process's lifetime and the Redis
+        // cache expires quickly, so without this the view is empty after any restart.
+        var storedEntries = wantAudit
+            ? await auditStore.GetRecentAsync(count)
+            : [];
+
         // Union by (Timestamp, Action, ActorUserId) to dedupe entries present in both sources,
         // then filter by the requested category.
         var merged = bufferEntries
             .UnionBy(redisEntries, e => (e.Timestamp, e.Action, e.ActorUserId))
+            .UnionBy(storedEntries, e => (e.Timestamp, e.Action, e.ActorUserId))
             .Where(e => (wantSystem && e.Category == LogCategory.System) ||
                         (wantAudit  && e.Category == LogCategory.Audit))
             .OrderByDescending(e => e.Timestamp)

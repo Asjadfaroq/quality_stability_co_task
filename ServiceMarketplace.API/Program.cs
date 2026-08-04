@@ -535,6 +535,10 @@ builder.Services.AddSingleton<IAuditLogCache>(sp =>
     return new AuditLogCache(mux, logger);
 });
 
+// Durable audit log storage. Scoped because it depends on AppDbContext; the singleton
+// LogBroadcastService resolves it through a scope factory per entry.
+builder.Services.AddScoped<IAuditLogStore, AuditLogStore>();
+
 // Register services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
@@ -553,6 +557,7 @@ builder.Services.AddScoped<IStripeService, StripeService>();
 builder.Services.AddHostedService<AutoConfirmJob>();
 builder.Services.AddHostedService<ExpireStaleRequestsJob>();
 builder.Services.AddHostedService<ChatCleanupJob>();
+builder.Services.AddHostedService<AuditLogCleanupJob>();
 
 var app = builder.Build();
 
